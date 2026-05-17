@@ -351,8 +351,8 @@ export default function WriterPage() {
   const [theoristsLoading, setTheoristsLoading] = useState(false);
   const theoristsCacheRef = useRef<Record<string, string[]>>({});
 
-  // Reset edit mode when switching chapters
-  useEffect(() => { setIsEditMode(false); }, [activeChapterIndex]);
+  // Reset edit mode and clear text selection when switching chapters
+  useEffect(() => { setIsEditMode(false); setTextSelection(null); }, [activeChapterIndex]);
 
   // Restore personalise from chapter draft_config when switching chapters
   useEffect(() => {
@@ -2101,7 +2101,6 @@ export default function WriterPage() {
                 )}
                 onMouseUp={!isEditMode ? handleTextSelection : undefined}
                 onTouchEnd={!isEditMode ? handleTextSelection : undefined}
-                onMouseDown={() => { if (!inlineEditLoading) setTextSelection(null); }}
               >
                 {/* Chapter title in canvas */}
                 <div className={cn("flex items-start justify-between gap-2 mb-5", isEditMode && "flex-shrink-0 px-5 sm:px-10 pt-6 pb-2")}>

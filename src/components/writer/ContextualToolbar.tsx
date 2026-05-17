@@ -19,7 +19,7 @@ const ACTIONS = [
 
 export function ContextualToolbar({ rect, isLoading, activeAction, onAction }: Props) {
   const toolbarHeight = 40;
-  const toolbarWidth = 340; // approximate with 6 actions
+  const toolbarWidth = Math.min(340, window.innerWidth - 16);
 
   // Prefer below the selection so the browser's native copy menu (above) doesn't block it
   let top = rect.bottom + 8;
@@ -32,10 +32,11 @@ export function ContextualToolbar({ rect, isLoading, activeAction, onAction }: P
 
   return (
     <div
-      className="fixed z-[200] flex items-center gap-0.5 bg-foreground text-background rounded-2xl px-1.5 py-1.5 shadow-2xl animate-in fade-in zoom-in-95 duration-100"
-      style={{ top, left }}
+      className="fixed z-[200] flex items-center gap-0.5 bg-foreground text-background rounded-2xl px-1.5 py-1.5 shadow-2xl animate-in fade-in zoom-in-95 duration-100 overflow-x-auto scrollbar-hide"
+      style={{ top, left, maxWidth: toolbarWidth }}
       onMouseDown={(e) => e.stopPropagation()}
       onTouchStart={(e) => e.stopPropagation()}
+      onTouchEnd={(e) => e.stopPropagation()}
     >
       {ACTIONS.map((a) => (
         <button
@@ -44,7 +45,7 @@ export function ContextualToolbar({ rect, isLoading, activeAction, onAction }: P
           disabled={isLoading}
           title={a.label}
           className={cn(
-            "inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[11px] font-bold transition-all select-none",
+            "inline-flex items-center gap-1 px-2 py-1.5 rounded-xl text-[11px] font-bold transition-all select-none flex-shrink-0",
             activeAction === a.id
               ? "bg-background/25 text-background"
               : "hover:bg-background/15 text-background/80 hover:text-background",
@@ -56,7 +57,7 @@ export function ContextualToolbar({ rect, isLoading, activeAction, onAction }: P
           ) : (
             <span className="text-[12px] leading-none">{a.icon}</span>
           )}
-          <span>{a.label}</span>
+          <span className="hidden min-[360px]:inline">{a.label}</span>
         </button>
       ))}
     </div>

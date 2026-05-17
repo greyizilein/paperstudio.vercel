@@ -9,7 +9,8 @@ export type AdminEventKind =
   | "commission_credited"
   | "payout_requested"
   | "payout_success"
-  | "payout_failed";
+  | "payout_failed"
+  | "complaint";
 
 export async function notifyAdmin(
   kind: AdminEventKind,

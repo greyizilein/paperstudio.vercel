@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { notifyAdmin } from "../_shared/admin-event-email.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -48,7 +49,14 @@ serve(async (req) => {
 
     if (error) throw error;
 
-    // Create a notification for the admin
+    // Notify admin by email (fire-and-forget)
+    notifyAdmin(
+      "complaint",
+      `New complaint: ${subject.trim()}`,
+      `From: ${user.email}\nSubject: ${subject.trim()}\n\n${body.trim()}`,
+    ).catch(() => {});
+
+    // Create a notification for the user
     await supabase.from("notifications").insert({
       user_id: user.id,
       title: "Complaint submitted",
