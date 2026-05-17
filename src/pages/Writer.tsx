@@ -322,6 +322,7 @@ export default function WriterPage() {
   } | null>(null);
 
   // Panels & modals
+  const [personaliseMode, setPersonaliseMode] = useState<"standard" | "custom" | "advanced">("standard");
   const [showPersonalise, setShowPersonalise] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
   const [showExportChModal, setShowExportChModal] = useState(false);
@@ -2150,6 +2151,31 @@ export default function WriterPage() {
           <button onClick={() => setShowPersonalise(false)} className="p-1 text-muted-foreground hover:text-foreground"><X size={14} /></button>
         </div>
 
+        {/* Mode toggle */}
+        <div className="px-3.5 py-2 border-b border-border flex-shrink-0">
+          <div className="flex gap-1">
+            {(["standard", "custom", "advanced"] as const).map((mode) => (
+              <button
+                key={mode}
+                onClick={() => setPersonaliseMode(mode)}
+                className={cn(
+                  "flex-1 py-1 rounded-md text-[11px] font-bold capitalize transition-all",
+                  personaliseMode === mode
+                    ? "bg-primary text-white"
+                    : "bg-secondary text-muted-foreground hover:text-foreground"
+                )}
+              >
+                {mode === "standard" ? "Simple" : mode === "custom" ? "Custom" : "Advanced"}
+              </button>
+            ))}
+          </div>
+          <p className="text-[10px] text-muted-foreground mt-1.5 leading-snug">
+            {personaliseMode === "standard" && "Quick setup — essential settings only"}
+            {personaliseMode === "custom" && "Add sources, citations & analysis methods"}
+            {personaliseMode === "advanced" && "Full control over every generation setting"}
+          </p>
+        </div>
+
         <div className="flex-1 overflow-y-auto px-3.5 py-3 space-y-4 text-sm">
           {/* ═══ AI MODEL SELECTION ═══ */}
           <PanelSection label="AI model">
@@ -2247,7 +2273,7 @@ export default function WriterPage() {
           {/* Writing style section removed — baked into mode/craft model defaults */}
 
           {/* ═══ INTRODUCTION: Objectives, Questions, Hypotheses ═══ */}
-          {chType === "introduction" && (
+          {chType === "introduction" && personaliseMode !== "standard" && (
             <PanelSection label="Research objectives & questions">
               <PanelField label={`Research objectives`}>
                 <textarea value={personalise.researchObjectivesText} onChange={e => setPersonalise(p => ({ ...p, researchObjectivesText: e.target.value }))}
@@ -2274,7 +2300,7 @@ export default function WriterPage() {
           )}
 
           {/* ═══ SOURCES & CITATIONS — only for chapters that use citations ═══ */}
-          {!isNoCiteChapter && !isReuseCiteChapter && chType !== "abstract" && (
+          {!isNoCiteChapter && !isReuseCiteChapter && chType !== "abstract" && personaliseMode !== "standard" && (
             <PanelSection label="Sources & citations">
               <div className="grid grid-cols-2 gap-2">
                 <PanelField label="Total sources">
@@ -2325,7 +2351,7 @@ export default function WriterPage() {
           )}
 
           {/* ═══ LIT REVIEW: Specific authors ═══ */}
-          {chType === "literature_review" && (
+          {chType === "literature_review" && personaliseMode === "advanced" && (
             <PanelSection label="Specific authors to include">
               <div className="flex flex-col gap-1 mb-2">
                 {suggestedLitAuthors.map(a => (
@@ -2350,7 +2376,7 @@ export default function WriterPage() {
           )}
 
           {/* ═══ THEORISTS & GEOGRAPHY — all except abstract & findings ═══ */}
-          {chType !== "abstract" && chType !== "findings" && chType !== "conclusion" && (
+          {chType !== "abstract" && chType !== "findings" && chType !== "conclusion" && personaliseMode === "advanced" && (
             <PanelSection label="Key theorists & geography">
               <PanelField label={<>Key theorists & frameworks <span className="text-[10px] font-bold bg-aqua/20 text-aqua px-1.5 py-px rounded-full ml-1">AUTO-SUGGESTED</span></>}>
                 <div className="text-[11px] text-muted-foreground mb-1.5 leading-snug">Based on your title and field. Tap to select.</div>
@@ -2389,7 +2415,7 @@ export default function WriterPage() {
           )}
 
           {/* ═══ METHODOLOGY: Research Design ═══ */}
-          {chType === "methodology" && (
+          {chType === "methodology" && personaliseMode !== "standard" && (
             <>
               <PanelSection label="Research design">
                 <div className="grid grid-cols-2 gap-2">
@@ -2434,7 +2460,7 @@ export default function WriterPage() {
           )}
 
           {/* ═══ ANALYSIS METHODS — for methodology & findings ═══ */}
-          {(chType === "methodology" || chType === "findings") && (
+          {(chType === "methodology" || chType === "findings") && personaliseMode !== "standard" && (
             <PanelSection label={chType === "findings" ? "Quantitative analysis methods" : "Data analysis methods"}>
               {chType === "findings" && (
                 <div className="text-[10px] font-bold text-green uppercase tracking-wide mb-1">Auto-selected from Chapter 3</div>
@@ -2495,7 +2521,7 @@ export default function WriterPage() {
           )}
 
           {/* ═══ ANALYSIS SOFTWARE — methodology only ═══ */}
-          {chType === "methodology" && (
+          {chType === "methodology" && personaliseMode === "advanced" && (
             <PanelSection label="Analysis software">
               <div className="flex flex-col gap-1 mb-2">
                 {ANALYSIS_SOFTWARE_OPTIONS.map(s => (
@@ -2517,7 +2543,7 @@ export default function WriterPage() {
           )}
 
           {/* ═══ CHARTS & VISUALISATIONS — findings only ═══ */}
-          {chType === "findings" && (
+          {chType === "findings" && personaliseMode === "advanced" && (
             <>
               <PanelSection label="Charts & visualisations">
                 <div className="text-[10px] font-bold text-green uppercase tracking-wide mb-1">Auto-selected</div>
@@ -2630,7 +2656,7 @@ export default function WriterPage() {
           )}
 
           {/* ═══ METHODOLOGY: Instrument generation ═══ */}
-          {chType === "methodology" && (
+          {chType === "methodology" && personaliseMode === "advanced" && (
             <PanelSection label="Data collection instrument (appendix)">
               <PanelField label="Generate instrument draft?">
                 <PanelSelect value={personalise.instrumentGenerate} options={INSTRUMENT_OPTIONS} onChange={v => setPersonalise(p => ({ ...p, instrumentGenerate: v }))} />
@@ -2639,7 +2665,7 @@ export default function WriterPage() {
           )}
 
           {/* ═══ ABSTRACT FORMAT ═══ */}
-          {chType === "abstract" && (
+          {chType === "abstract" && personaliseMode === "advanced" && (
             <PanelSection label="Abstract format">
               <PanelField label="Abstract type">
                 <PanelSelect value={personalise.abstractType} options={ABSTRACT_TYPES} onChange={v => setPersonalise(p => ({ ...p, abstractType: v }))} />
@@ -2664,15 +2690,17 @@ export default function WriterPage() {
           )}
 
           {/* ═══ STRUCTURE — all chapters ═══ */}
-          <PanelSection label="Structure">
-            <PanelField label="Line spacing">
-              <PanelSelect value={personalise.lineSpacing} options={LINE_SPACING_OPTIONS} onChange={v => setPersonalise(p => ({ ...p, lineSpacing: v }))} />
-            </PanelField>
-            <div className="flex flex-col gap-1">
-              <CheckItem label="Begin chapter on new page" checked={personalise.beginOnNewPage} onChange={v => setPersonalise(p => ({ ...p, beginOnNewPage: v }))} />
-              <CheckItem label="Include appendix for this chapter" checked={personalise.includeAppendix} onChange={v => setPersonalise(p => ({ ...p, includeAppendix: v }))} />
-            </div>
-          </PanelSection>
+          {personaliseMode === "advanced" && (
+            <PanelSection label="Structure">
+              <PanelField label="Line spacing">
+                <PanelSelect value={personalise.lineSpacing} options={LINE_SPACING_OPTIONS} onChange={v => setPersonalise(p => ({ ...p, lineSpacing: v }))} />
+              </PanelField>
+              <div className="flex flex-col gap-1">
+                <CheckItem label="Begin chapter on new page" checked={personalise.beginOnNewPage} onChange={v => setPersonalise(p => ({ ...p, beginOnNewPage: v }))} />
+                <CheckItem label="Include appendix for this chapter" checked={personalise.includeAppendix} onChange={v => setPersonalise(p => ({ ...p, includeAppendix: v }))} />
+              </div>
+            </PanelSection>
+          )}
 
           {/* ═══ UPLOAD INSTRUCTIONS — all chapters ═══ */}
           <PanelSection label="Upload documents / instructions">
