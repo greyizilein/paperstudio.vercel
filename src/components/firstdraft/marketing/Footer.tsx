@@ -1,48 +1,277 @@
 import { Link } from "react-router-dom";
 
+const DA_FONTS = {
+  headline: '"Fraunces", "Playfair Display", Georgia, serif',
+  body: '"Geist", system-ui, sans-serif',
+};
+
+const QuillIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 64 64" fill="none" aria-hidden="true" style={{ color: "#B89A5A" }}>
+    <path
+      d="M50 6 C 40 10, 32 18, 27 30 C 24 38, 23 46, 24 52 L 28 52 C 30 46, 33 40, 38 34 C 44 26, 49 18, 52 10 C 53 8, 52 6, 50 6 Z"
+      fill="currentColor"
+    />
+    <path
+      d="M48 10 C 40 18, 33 28, 28 44"
+      stroke="rgba(10,8,4,0.5)"
+      strokeWidth="1.2"
+      strokeLinecap="round"
+      fill="none"
+    />
+    <path d="M24 52 L 28 52 L 26 58 Z" fill="currentColor" />
+    <circle cx="26" cy="58.5" r="1.1" fill="currentColor" />
+  </svg>
+);
+
+type FooterLinkCol = {
+  heading: string;
+  links: { label: string; href: string; external?: boolean }[];
+};
+
+const linkColumns: FooterLinkCol[] = [
+  {
+    heading: "Product",
+    links: [
+      { label: "Features", href: "/features" },
+      { label: "How It Works", href: "/how-it-works" },
+      { label: "Pricing", href: "/pricing" },
+      { label: "Research Tools", href: "/research-tools" },
+      { label: "CZAR Assistant", href: "/czar" },
+    ],
+  },
+  {
+    heading: "Resources",
+    links: [
+      { label: "Help Centre", href: "/help" },
+      { label: "Student Guide", href: "/student-guide" },
+      { label: "Academic Integrity", href: "/integrity" },
+      { label: "Changelog", href: "/changelog" },
+      { label: "Contact", href: "/contact" },
+    ],
+  },
+  {
+    heading: "Legal",
+    links: [
+      { label: "Terms of Service", href: "/terms" },
+      { label: "Privacy Policy", href: "/privacy" },
+      { label: "Cookie Policy", href: "/cookies" },
+    ],
+  },
+  {
+    heading: "Social",
+    links: [
+      { label: "Twitter / X", href: "https://twitter.com/paperstudio_io", external: true },
+      { label: "Instagram", href: "https://instagram.com/paperstudio", external: true },
+      { label: "LinkedIn", href: "https://linkedin.com/company/paperstudio", external: true },
+    ],
+  },
+];
+
+const FooterLink = ({ href, label, external }: { href: string; label: string; external?: boolean }) => {
+  const style: React.CSSProperties = {
+    fontFamily: DA_FONTS.body,
+    fontSize: "0.85rem",
+    color: "#6B6050",
+    textDecoration: "none",
+    transition: "color 0.2s",
+    display: "block",
+  };
+
+  if (external) {
+    return (
+      <a
+        href={href}
+        target="_blank"
+        rel="noopener noreferrer"
+        style={style}
+        className="footer-da-link"
+      >
+        {label}
+      </a>
+    );
+  }
+  return (
+    <Link to={href} style={style} className="footer-da-link">
+      {label}
+    </Link>
+  );
+};
+
 export const MarketingFooter = () => (
-  <footer className="border-t py-12" style={{ background: "#1a1714", borderColor: "hsl(24, 14%, 14%)" }}>
-    <div className="max-w-6xl mx-auto px-6">
-      <div className="flex flex-col md:flex-row justify-between items-start gap-8">
-        <div>
-          <Link to="/" className="flex items-center">
-            <span className="text-xl font-extrabold text-white tracking-tight">PAPERSTUDIO</span>
+  <footer
+    style={{
+      background: "#0A0804",
+      borderTop: "1px solid rgba(232,223,200,0.06)",
+    }}
+  >
+    <style>{`
+      .footer-da-link:hover { color: #A8967A !important; }
+    `}</style>
+
+    <div
+      style={{
+        maxWidth: "1152px",
+        margin: "0 auto",
+        padding: "72px 24px 0",
+      }}
+    >
+      {/* Top: logo + columns */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1.4fr repeat(4, 1fr)",
+          gap: "48px",
+          paddingBottom: "64px",
+        }}
+        className="footer-da-grid"
+      >
+        <style>{`
+          @media (max-width: 768px) {
+            .footer-da-grid {
+              grid-template-columns: 1fr 1fr !important;
+              gap: 40px 32px !important;
+            }
+            .footer-da-brand { grid-column: 1 / -1 !important; }
+          }
+          @media (max-width: 480px) {
+            .footer-da-grid { grid-template-columns: 1fr !important; }
+          }
+        `}</style>
+
+        {/* Brand */}
+        <div className="footer-da-brand" style={{ gridColumn: "1" }}>
+          <Link
+            to="/"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "8px",
+              textDecoration: "none",
+            }}
+          >
+            <QuillIcon />
+            <span
+              style={{
+                fontFamily: DA_FONTS.headline,
+                fontStyle: "italic",
+                fontWeight: 600,
+                fontSize: "1.1rem",
+                color: "#E8DFC8",
+                letterSpacing: "0.05em",
+              }}
+            >
+              PAPERSTUDIO
+            </span>
           </Link>
-          <p className="mt-3 text-xs text-white/25 max-w-xs">
-            Built by writers, for students who can't afford one.
+          <p
+            style={{
+              fontFamily: DA_FONTS.body,
+              fontSize: "0.82rem",
+              color: "#6B6050",
+              lineHeight: 1.65,
+              marginTop: "14px",
+              maxWidth: "240px",
+            }}
+          >
+            The academic AI writing engine for students who take their work seriously.
           </p>
+          {/* Mini stats */}
+          <div
+            style={{
+              display: "flex",
+              gap: "20px",
+              marginTop: "24px",
+            }}
+          >
+            {[
+              { val: "12k+", label: "Students" },
+              { val: "50+", label: "Frameworks" },
+            ].map((s) => (
+              <div key={s.label}>
+                <div
+                  style={{
+                    fontFamily: DA_FONTS.headline,
+                    fontStyle: "italic",
+                    fontWeight: 600,
+                    fontSize: "1.1rem",
+                    color: "#A8967A",
+                  }}
+                >
+                  {s.val}
+                </div>
+                <div
+                  style={{
+                    fontFamily: DA_FONTS.body,
+                    fontSize: "0.7rem",
+                    color: "#6B6050",
+                    marginTop: "2px",
+                  }}
+                >
+                  {s.label}
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
-        <div className="flex gap-12">
-          <div>
-            <p className="text-[10px] font-semibold text-white/40 uppercase tracking-wider mb-3">Product</p>
-            <ul className="space-y-2">
-              <li><Link to="/features" className="text-sm text-white/25 hover:text-white/50 transition-colors">Features</Link></li>
-              <li><Link to="/pricing" className="text-sm text-white/25 hover:text-white/50 transition-colors">Pricing</Link></li>
-              <li><Link to="/how-it-works" className="text-sm text-white/25 hover:text-white/50 transition-colors">How It Works</Link></li>
-              <li><Link to="/research-tools" className="text-sm text-white/25 hover:text-white/50 transition-colors">Research tools</Link></li>
+
+        {/* Link columns */}
+        {linkColumns.map((col) => (
+          <div key={col.heading}>
+            <p
+              style={{
+                fontFamily: DA_FONTS.body,
+                fontSize: "0.68rem",
+                fontWeight: 600,
+                letterSpacing: "0.12em",
+                textTransform: "uppercase",
+                color: "#4A4035",
+                marginBottom: "16px",
+              }}
+            >
+              {col.heading}
+            </p>
+            <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: "10px" }}>
+              {col.links.map((link) => (
+                <li key={link.label}>
+                  <FooterLink {...link} />
+                </li>
+              ))}
             </ul>
           </div>
-          <div>
-            <p className="text-[10px] font-semibold text-white/40 uppercase tracking-wider mb-3">Resources</p>
-            <ul className="space-y-2">
-              <li><Link to="/help" className="text-sm text-white/25 hover:text-white/50 transition-colors">Help</Link></li>
-              <li><Link to="/student-guide" className="text-sm text-white/25 hover:text-white/50 transition-colors">Student guide</Link></li>
-              <li><Link to="/integrity" className="text-sm text-white/25 hover:text-white/50 transition-colors">Integrity</Link></li>
-              <li><Link to="/contact" className="text-sm text-white/25 hover:text-white/50 transition-colors">Contact</Link></li>
-            </ul>
-          </div>
-          <div>
-            <p className="text-[10px] font-semibold text-white/40 uppercase tracking-wider mb-3">Legal</p>
-            <ul className="space-y-2">
-              <li><Link to="/terms" className="text-sm text-white/25 hover:text-white/50 transition-colors">Terms of Service</Link></li>
-              <li><Link to="/privacy" className="text-sm text-white/25 hover:text-white/50 transition-colors">Privacy Policy</Link></li>
-              <li><Link to="/cookies" className="text-sm text-white/25 hover:text-white/50 transition-colors">Cookies</Link></li>
-            </ul>
-          </div>
-        </div>
+        ))}
       </div>
-      <div className="mt-10 pt-6 border-t text-xs text-white/15 text-center" style={{ borderColor: "hsl(24, 14%, 14%)" }}>
-        © {new Date().getFullYear()} PAPERSTUDIO. All rights reserved.
+
+      {/* Bottom bar */}
+      <div
+        style={{
+          borderTop: "1px solid rgba(232,223,200,0.05)",
+          padding: "22px 0 24px",
+          display: "flex",
+          flexWrap: "wrap",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: "12px",
+        }}
+      >
+        <span
+          style={{
+            fontFamily: DA_FONTS.body,
+            fontSize: "0.75rem",
+            color: "#4A4035",
+          }}
+        >
+          © {new Date().getFullYear()} PAPERSTUDIO. All rights reserved.
+        </span>
+        <span
+          style={{
+            fontFamily: DA_FONTS.headline,
+            fontStyle: "italic",
+            fontSize: "0.8rem",
+            color: "#4A4035",
+          }}
+        >
+          Made for students who can't afford a writer.
+        </span>
       </div>
     </div>
   </footer>

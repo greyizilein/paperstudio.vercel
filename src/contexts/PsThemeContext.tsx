@@ -24,7 +24,7 @@ const LS_MODE  = "ps_theme_mode";
 // Bumped when we want to force-reset existing users to a new default.
 // Bump 2026-04-26: introduced Classic (Notion B&W) theme as the default;
 // reset every previously-saved theme so everyone lands on Classic on next load.
-const LS_RESET_KEY = "ps_theme_reset_v2";
+const LS_RESET_KEY = "ps_theme_reset_v3";
 
 function readLocal(): { themeId: PsThemeId; mode: PsMode } {
   if (typeof window === "undefined") {

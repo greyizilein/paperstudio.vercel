@@ -1,0 +1,779 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PaperStudio — Design Themes Preview</title>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,ital,wght@9..144,0,300;9..144,0,400;9..144,0,600;9..144,0,700;9..144,1,400;9..144,1,600&family=Geist:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Geist', sans-serif;
+    background: #0a0a0a;
+    color: #fff;
+    padding: 24px 16px 80px;
+    min-height: 100vh;
+  }
+
+  h1 {
+    font-family: 'Fraunces', serif;
+    font-size: clamp(28px, 6vw, 48px);
+    font-weight: 400;
+    text-align: center;
+    margin-bottom: 8px;
+    color: #fff;
+  }
+  .subtitle {
+    text-align: center;
+    color: #888;
+    font-size: 14px;
+    margin-bottom: 48px;
+  }
+
+  /* ── Theme Section ── */
+  .theme-section {
+    margin-bottom: 64px;
+  }
+  .theme-label {
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: #555;
+    margin-bottom: 16px;
+    padding-left: 4px;
+  }
+
+  /* ── Theme Card ── */
+  .theme-card {
+    border-radius: 20px;
+    overflow: hidden;
+    margin-bottom: 16px;
+    border: 1px solid rgba(255,255,255,0.06);
+  }
+  .theme-header {
+    padding: 28px 24px 20px;
+    position: relative;
+  }
+  .theme-name {
+    font-family: 'Fraunces', serif;
+    font-size: 22px;
+    font-weight: 400;
+    margin-bottom: 4px;
+  }
+  .theme-desc {
+    font-size: 12px;
+    opacity: 0.55;
+    line-height: 1.5;
+    max-width: 280px;
+  }
+
+  /* ── Swatches ── */
+  .swatches {
+    display: flex;
+    gap: 0;
+    height: 52px;
+  }
+  .swatch {
+    flex: 1;
+    position: relative;
+    cursor: default;
+  }
+  .swatch-label {
+    position: absolute;
+    bottom: 6px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 9px;
+    font-family: 'DM Mono', monospace;
+    letter-spacing: 0.05em;
+    white-space: nowrap;
+    opacity: 0.7;
+    mix-blend-mode: difference;
+    color: white;
+  }
+
+  /* ── UI Sample ── */
+  .ui-sample {
+    padding: 20px 24px;
+    border-top: 1px solid rgba(255,255,255,0.04);
+  }
+  .ui-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 14px;
+  }
+  .ui-row:last-child { margin-bottom: 0; }
+
+  .btn {
+    padding: 8px 18px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-family: 'Geist', sans-serif;
+    font-weight: 500;
+    border: none;
+    cursor: pointer;
+    letter-spacing: -0.01em;
+  }
+  .badge {
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+  }
+  .card-mini {
+    padding: 12px 14px;
+    border-radius: 10px;
+    font-size: 12px;
+    line-height: 1.5;
+    flex: 1;
+    min-width: 140px;
+  }
+  .heading-sample {
+    font-family: 'Fraunces', serif;
+    font-size: 18px;
+    font-weight: 400;
+    line-height: 1.2;
+  }
+  .heading-sample em { font-style: italic; }
+  .mono-sample {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    opacity: 0.6;
+  }
+  .divider {
+    height: 1px;
+    margin: 16px 0;
+    opacity: 0.12;
+    background: currentColor;
+  }
+
+  /* ── Mode toggle strip ── */
+  .mode-strip {
+    display: flex;
+    border-top: 1px solid rgba(255,255,255,0.04);
+  }
+  .mode-half {
+    flex: 1;
+    padding: 16px 20px;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .mode-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  /* ═══════════════════════════════════════
+     THEME 1 — INK & PAPER
+  ═══════════════════════════════════════ */
+  .t1-header { background: #FAF7F2; color: #1A1614; }
+  .t1-dark-header { background: #111318; color: #EAE4D8; }
+  .t1-name { color: inherit; }
+  .t1-desc { color: #1A1614 !important; opacity: 0.45 !important; }
+  .t1-dark-desc { color: #EAE4D8 !important; opacity: 0.45 !important; }
+
+  /* swatches */
+  .t1-s1 { background: #FAF7F2; }
+  .t1-s2 { background: #EAE0CC; }
+  .t1-s3 { background: #C9A84C; }
+  .t1-s4 { background: #2E7D7B; }
+  .t1-s5 { background: #1A1614; }
+
+  .t1d-s1 { background: #111318; }
+  .t1d-s2 { background: #1E2028; }
+  .t1d-s3 { background: #D4A853; }
+  .t1d-s4 { background: #3D9E9C; }
+  .t1d-s5 { background: #EAE4D8; }
+
+  /* light UI */
+  .t1-bg { background: #FAF7F2; }
+  .t1-btn-primary { background: #1A1614; color: #FAF7F2; }
+  .t1-btn-accent { background: #C9A84C; color: #1A1614; }
+  .t1-btn-outline { background: transparent; color: #1A1614; border: 1.5px solid #D4C5A9; }
+  .t1-badge-a { background: #F5EBCC; color: #8B6914; }
+  .t1-badge-b { background: #DFF0EF; color: #1F6160; }
+  .t1-card { background: #FFF; color: #1A1614; border: 1px solid #EDE6D8; }
+  .t1-text { color: #1A1614; }
+  .t1-sub { color: #8A7E72; }
+
+  /* dark UI */
+  .t1d-bg { background: #111318; }
+  .t1d-btn-primary { background: #D4A853; color: #111318; }
+  .t1d-btn-accent { background: #3D9E9C; color: #111318; }
+  .t1d-btn-outline { background: transparent; color: #EAE4D8; border: 1.5px solid #2E3240; }
+  .t1d-badge-a { background: #2A2210; color: #D4A853; }
+  .t1d-badge-b { background: #0E2626; color: #3D9E9C; }
+  .t1d-card { background: #1A1E2A; color: #EAE4D8; border: 1px solid #252B3B; }
+  .t1d-text { color: #EAE4D8; }
+  .t1d-sub { color: #6B7280; }
+
+  /* ═══════════════════════════════════════
+     THEME 2 — DARK ACADEMIA
+  ═══════════════════════════════════════ */
+  .t2-header { background: #F8F4EE; color: #1C1009; }
+  .t2-dark-header { background: #0E0C08; color: #E8DFC8; }
+
+  .t2-s1 { background: #F8F4EE; }
+  .t2-s2 { background: #DDD0B8; }
+  .t2-s3 { background: #8B2635; }
+  .t2-s4 { background: #2D4A22; }
+  .t2-s5 { background: #1C1009; }
+
+  .t2d-s1 { background: #0E0C08; }
+  .t2d-s2 { background: #1A160E; }
+  .t2d-s3 { background: #C4384A; }
+  .t2d-s4 { background: #4A7A38; }
+  .t2d-s5 { background: #E8DFC8; }
+
+  .t2-btn-primary { background: #1C1009; color: #F8F4EE; }
+  .t2-btn-accent { background: #8B2635; color: #F8F4EE; }
+  .t2-btn-outline { background: transparent; color: #1C1009; border: 1.5px solid #C9B99A; }
+  .t2-badge-a { background: #F5E4E6; color: #8B2635; }
+  .t2-badge-b { background: #E2EDD9; color: #2D4A22; }
+  .t2-card { background: #FFF; color: #1C1009; border: 1px solid #E8DECE; }
+  .t2-text { color: #1C1009; }
+  .t2-sub { color: #7A6A58; }
+
+  .t2d-btn-primary { background: #C4384A; color: #F8F4EE; }
+  .t2d-btn-accent { background: #4A7A38; color: #F8F4EE; }
+  .t2d-btn-outline { background: transparent; color: #E8DFC8; border: 1.5px solid #2A2218; }
+  .t2d-badge-a { background: #2A0E12; color: #C4384A; }
+  .t2d-badge-b { background: #0E1A0A; color: #4A7A38; }
+  .t2d-card { background: #1A160E; color: #E8DFC8; border: 1px solid #2A2218; }
+  .t2d-text { color: #E8DFC8; }
+  .t2d-sub { color: #6B6050; }
+  .t2d-bg { background: #0E0C08; }
+
+  /* ═══════════════════════════════════════
+     THEME 3 — NORDIC FROST
+  ═══════════════════════════════════════ */
+  .t3-s1 { background: #F5F8FC; }
+  .t3-s2 { background: #D6E4F0; }
+  .t3-s3 { background: #2563EB; }
+  .t3-s4 { background: #7C3AED; }
+  .t3-s5 { background: #0F172A; }
+
+  .t3d-s1 { background: #080D16; }
+  .t3d-s2 { background: #0F172A; }
+  .t3d-s3 { background: #3B82F6; }
+  .t3d-s4 { background: #8B5CF6; }
+  .t3d-s5 { background: #E2E8F0; }
+
+  .t3-btn-primary { background: #2563EB; color: #fff; }
+  .t3-btn-accent { background: #7C3AED; color: #fff; }
+  .t3-btn-outline { background: transparent; color: #0F172A; border: 1.5px solid #C7D7EC; }
+  .t3-badge-a { background: #EFF6FF; color: #2563EB; }
+  .t3-badge-b { background: #F5F3FF; color: #7C3AED; }
+  .t3-card { background: #fff; color: #0F172A; border: 1px solid #E2ECF5; }
+  .t3-text { color: #0F172A; }
+  .t3-sub { color: #64748B; }
+
+  .t3d-btn-primary { background: #3B82F6; color: #fff; }
+  .t3d-btn-accent { background: #8B5CF6; color: #fff; }
+  .t3d-btn-outline { background: transparent; color: #E2E8F0; border: 1.5px solid #1E293B; }
+  .t3d-badge-a { background: #0C1A3D; color: #3B82F6; }
+  .t3d-badge-b { background: #150E30; color: #8B5CF6; }
+  .t3d-card { background: #0F172A; color: #E2E8F0; border: 1px solid #1E293B; }
+  .t3d-text { color: #E2E8F0; }
+  .t3d-sub { color: #64748B; }
+  .t3d-bg { background: #080D16; }
+
+  /* ═══════════════════════════════════════
+     THEME 4 — EMBER
+  ═══════════════════════════════════════ */
+  .t4-s1 { background: #FDF9F5; }
+  .t4-s2 { background: #F2DDD0; }
+  .t4-s3 { background: #D95F2B; }
+  .t4-s4 { background: #1A6B5C; }
+  .t4-s5 { background: #1A120E; }
+
+  .t4d-s1 { background: #0F0C0A; }
+  .t4d-s2 { background: #1C1410; }
+  .t4d-s3 { background: #E8703A; }
+  .t4d-s4 { background: #22907A; }
+  .t4d-s5 { background: #F2E8E0; }
+
+  .t4-btn-primary { background: #D95F2B; color: #fff; }
+  .t4-btn-accent { background: #1A6B5C; color: #fff; }
+  .t4-btn-outline { background: transparent; color: #1A120E; border: 1.5px solid #E8CCC0; }
+  .t4-badge-a { background: #FDF0EA; color: #B54520; }
+  .t4-badge-b { background: #E4F2EE; color: #145448; }
+  .t4-card { background: #fff; color: #1A120E; border: 1px solid #EEE0D8; }
+  .t4-text { color: #1A120E; }
+  .t4-sub { color: #7A6458; }
+
+  .t4d-btn-primary { background: #E8703A; color: #fff; }
+  .t4d-btn-accent { background: #22907A; color: #fff; }
+  .t4d-btn-outline { background: transparent; color: #F2E8E0; border: 1.5px solid #2A1E18; }
+  .t4d-badge-a { background: #2A1008; color: #E8703A; }
+  .t4d-badge-b { background: #081E18; color: #22907A; }
+  .t4d-card { background: #1C1410; color: #F2E8E0; border: 1px solid #2A1E18; }
+  .t4d-text { color: #F2E8E0; }
+  .t4d-sub { color: #7A6458; }
+  .t4d-bg { background: #0F0C0A; }
+
+  /* ═══════════════════════════════════════
+     THEME 5 — VOID (Pure Black + Neon)
+  ═══════════════════════════════════════ */
+  .t5-s1 { background: #FAFAFA; }
+  .t5-s2 { background: #E4E4E7; }
+  .t5-s3 { background: #18181B; }
+  .t5-s4 { background: #00D68F; }
+  .t5-s5 { background: #09090B; }
+
+  .t5d-s1 { background: #09090B; }
+  .t5d-s2 { background: #18181B; }
+  .t5d-s3 { background: #00D68F; }
+  .t5d-s4 { background: #A855F7; }
+  .t5d-s5 { background: #FAFAFA; }
+
+  .t5-btn-primary { background: #18181B; color: #FAFAFA; }
+  .t5-btn-accent { background: #00D68F; color: #09090B; }
+  .t5-btn-outline { background: transparent; color: #18181B; border: 1.5px solid #D4D4D8; }
+  .t5-badge-a { background: #F0FDF8; color: #047857; }
+  .t5-badge-b { background: #F9F0FF; color: #7C3AED; }
+  .t5-card { background: #fff; color: #18181B; border: 1px solid #E4E4E7; }
+  .t5-text { color: #18181B; }
+  .t5-sub { color: #71717A; }
+
+  .t5d-btn-primary { background: #00D68F; color: #09090B; font-weight: 600; }
+  .t5d-btn-accent { background: #A855F7; color: #fff; }
+  .t5d-btn-outline { background: transparent; color: #FAFAFA; border: 1.5px solid #27272A; }
+  .t5d-badge-a { background: #001F14; color: #00D68F; }
+  .t5d-badge-b { background: #1A0A2E; color: #A855F7; }
+  .t5d-card { background: #18181B; color: #FAFAFA; border: 1px solid #27272A; }
+  .t5d-text { color: #FAFAFA; }
+  .t5d-sub { color: #71717A; }
+  .t5d-bg { background: #09090B; }
+
+  /* ── page section label ── */
+  .section-title {
+    font-size: 11px;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    color: #444;
+    text-align: center;
+    margin: 56px 0 28px;
+  }
+  .section-title span {
+    background: #0a0a0a;
+    padding: 0 16px;
+    position: relative;
+  }
+  .section-title::before {
+    content: '';
+    display: block;
+    height: 1px;
+    background: #222;
+    position: absolute;
+    left: 0; right: 0;
+    top: 50%;
+    transform: translateY(-50%);
+  }
+  .section-title-wrap {
+    position: relative;
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+
+<h1>Design Themes</h1>
+<p class="subtitle">PaperStudio &amp; CZAR — choose your direction</p>
+
+<!-- ══════════════════════════════════════
+     THEME 1 — INK & PAPER
+══════════════════════════════════════ -->
+<div class="section-title-wrap"><div class="section-title"><span>01 — Ink &amp; Paper</span></div></div>
+
+<div class="theme-card">
+  <!-- LIGHT -->
+  <div class="theme-header t1-bg">
+    <div class="theme-name t1-text">Ink &amp; Paper</div>
+    <div class="theme-desc" style="color:#1A1614;opacity:.5;">Warm parchment tones with gold &amp; teal accents. Like a beautifully typeset book.</div>
+  </div>
+  <div class="swatches">
+    <div class="swatch t1-s1"><span class="swatch-label">#FAF7F2</span></div>
+    <div class="swatch t1-s2"><span class="swatch-label">#EAE0CC</span></div>
+    <div class="swatch t1-s3"><span class="swatch-label">#C9A84C</span></div>
+    <div class="swatch t1-s4"><span class="swatch-label">#2E7D7B</span></div>
+    <div class="swatch t1-s5"><span class="swatch-label">#1A1614</span></div>
+  </div>
+  <div class="ui-sample t1-bg">
+    <div class="ui-row">
+      <span class="heading-sample t1-text">Writing <em>beautifully</em></span>
+    </div>
+    <div class="divider t1-text"></div>
+    <div class="ui-row">
+      <button class="btn t1-btn-primary">Generate</button>
+      <button class="btn t1-btn-accent">CZAR Chat</button>
+      <button class="btn t1-btn-outline">Preview</button>
+    </div>
+    <div class="ui-row">
+      <span class="badge t1-badge-a">Masters</span>
+      <span class="badge t1-badge-b">Gemini Flash</span>
+      <span class="mono-sample t1-sub">1,842 words</span>
+    </div>
+    <div class="ui-row">
+      <div class="card-mini t1-card"><strong style="font-family:Fraunces,serif;font-size:14px;" class="t1-text">Chapter 2</strong><br><span class="t1-sub">Literature Review · 4,200 words</span></div>
+      <div class="card-mini t1-card"><strong style="font-family:Fraunces,serif;font-size:14px;" class="t1-text">Chapter 3</strong><br><span class="t1-sub">Methodology · 3,100 words</span></div>
+    </div>
+  </div>
+  <!-- DARK -->
+  <div class="mode-strip">
+    <div class="mode-half" style="background:#111318;color:#EAE4D8;">
+      <div class="mode-dot" style="background:#D4A853;"></div>
+      Dark mode
+    </div>
+    <div class="mode-half" style="background:#1A1E2A;color:#6B7280;">
+      <div class="mode-dot" style="background:#3D9E9C;"></div>
+      Teal accent
+    </div>
+  </div>
+  <div class="swatches">
+    <div class="swatch t1d-s1"><span class="swatch-label">#111318</span></div>
+    <div class="swatch t1d-s2"><span class="swatch-label">#1E2028</span></div>
+    <div class="swatch t1d-s3"><span class="swatch-label">#D4A853</span></div>
+    <div class="swatch t1d-s4"><span class="swatch-label">#3D9E9C</span></div>
+    <div class="swatch t1d-s5"><span class="swatch-label">#EAE4D8</span></div>
+  </div>
+  <div class="ui-sample t1d-bg">
+    <div class="ui-row">
+      <span class="heading-sample t1d-text">Writing <em>beautifully</em></span>
+    </div>
+    <div class="divider t1d-text"></div>
+    <div class="ui-row">
+      <button class="btn t1d-btn-primary">Generate</button>
+      <button class="btn t1d-btn-accent">CZAR Chat</button>
+      <button class="btn t1d-btn-outline">Preview</button>
+    </div>
+    <div class="ui-row">
+      <span class="badge t1d-badge-a">Masters</span>
+      <span class="badge t1d-badge-b">Gemini Flash</span>
+      <span class="mono-sample t1d-sub">1,842 words</span>
+    </div>
+    <div class="ui-row">
+      <div class="card-mini t1d-card"><strong style="font-family:Fraunces,serif;font-size:14px;" class="t1d-text">Chapter 2</strong><br><span class="t1d-sub">Literature Review · 4,200 words</span></div>
+      <div class="card-mini t1d-card"><strong style="font-family:Fraunces,serif;font-size:14px;" class="t1d-text">Chapter 3</strong><br><span class="t1d-sub">Methodology · 3,100 words</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     THEME 2 — DARK ACADEMIA
+══════════════════════════════════════ -->
+<div class="section-title-wrap" style="margin-top:48px;"><div class="section-title"><span>02 — Dark Academia</span></div></div>
+
+<div class="theme-card">
+  <div class="theme-header" style="background:#F8F4EE;">
+    <div class="theme-name" style="color:#1C1009;">Dark Academia</div>
+    <div class="theme-desc" style="color:#1C1009;opacity:.45;">Aged parchment, deep burgundy, forest green. Oxford at midnight.</div>
+  </div>
+  <div class="swatches">
+    <div class="swatch t2-s1"><span class="swatch-label">#F8F4EE</span></div>
+    <div class="swatch t2-s2"><span class="swatch-label">#DDD0B8</span></div>
+    <div class="swatch t2-s3"><span class="swatch-label">#8B2635</span></div>
+    <div class="swatch t2-s4"><span class="swatch-label">#2D4A22</span></div>
+    <div class="swatch t2-s5"><span class="swatch-label">#1C1009</span></div>
+  </div>
+  <div class="ui-sample" style="background:#F8F4EE;">
+    <div class="ui-row">
+      <span class="heading-sample t2-text">Academic <em>excellence</em></span>
+    </div>
+    <div class="divider t2-text"></div>
+    <div class="ui-row">
+      <button class="btn t2-btn-primary">Generate</button>
+      <button class="btn t2-btn-accent">CZAR Chat</button>
+      <button class="btn t2-btn-outline">Preview</button>
+    </div>
+    <div class="ui-row">
+      <span class="badge t2-badge-a">Masters</span>
+      <span class="badge t2-badge-b">Gemini Flash</span>
+      <span class="mono-sample t2-sub">1,842 words</span>
+    </div>
+    <div class="ui-row">
+      <div class="card-mini t2-card"><strong style="font-family:Fraunces,serif;font-size:14px;" class="t2-text">Chapter 2</strong><br><span class="t2-sub">Literature Review · 4,200 words</span></div>
+      <div class="card-mini t2-card"><strong style="font-family:Fraunces,serif;font-size:14px;" class="t2-text">Chapter 3</strong><br><span class="t2-sub">Methodology · 3,100 words</span></div>
+    </div>
+  </div>
+  <div class="mode-strip">
+    <div class="mode-half" style="background:#0E0C08;color:#E8DFC8;">
+      <div class="mode-dot" style="background:#C4384A;"></div>
+      Dark mode
+    </div>
+    <div class="mode-half" style="background:#1A160E;color:#6B6050;">
+      <div class="mode-dot" style="background:#4A7A38;"></div>
+      Forest accent
+    </div>
+  </div>
+  <div class="swatches">
+    <div class="swatch t2d-s1"><span class="swatch-label">#0E0C08</span></div>
+    <div class="swatch t2d-s2"><span class="swatch-label">#1A160E</span></div>
+    <div class="swatch t2d-s3"><span class="swatch-label">#C4384A</span></div>
+    <div class="swatch t2d-s4"><span class="swatch-label">#4A7A38</span></div>
+    <div class="swatch t2d-s5"><span class="swatch-label">#E8DFC8</span></div>
+  </div>
+  <div class="ui-sample t2d-bg">
+    <div class="ui-row">
+      <span class="heading-sample t2d-text">Academic <em>excellence</em></span>
+    </div>
+    <div class="divider t2d-text"></div>
+    <div class="ui-row">
+      <button class="btn t2d-btn-primary">Generate</button>
+      <button class="btn t2d-btn-accent">CZAR Chat</button>
+      <button class="btn t2d-btn-outline">Preview</button>
+    </div>
+    <div class="ui-row">
+      <span class="badge t2d-badge-a">Masters</span>
+      <span class="badge t2d-badge-b">Gemini Flash</span>
+      <span class="mono-sample t2d-sub">1,842 words</span>
+    </div>
+    <div class="ui-row">
+      <div class="card-mini t2d-card"><strong style="font-family:Fraunces,serif;font-size:14px;" class="t2d-text">Chapter 2</strong><br><span class="t2d-sub">Literature Review · 4,200 words</span></div>
+      <div class="card-mini t2d-card"><strong style="font-family:Fraunces,serif;font-size:14px;" class="t2d-text">Chapter 3</strong><br><span class="t2d-sub">Methodology · 3,100 words</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     THEME 3 — NORDIC FROST
+══════════════════════════════════════ -->
+<div class="section-title-wrap" style="margin-top:48px;"><div class="section-title"><span>03 — Nordic Frost</span></div></div>
+
+<div class="theme-card">
+  <div class="theme-header" style="background:#F5F8FC;">
+    <div class="theme-name" style="color:#0F172A;">Nordic Frost</div>
+    <div class="theme-desc" style="color:#0F172A;opacity:.45;">Clean ice blues with violet depth. Crisp, intelligent, modern.</div>
+  </div>
+  <div class="swatches">
+    <div class="swatch t3-s1"></div>
+    <div class="swatch t3-s2"></div>
+    <div class="swatch t3-s3"><span class="swatch-label">#2563EB</span></div>
+    <div class="swatch t3-s4"><span class="swatch-label">#7C3AED</span></div>
+    <div class="swatch t3-s5"></div>
+  </div>
+  <div class="ui-sample" style="background:#F5F8FC;">
+    <div class="ui-row">
+      <span class="heading-sample t3-text">Research <em>amplified</em></span>
+    </div>
+    <div class="divider t3-text"></div>
+    <div class="ui-row">
+      <button class="btn t3-btn-primary">Generate</button>
+      <button class="btn t3-btn-accent">CZAR Chat</button>
+      <button class="btn t3-btn-outline">Preview</button>
+    </div>
+    <div class="ui-row">
+      <span class="badge t3-badge-a">Masters</span>
+      <span class="badge t3-badge-b">Gemini Flash</span>
+      <span class="mono-sample t3-sub">1,842 words</span>
+    </div>
+    <div class="ui-row">
+      <div class="card-mini t3-card"><strong style="font-family:Fraunces,serif;font-size:14px;" class="t3-text">Chapter 2</strong><br><span class="t3-sub">Literature Review</span></div>
+      <div class="card-mini t3-card"><strong style="font-family:Fraunces,serif;font-size:14px;" class="t3-text">Chapter 3</strong><br><span class="t3-sub">Methodology</span></div>
+    </div>
+  </div>
+  <div class="mode-strip">
+    <div class="mode-half" style="background:#080D16;color:#E2E8F0;">
+      <div class="mode-dot" style="background:#3B82F6;"></div>
+      Dark mode
+    </div>
+    <div class="mode-half" style="background:#0F172A;color:#64748B;">
+      <div class="mode-dot" style="background:#8B5CF6;"></div>
+      Violet accent
+    </div>
+  </div>
+  <div class="swatches">
+    <div class="swatch t3d-s1"><span class="swatch-label">#080D16</span></div>
+    <div class="swatch t3d-s2"><span class="swatch-label">#0F172A</span></div>
+    <div class="swatch t3d-s3"><span class="swatch-label">#3B82F6</span></div>
+    <div class="swatch t3d-s4"><span class="swatch-label">#8B5CF6</span></div>
+    <div class="swatch t3d-s5"><span class="swatch-label">#E2E8F0</span></div>
+  </div>
+  <div class="ui-sample t3d-bg">
+    <div class="ui-row">
+      <span class="heading-sample t3d-text">Research <em>amplified</em></span>
+    </div>
+    <div class="divider t3d-text"></div>
+    <div class="ui-row">
+      <button class="btn t3d-btn-primary">Generate</button>
+      <button class="btn t3d-btn-accent">CZAR Chat</button>
+      <button class="btn t3d-btn-outline">Preview</button>
+    </div>
+    <div class="ui-row">
+      <span class="badge t3d-badge-a">Masters</span>
+      <span class="badge t3d-badge-b">Gemini Flash</span>
+      <span class="mono-sample t3d-sub">1,842 words</span>
+    </div>
+    <div class="ui-row">
+      <div class="card-mini t3d-card"><strong style="font-family:Fraunces,serif;font-size:14px;" class="t3d-text">Chapter 2</strong><br><span class="t3d-sub">Literature Review</span></div>
+      <div class="card-mini t3d-card"><strong style="font-family:Fraunces,serif;font-size:14px;" class="t3d-text">Chapter 3</strong><br><span class="t3d-sub">Methodology</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     THEME 4 — EMBER
+══════════════════════════════════════ -->
+<div class="section-title-wrap" style="margin-top:48px;"><div class="section-title"><span>04 — Ember</span></div></div>
+
+<div class="theme-card">
+  <div class="theme-header" style="background:#FDF9F5;">
+    <div class="theme-name" style="color:#1A120E;">Ember</div>
+    <div class="theme-desc" style="color:#1A120E;opacity:.45;">Terracotta warmth with deep teal. Human, energetic, grounded.</div>
+  </div>
+  <div class="swatches">
+    <div class="swatch t4-s1"></div>
+    <div class="swatch t4-s2"></div>
+    <div class="swatch t4-s3"><span class="swatch-label">#D95F2B</span></div>
+    <div class="swatch t4-s4"><span class="swatch-label">#1A6B5C</span></div>
+    <div class="swatch t4-s5"></div>
+  </div>
+  <div class="ui-sample" style="background:#FDF9F5;">
+    <div class="ui-row">
+      <span class="heading-sample t4-text">Think <em>deeper,</em> write faster</span>
+    </div>
+    <div class="divider t4-text"></div>
+    <div class="ui-row">
+      <button class="btn t4-btn-primary">Generate</button>
+      <button class="btn t4-btn-accent">CZAR Chat</button>
+      <button class="btn t4-btn-outline">Preview</button>
+    </div>
+    <div class="ui-row">
+      <span class="badge t4-badge-a">Masters</span>
+      <span class="badge t4-badge-b">Gemini Flash</span>
+      <span class="mono-sample t4-sub">1,842 words</span>
+    </div>
+    <div class="ui-row">
+      <div class="card-mini t4-card"><strong style="font-family:Fraunces,serif;font-size:14px;" class="t4-text">Chapter 2</strong><br><span class="t4-sub">Literature Review</span></div>
+      <div class="card-mini t4-card"><strong style="font-family:Fraunces,serif;font-size:14px;" class="t4-text">Chapter 3</strong><br><span class="t4-sub">Methodology</span></div>
+    </div>
+  </div>
+  <div class="mode-strip">
+    <div class="mode-half" style="background:#0F0C0A;color:#F2E8E0;">
+      <div class="mode-dot" style="background:#E8703A;"></div>
+      Dark mode
+    </div>
+    <div class="mode-half" style="background:#1C1410;color:#7A6458;">
+      <div class="mode-dot" style="background:#22907A;"></div>
+      Teal accent
+    </div>
+  </div>
+  <div class="swatches">
+    <div class="swatch t4d-s1"><span class="swatch-label">#0F0C0A</span></div>
+    <div class="swatch t4d-s2"><span class="swatch-label">#1C1410</span></div>
+    <div class="swatch t4d-s3"><span class="swatch-label">#E8703A</span></div>
+    <div class="swatch t4d-s4"><span class="swatch-label">#22907A</span></div>
+    <div class="swatch t4d-s5"><span class="swatch-label">#F2E8E0</span></div>
+  </div>
+  <div class="ui-sample t4d-bg">
+    <div class="ui-row">
+      <span class="heading-sample t4d-text">Think <em>deeper,</em> write faster</span>
+    </div>
+    <div class="divider t4d-text"></div>
+    <div class="ui-row">
+      <button class="btn t4d-btn-primary">Generate</button>
+      <button class="btn t4d-btn-accent">CZAR Chat</button>
+      <button class="btn t4d-btn-outline">Preview</button>
+    </div>
+    <div class="ui-row">
+      <span class="badge t4d-badge-a">Masters</span>
+      <span class="badge t4d-badge-b">Gemini Flash</span>
+      <span class="mono-sample t4d-sub">1,842 words</span>
+    </div>
+    <div class="ui-row">
+      <div class="card-mini t4d-card"><strong style="font-family:Fraunces,serif;font-size:14px;" class="t4d-text">Chapter 2</strong><br><span class="t4d-sub">Literature Review</span></div>
+      <div class="card-mini t4d-card"><strong style="font-family:Fraunces,serif;font-size:14px;" class="t4d-text">Chapter 3</strong><br><span class="t4d-sub">Methodology</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     THEME 5 — VOID
+══════════════════════════════════════ -->
+<div class="section-title-wrap" style="margin-top:48px;"><div class="section-title"><span>05 — Void</span></div></div>
+
+<div class="theme-card">
+  <div class="theme-header" style="background:#FAFAFA;">
+    <div class="theme-name" style="color:#18181B;">Void</div>
+    <div class="theme-desc" style="color:#18181B;opacity:.45;">Pure black with electric mint &amp; violet. Minimal, sharp, futuristic.</div>
+  </div>
+  <div class="swatches">
+    <div class="swatch t5-s1"></div>
+    <div class="swatch t5-s2"></div>
+    <div class="swatch t5-s3"></div>
+    <div class="swatch t5-s4"><span class="swatch-label">#00D68F</span></div>
+    <div class="swatch t5-s5"></div>
+  </div>
+  <div class="ui-sample" style="background:#FAFAFA;">
+    <div class="ui-row">
+      <span class="heading-sample t5-text">Write <em>without</em> limits</span>
+    </div>
+    <div class="divider t5-text"></div>
+    <div class="ui-row">
+      <button class="btn t5-btn-primary">Generate</button>
+      <button class="btn t5-btn-accent">CZAR Chat</button>
+      <button class="btn t5-btn-outline">Preview</button>
+    </div>
+    <div class="ui-row">
+      <span class="badge t5-badge-a">Masters</span>
+      <span class="badge t5-badge-b">Gemini Flash</span>
+      <span class="mono-sample t5-sub">1,842 words</span>
+    </div>
+    <div class="ui-row">
+      <div class="card-mini t5-card"><strong style="font-family:Fraunces,serif;font-size:14px;" class="t5-text">Chapter 2</strong><br><span class="t5-sub">Literature Review</span></div>
+      <div class="card-mini t5-card"><strong style="font-family:Fraunces,serif;font-size:14px;" class="t5-text">Chapter 3</strong><br><span class="t5-sub">Methodology</span></div>
+    </div>
+  </div>
+  <div class="mode-strip">
+    <div class="mode-half" style="background:#09090B;color:#FAFAFA;">
+      <div class="mode-dot" style="background:#00D68F;"></div>
+      Dark mode
+    </div>
+    <div class="mode-half" style="background:#18181B;color:#71717A;">
+      <div class="mode-dot" style="background:#A855F7;"></div>
+      Violet accent
+    </div>
+  </div>
+  <div class="swatches">
+    <div class="swatch t5d-s1"><span class="swatch-label">#09090B</span></div>
+    <div class="swatch t5d-s2"><span class="swatch-label">#18181B</span></div>
+    <div class="swatch t5d-s3"><span class="swatch-label">#00D68F</span></div>
+    <div class="swatch t5d-s4"><span class="swatch-label">#A855F7</span></div>
+    <div class="swatch t5d-s5"><span class="swatch-label">#FAFAFA</span></div>
+  </div>
+  <div class="ui-sample t5d-bg">
+    <div class="ui-row">
+      <span class="heading-sample t5d-text">Write <em>without</em> limits</span>
+    </div>
+    <div class="divider t5d-text"></div>
+    <div class="ui-row">
+      <button class="btn t5d-btn-primary">Generate</button>
+      <button class="btn t5d-btn-accent">CZAR Chat</button>
+      <button class="btn t5d-btn-outline">Preview</button>
+    </div>
+    <div class="ui-row">
+      <span class="badge t5d-badge-a">Masters</span>
+      <span class="badge t5d-badge-b">Gemini Flash</span>
+      <span class="mono-sample t5d-sub">1,842 words</span>
+    </div>
+    <div class="ui-row">
+      <div class="card-mini t5d-card"><strong style="font-family:Fraunces,serif;font-size:14px;" class="t5d-text">Chapter 2</strong><br><span class="t5d-sub">Literature Review</span></div>
+      <div class="card-mini t5d-card"><strong style="font-family:Fraunces,serif;font-size:14px;" class="t5d-text">Chapter 3</strong><br><span class="t5d-sub">Methodology</span></div>
+    </div>
+  </div>
+</div>
+
+<p style="text-align:center;color:#333;font-size:12px;margin-top:48px;font-family:'DM Mono',monospace;">All themes use Fraunces (headings) · Geist (UI) · DM Mono (details)</p>
+
+</body>
+</html>
