@@ -1,0 +1,7 @@
+project_id = "mmhpmfgzkjqefpihnzpx"
+
+[functions.paystack-transfer-webhook]
+verify_jwt = false
+
+[functions.notify-new-signup]
+verify_jwt = false

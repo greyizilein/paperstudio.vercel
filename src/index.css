@@ -1,0 +1,1071 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Lato:ital,wght@0,300;0,400;0,700;0,900;1,400&family=Nunito:wght@400;600;700;800;900&family=DM+Mono:wght@400;500&family=Allura&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700;800&family=Geist+Mono:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter+Tight:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+/* Reading-mode typefaces (CZAR personal accessibility prefs — screen-only,
+   never reach the export pipeline). Loaded with display=swap so the page
+   never blocks on them. */
+@import url('https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,300;8..60,400;8..60,500;8..60,600;8..60,700&family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400;1,700&display=swap');
+
+@layer base {
+  :root {
+    /* PAPERSTUDIO — warm cream + charcoal + terracotta (ZOE-inspired) */
+    --background: 40 33% 98%;          /* cream paper */
+    --foreground: 24 10% 10%;          /* warm charcoal */
+
+    --card: 0 0% 100%;
+    --card-foreground: 24 10% 10%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 24 10% 10%;
+
+    /* Terracotta primary (replaces aubergine throughout the app) */
+    --primary: 18 50% 53%;
+    --primary-foreground: 0 0% 100%;
+    --primary-dark: 18 55% 44%;
+    --primary-mid: 18 40% 60%;
+    --primary-light: 18 45% 92%;
+    --primary-pale: 30 35% 97%;
+
+    --secondary: 40 25% 95%;
+    --secondary-foreground: 24 10% 10%;
+
+    --muted: 40 25% 95%;
+    --muted-foreground: 24 8% 42%;
+
+    --accent: 153 16% 42%;             /* sage accent */
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 65% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 30 15% 88%;
+    --input: 30 15% 88%;
+    --ring: 18 50% 53%;
+
+    --radius: 0.5rem;
+
+    --surface: 0 0% 100%;
+    --surface-light: 40 25% 96%;
+
+    /* Accent colors mapped to ZOE palette */
+    --aqua: 212 38% 43%;               /* dusty blue */
+    --green: 153 16% 42%;              /* sage */
+    --yellow: 37 56% 50%;              /* warm gold */
+    --red: 351 40% 56%;                /* dusty rose */
+
+    /* Sidebar = deep charcoal */
+    --sidebar-background: 24 14% 12%;
+    --sidebar-foreground: 0 0% 96%;
+    --sidebar-primary: 18 50% 53%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 24 14% 18%;
+    --sidebar-accent-foreground: 0 0% 96%;
+    --sidebar-border: 0 0% 100% / 0.08;
+    --sidebar-ring: 18 50% 53%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: 'Inter', 'Lato', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    overflow-x: hidden;
+  }
+}
+
+/* PaperStudio theme — gradient background applied from CSS variable */
+.ps-app {
+  background: var(--ps-bg-gradient, hsl(var(--background)));
+  min-height: 100dvh;
+}
+
+/* Academic prose: justified text and clean tables */
+.prose p { text-align: justify; }
+.prose table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 13px; }
+.prose thead { background: hsl(var(--muted)); }
+.prose th { border: 1px solid hsl(var(--border)); padding: 0.5rem 0.75rem; text-align: left; font-weight: 700; font-size: 13px; }
+.prose td { border: 1px solid hsl(var(--border)); padding: 0.5rem 0.75rem; font-size: 13px; }
+.prose tr:nth-child(even) td { background: hsl(var(--muted) / 0.3); }
+
+/* ─── Publication-quality writing display ─────────────────────────────────── */
+.prose-academic {
+  font-family: 'Lato', Georgia, serif;
+  font-size: 0.875rem;     /* 14px */
+  line-height: 1.95;
+  color: hsl(var(--foreground));
+}
+.prose-academic p {
+  text-align: justify;
+  hyphens: auto;
+  margin-bottom: 1em;
+}
+/* Headings */
+.prose-academic h1 {
+  font-family: 'Nunito', sans-serif;
+  font-size: 1.2rem;
+  font-weight: 900;
+  margin-top: 2rem;
+  margin-bottom: 0.5rem;
+  letter-spacing: -0.01em;
+}
+.prose-academic h2 {
+  font-family: 'Nunito', sans-serif;
+  font-size: 1.05rem;
+  font-weight: 800;
+  margin-top: 1.75rem;
+  margin-bottom: 0.5rem;
+  letter-spacing: -0.01em;
+}
+.prose-academic h3 {
+  font-family: 'Nunito', sans-serif;
+  font-size: 0.95rem;
+  font-weight: 700;
+  margin-top: 1.25rem;
+  margin-bottom: 0.35rem;
+}
+.prose-academic h4 {
+  font-family: 'Nunito', sans-serif;
+  font-size: 0.875rem;
+  font-weight: 700;
+  margin-top: 1rem;
+  margin-bottom: 0.25rem;
+}
+/* Ordered/unordered lists */
+.prose-academic ol {
+  list-style-type: decimal;
+  padding-left: 1.75rem;
+  margin-bottom: 1em;
+}
+.prose-academic ul {
+  list-style-type: disc;
+  padding-left: 1.75rem;
+  margin-bottom: 1em;
+}
+.prose-academic li {
+  margin-bottom: 0.25em;
+  text-align: justify;
+}
+/* Nested lists */
+.prose-academic ol ol { list-style-type: lower-alpha; }
+.prose-academic ol ol ol { list-style-type: lower-roman; }
+/* Blockquotes (long citations) */
+.prose-academic blockquote {
+  border-left: 3px solid hsl(var(--primary));
+  padding-left: 1rem;
+  margin: 1rem 0;
+  color: hsl(var(--muted-foreground));
+  font-style: italic;
+}
+/* Strong/emphasis */
+.prose-academic strong { font-weight: 700; }
+.prose-academic em { font-style: italic; }
+/* Tables */
+.prose-academic table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1.25rem 0;
+  font-size: 13px;
+}
+.prose-academic thead { background: hsl(var(--muted)); }
+.prose-academic th {
+  border: 1px solid hsl(var(--border));
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+  font-weight: 700;
+}
+.prose-academic td {
+  border: 1px solid hsl(var(--border));
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+}
+.prose-academic tr:nth-child(even) td { background: hsl(var(--muted) / 0.3); }
+/* Code blocks (for statistical output) */
+.prose-academic pre {
+  background: hsl(var(--muted));
+  border: 1px solid hsl(var(--border));
+  border-radius: 4px;
+  padding: 0.75rem 1rem;
+  overflow-x: auto;
+  font-family: 'DM Mono', monospace;
+  font-size: 12px;
+}
+.prose-academic code {
+  font-family: 'DM Mono', monospace;
+  font-size: 12px;
+  background: hsl(var(--muted));
+  padding: 0.1em 0.3em;
+  border-radius: 3px;
+}
+/* Horizontal rule */
+.prose-academic hr {
+  border: none;
+  border-top: 1px solid hsl(var(--border));
+  margin: 1.5rem 0;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { @apply bg-primary/15 rounded-full; }
+::-webkit-scrollbar-thumb:hover { @apply bg-primary/30; }
+
+::selection {
+  background: hsl(var(--primary) / 0.2);
+  color: hsl(var(--primary));
+}
+
+/* Hero */
+.hero-gradient {
+  background: hsl(var(--primary));
+  position: relative;
+  overflow: hidden;
+}
+
+/* Reveal animation */
+.reveal {
+  opacity: 0;
+  transform: translateY(24px);
+  transition: opacity 0.7s ease, transform 0.7s ease;
+}
+.reveal.in {
+  opacity: 1;
+  transform: none;
+}
+
+/* Cursor blink */
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+.cursor-blink {
+  display: inline-block;
+  width: 2px;
+  height: 14px;
+  background: hsl(var(--aqua));
+  vertical-align: text-bottom;
+  animation: blink 0.8s step-end infinite;
+  margin-left: 1px;
+}
+
+/* Hero glow pulse */
+@keyframes glowPulse {
+  0%, 100% { opacity: 0.6; transform: translateX(-50%) scale(1); }
+  50% { opacity: 1; transform: translateX(-50%) scale(1.1); }
+}
+
+/* Live dot pulse */
+@keyframes livePulse {
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(54, 197, 240, 0.4); }
+  50% { opacity: 0.7; box-shadow: 0 0 0 6px rgba(54, 197, 240, 0); }
+}
+.live-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: hsl(var(--aqua));
+  animation: livePulse 1.5s infinite;
+  flex-shrink: 0;
+}
+
+/* Fade down animation */
+@keyframes fadeDown {
+  from { opacity: 0; transform: translateY(-16px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* Board rise animation */
+@keyframes boardRise {
+  from { opacity: 0; transform: perspective(1600px) rotateX(12deg) translateY(40px); }
+  to { opacity: 1; transform: perspective(1600px) rotateX(5deg) translateY(0); }
+}
+
+/* Stage pulse animation */
+@keyframes stagePulse {
+  0%, 100% { border-color: hsl(var(--primary-light)); }
+  50% { border-color: hsl(var(--primary)); }
+}
+
+/* Page enter animation */
+@keyframes pageIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
+}
+
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* ── BookLoader animations ─────────────────────────────────────────── */
+@keyframes ps-book-sway {
+  0%, 100% { transform: rotate(0deg); }
+  50%      { transform: rotate(-2deg); }
+}
+@keyframes ps-book-sway-r {
+  0%, 100% { transform: rotate(0deg); }
+  50%      { transform: rotate(2deg); }
+}
+@keyframes ps-book-tip {
+  0%   { transform: rotate(0deg); }
+  35%  { transform: rotate(0deg); }
+  55%  { transform: rotate(-32deg); }
+  75%  { transform: rotate(-32deg); }
+  100% { transform: rotate(0deg); }
+}
+@keyframes ps-book-open-pulse {
+  0%, 100% { transform: translateY(0); opacity: 1; }
+  50%      { transform: translateY(-3px); opacity: 0.85; }
+}
+.ps-book-1     { animation: ps-book-sway   2.4s ease-in-out infinite; }
+.ps-book-2     { animation: ps-book-sway-r 2.4s ease-in-out infinite 0.2s; }
+.ps-book-3     { animation: ps-book-sway   2.4s ease-in-out infinite 0.4s; }
+.ps-book-tip   { animation: ps-book-tip    2.4s ease-in-out infinite; }
+.ps-book-open  { animation: ps-book-open-pulse 2.4s ease-in-out infinite; transform-origin: 96px 72px; }
+
+/* ─────────────────────────────────────────────────────────────────────────
+   PAPERSTUDIO Marketing surface (ZOE-derived dark terracotta).
+   Scoped under .paperstudio-marketing to avoid bleeding into the dashboard,
+   writer, auth, settings, admin, or legal pages.
+   ───────────────────────────────────────────────────────────────────────── */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+
+.paperstudio-marketing {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  background: #1a1714;
+  color: #fff;
+}
+.paperstudio-marketing h1,
+.paperstudio-marketing h2,
+.paperstudio-marketing h3,
+.paperstudio-marketing h4,
+.paperstudio-marketing h5,
+.paperstudio-marketing h6 { text-wrap: balance; }
+.paperstudio-marketing p { text-wrap: pretty; }
+
+/* Floating + accent animations (namespaced) */
+@keyframes ps-float-gentle { 0%,100% { transform: translateY(0) rotate(0); } 50% { transform: translateY(-12px) rotate(2deg); } }
+@keyframes ps-float-slow   { 0%,100% { transform: translateY(0) rotate(0); } 50% { transform: translateY(-8px) rotate(-1.5deg); } }
+@keyframes ps-float-drift  { 0%,100% { transform: translateY(0) translateX(0); } 33% { transform: translateY(-10px) translateX(4px); } 66% { transform: translateY(-6px) translateX(-3px); } }
+@keyframes ps-blink-cursor { 0%,100% { opacity: 1; } 50% { opacity: 0; } }
+@keyframes ps-cursor-path  { 0% { transform: translate(0,0); opacity: 0; } 5% { opacity: 1; } 20% { transform: translate(120px,80px); } 50% { transform: translate(250px,40px); } 70% { transform: translate(180px,160px); } 95% { opacity: 1; } 100% { transform: translate(300px,20px); opacity: 0; } }
+@keyframes ps-pulse-glow   { 0%,100% { box-shadow: 0 0 20px 0 rgba(196,112,75,0); } 50% { box-shadow: 0 0 24px 6px rgba(196,112,75,0.25); } }
+@keyframes ps-slide-left   { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
+
+.paperstudio-marketing .animate-float-gentle { animation: ps-float-gentle 5s ease-in-out infinite; }
+.paperstudio-marketing .animate-float-slow   { animation: ps-float-slow 7s ease-in-out infinite; }
+.paperstudio-marketing .animate-float-drift  { animation: ps-float-drift 9s ease-in-out infinite; }
+.paperstudio-marketing .animate-blink-cursor { animation: ps-blink-cursor 0.8s step-end infinite; }
+.paperstudio-marketing .animate-cursor       { animation: ps-cursor-path 8s ease-in-out infinite; }
+.paperstudio-marketing .animate-pulse-glow   { animation: ps-pulse-glow 2.5s ease-in-out infinite; }
+.paperstudio-marketing .animate-slide-left   { animation: ps-slide-left 30s linear infinite; }
+
+/* ─── CZAR theming baseline ─────────────────────────────────────────────
+   Themes set CSS vars on `.czar-root` at runtime via applyTheme().
+   These defaults match the Editorial Light theme so first paint is correct.
+   Also defined on :root so Radix-portaled UI (popovers, dropdowns, dialogs)
+   that lives outside .czar-root still resolves the tokens — otherwise
+   `var(--czar-surface)` falls through to transparent. */
+:root,
+.czar-root {
+  --czar-bg: #FAF8F4;
+  --czar-bg-elev: #F2EFE8;
+  --czar-surface: #FFFFFF;
+  --czar-surface-hover: #F4F1EA;
+  --czar-border: #EAE6DD;
+  --czar-text: #15131A;
+  --czar-text-dim: #5A5762;
+  --czar-text-faint: #8E8A93;
+  --czar-accent: #15131A;
+  --czar-accent-fg: #FAF8F4;
+  --czar-danger: #B5302E;
+  --czar-assistant-fg: #1A1A1A;
+  /* Bubble variables — overridden per theme */
+  --czar-asst-bubble: var(--czar-surface);
+  --czar-asst-bubble-fg: var(--czar-assistant-fg, var(--czar-text));
+  --czar-user-bubble: var(--czar-surface-hover);
+  --czar-user-bubble-fg: var(--czar-text);
+
+  /* Editorial typography tokens */
+  --czar-font-display: "Fraunces", "Playfair Display", Georgia, "Times New Roman", serif;
+  --czar-font-body: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --czar-font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --czar-ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* When CZAR is active, the body background matches the theme so the
+   page feels immersive (no white flash on overscroll / rubber-banding).
+   applyTheme() writes --czar-page-bg to html; we use it here. */
+html[data-czar-theme] body {
+  background: var(--czar-page-bg, inherit);
+}
+
+.czar-root {
+  background: var(--czar-bg-gradient, var(--czar-bg));
+  color: var(--czar-text);
+  font-family: var(--czar-font-body);
+  font-feature-settings: "ss01", "cv01", "cv11";
+}
+
+/* Editorial display headings — Fraunces with optical sizing */
+.czar-root .czar-display { font-family: var(--czar-font-display); font-feature-settings: "ss01"; letter-spacing: -0.015em; }
+.czar-root .czar-smallcaps { font-variant: small-caps; letter-spacing: 0.06em; text-transform: lowercase; }
+
+.czar-root .czar-prose { font-family: var(--czar-font-body); font-size: 15px; line-height: 1.7; letter-spacing: -0.005em; }
+.czar-root .czar-prose p { color: var(--czar-text); margin: 0.85em 0; }
+.czar-root .czar-prose a { color: var(--czar-accent); text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 2px; }
+.czar-root .czar-prose strong { color: var(--czar-text); font-weight: 600; }
+.czar-root .czar-prose em { color: var(--czar-text); font-style: italic; }
+.czar-root .czar-prose code { background: var(--czar-surface-hover); color: var(--czar-text); padding: 1px 5px; border-radius: 3px; font-family: var(--czar-font-mono); font-size: 0.88em; }
+.czar-root .czar-prose pre { background: var(--czar-surface-hover); color: var(--czar-text); padding: 14px 16px; border-radius: 10px; overflow-x: auto; border: 1px solid var(--czar-border); }
+.czar-root .czar-prose pre code { background: transparent; padding: 0; font-size: 0.9em; }
+.czar-root .czar-prose h1, .czar-root .czar-prose h2, .czar-root .czar-prose h3, .czar-root .czar-prose h4 {
+  font-family: var(--czar-font-display); color: var(--czar-text); font-weight: 600; letter-spacing: -0.02em;
+  margin-top: 1.5em; margin-bottom: 0.45em; line-height: 1.25;
+}
+.czar-root .czar-prose h1 { font-size: 1.75em; font-weight: 700; }
+.czar-root .czar-prose h2 { font-size: 1.4em; }
+.czar-root .czar-prose h3 { font-size: 1.18em; }
+.czar-root .czar-prose h4 { font-size: 1.05em; font-weight: 700; }
+.czar-root .czar-prose ul, .czar-root .czar-prose ol { padding-left: 1.5em; margin: 0.75em 0; }
+.czar-root .czar-prose li { color: var(--czar-text); margin: 0.3em 0; }
+.czar-root .czar-prose blockquote {
+  border-left: 2px solid var(--czar-accent); padding: 0.2em 0 0.2em 1.1em; color: var(--czar-text-dim);
+  margin: 1em 0; font-family: var(--czar-font-display); font-style: italic; font-size: 1.05em; line-height: 1.55;
+}
+/* Drop-cap on the first paragraph of long replies (set via .czar-dropcap) */
+.czar-root .czar-prose.czar-dropcap > p:first-of-type::first-letter {
+  font-family: var(--czar-font-display); float: left; font-size: 3.4em; line-height: 0.92;
+  padding: 0.05em 0.1em 0 0; font-weight: 600; color: var(--czar-text);
+}
+/* Wrap tables for horizontal scroll on mobile */
+.czar-root .czar-prose table { display: block; width: 100%; max-width: 100%; overflow-x: auto; border-collapse: collapse; margin: 1.1em 0; font-size: 13px; -webkit-overflow-scrolling: touch; }
+.czar-root .czar-prose th { background: var(--czar-surface-hover); color: var(--czar-text); border: 1px solid var(--czar-border); padding: 7px 11px; text-align: left; font-weight: 600; white-space: nowrap; }
+.czar-root .czar-prose td { border: 1px solid var(--czar-border); padding: 7px 11px; color: var(--czar-text); }
+.czar-root .czar-prose hr { border: 0; border-top: 1px solid var(--czar-border); margin: 1.8em 0; }
+.czar-root .czar-prose img { max-width: 100%; height: auto; border-radius: 8px; margin: 1em 0; border: 1px solid var(--czar-border); display: block; }
+
+/* Streaming caret — solid blinking block, sits at the end of the live text. */
+.czar-stream-caret > :last-child::after,
+.czar-stream-caret::after {
+  content: "";
+  display: inline-block;
+  width: 0.5em;
+  height: 1.05em;
+  margin-left: 2px;
+  vertical-align: -0.18em;
+  background: var(--czar-accent);
+  border-radius: 1px;
+  animation: czar-blink 1s steps(2, start) infinite;
+}
+@keyframes czar-blink {
+  0%, 49%   { opacity: 1; }
+  50%, 100% { opacity: 0; }
+}
+@keyframes czar-blink { to { visibility: hidden; } }
+
+/* ─────────────────────────────────────────────────
+   CZAR · Chat bubbles with cutout tail
+   ─────────────────────────────────────────────────
+   Both bubbles use a notched / cut-out tail near the avatar/edge instead of
+   the classic rounded "tongue". The notch is achieved with a small
+   transparent SVG mask on a `::before` pseudo-element. */
+.czar-root .czar-bubble {
+  position: relative;
+  border-radius: 18px;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.04), 0 1px 8px rgba(0,0,0,0.03);
+}
+
+/* Assistant — distinct accent-tinted surface, wide, tail on top-left */
+.czar-root .czar-bubble-asst {
+  background: var(--czar-asst-bubble, color-mix(in srgb, var(--czar-accent) 10%, var(--czar-surface)));
+  color: var(--czar-asst-bubble-fg, var(--czar-text));
+  border: 1px solid color-mix(in srgb, var(--czar-accent) 18%, var(--czar-border));
+  border-top-left-radius: 4px;          /* notched corner near avatar */
+}
+.czar-root .czar-bubble-asst::before {
+  content: "";
+  position: absolute;
+  top: 0; left: -8px;
+  width: 14px; height: 14px;
+  background: inherit;
+  border-left: 1px solid color-mix(in srgb, var(--czar-accent) 18%, var(--czar-border));
+  border-top: 1px solid color-mix(in srgb, var(--czar-accent) 18%, var(--czar-border));
+  -webkit-mask: radial-gradient(circle at top right, transparent 9px, #000 10px);
+          mask: radial-gradient(circle at top right, transparent 9px, #000 10px);
+  border-top-left-radius: 4px;
+}
+
+/* User — accent-coloured (filled), narrower, tail on top-right */
+.czar-root .czar-bubble-user {
+  background: var(--czar-user-bubble, var(--czar-accent));
+  color: var(--czar-user-bubble-fg, var(--czar-accent-fg));
+  border: 1px solid color-mix(in srgb, var(--czar-accent) 35%, transparent);
+  border-top-right-radius: 4px;
+}
+.czar-root .czar-bubble-user::before {
+  content: "";
+  position: absolute;
+  top: 0; right: -8px;
+  width: 14px; height: 14px;
+  background: inherit;
+  -webkit-mask: radial-gradient(circle at top left, transparent 9px, #000 10px);
+          mask: radial-gradient(circle at top left, transparent 9px, #000 10px);
+  border-top-right-radius: 4px;
+}
+
+/* ─────────────────────────────────────────────────
+   CZAR · Paper sheet (deliverable surface)
+   ─────────────────────────────────────────────────
+   When CZAR streams an actual piece of work (anything with headings, tables,
+   or > ~220 words), we drop the chat bubble entirely and write onto a paper
+   sheet. Faint horizontal ruled lines provide an old-school writing vibe
+   without competing with the prose. */
+.czar-root .czar-paper {
+  position: relative;
+  background: var(--czar-asst-bubble, color-mix(in srgb, var(--czar-accent) 5%, var(--czar-surface)));
+  color: var(--czar-text);
+  border: 1px solid color-mix(in srgb, var(--czar-accent) 12%, var(--czar-border));
+  border-radius: 10px;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.04), 0 1px 8px rgba(0,0,0,0.025);
+}
+/* Prose tweaks specifically for the paper surface — minimal margins, slightly
+   tighter heading spacing, and a sized line-height that aligns with the rules. */
+.czar-root .czar-paper-prose { line-height: 1.7rem; }
+.czar-root .czar-paper-prose p,
+.czar-root .czar-paper-prose li { margin: 0 0 1.7rem 0; }
+.czar-root .czar-paper-prose h1,
+.czar-root .czar-paper-prose h2,
+.czar-root .czar-paper-prose h3,
+.czar-root .czar-paper-prose h4 { margin: 1.7rem 0 0.85rem 0; line-height: 1.7rem; }
+.czar-root .czar-paper-prose > *:first-child { margin-top: 0; }
+.czar-root .czar-paper-prose > *:last-child { margin-bottom: 0; }
+
+/* Premium focus rings */
+.czar-root :focus-visible { outline: none; box-shadow: 0 0 0 2px var(--czar-bg), 0 0 0 3px var(--czar-accent); border-radius: 6px; }
+
+/* Hairline scrollbar — only visible on hover */
+.czar-root *::-webkit-scrollbar { width: 8px; height: 8px; }
+.czar-root *::-webkit-scrollbar-track { background: transparent; }
+.czar-root *::-webkit-scrollbar-thumb { background: transparent; border-radius: 4px; }
+.czar-root *:hover::-webkit-scrollbar-thumb { background: var(--czar-border); }
+.czar-root *::-webkit-scrollbar-thumb:hover { background: var(--czar-text-faint); }
+
+/* Message fade-in */
+@keyframes czar-msg-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+.czar-root .czar-msg-in { animation: czar-msg-in 280ms var(--czar-ease) both; }
+
+/* Card pop-in — used by Plan / Clarify / Note cards so they don't snap in. */
+@keyframes czar-card-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0)   scale(1); }
+}
+.czar-root .czar-card-in { animation: czar-card-in 260ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+/* Thread cross-fade when switching conversations. */
+@keyframes czar-thread-in { from { opacity: 0; } to { opacity: 1; } }
+.czar-root .czar-thread-in { animation: czar-thread-in 180ms ease-out both; }
+
+/* Smoothly fade action bars / followups in once streaming settles. */
+.czar-root .czar-settle-in { animation: czar-msg-in 220ms var(--czar-ease) both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .czar-root .czar-msg-in,
+  .czar-root .czar-card-in,
+  .czar-root .czar-thread-in,
+  .czar-root .czar-settle-in { animation: none; }
+  .czar-stream-caret::after { animation: none; }
+}
+
+
+/* CZAR quill — scribbling motion while streaming.
+   The quill body tilts at the nib pivot; the ink trail draws on then fades. */
+@keyframes czar-quill-write {
+  0%, 100% { transform: rotate(0deg); }
+  25%      { transform: rotate(-4deg) translateX(-0.5px); }
+  50%      { transform: rotate(0deg); }
+  75%      { transform: rotate(4deg) translateX(0.5px); }
+}
+@keyframes czar-quill-ink {
+  0%   { stroke-dashoffset: 80; opacity: 0; }
+  20%  { opacity: 1; }
+  60%  { stroke-dashoffset: 0; opacity: 1; }
+  100% { stroke-dashoffset: 0; opacity: 0; }
+}
+
+/* Signature draw-on for the first-login PAPERSTUDIO splash */
+@keyframes ps-signature-draw {
+  0%   { stroke-dashoffset: var(--ps-sig-len, 2400); }
+  100% { stroke-dashoffset: 0; }
+}
+@keyframes ps-signature-fill {
+  0%, 60% { fill-opacity: 0; }
+  100%    { fill-opacity: 1; }
+}
+@keyframes ps-splash-fade {
+  0%   { opacity: 0; }
+  10%  { opacity: 1; }
+  85%  { opacity: 1; }
+  100% { opacity: 0; visibility: hidden; }
+}
+
+/* ─────────────────────────────────────────────────
+   CZAR · Editorial polish (per-user prose scale + reduced motion)
+   ───────────────────────────────────────────────── */
+.czar-root .czar-prose { font-size: var(--czar-prose-size, 15px); }
+
+/* Reduced motion: respect user preference (settings toggle OR system) */
+.czar-root.czar-reduced-motion *,
+.czar-root.czar-reduced-motion *::before,
+.czar-root.czar-reduced-motion *::after {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+  scroll-behavior: auto !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  .czar-root *,
+  .czar-root *::before,
+  .czar-root *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+/* Hairline focus ring tuned to the Editorial accent */
+.czar-root button:focus-visible,
+.czar-root [role="button"]:focus-visible,
+.czar-root input:focus-visible,
+.czar-root textarea:focus-visible {
+  outline: 1px solid var(--czar-accent);
+  outline-offset: 2px;
+}
+
+/* ─────────────────────────────────────────────────
+   CZAR · Reading mode (screen-only personal prefs)
+   ─────────────────────────────────────────────────
+   Applied via inline CSS variables on .czar-root from src/pages/Czar.tsx.
+   These NEVER reach the export pipeline — exports are governed by
+   supabase/functions/export-docx and use academic typography defaults.
+
+   Variables (all optional, fall back to existing tokens):
+     --czar-reading-font     font-family stack
+     --czar-reading-size     base body size in px
+     --czar-reading-leading  line-height (unitless)
+     --czar-reading-tracking letter-spacing (em)
+     --czar-reading-weight   font-weight (300-700)
+     --czar-reading-tint     surface background colour
+     --czar-reading-color    body text colour override
+     --czar-reading-align    text-align (left|justify)
+   ───────────────────────────────────────────────── */
+.czar-root.czar-reading .czar-prose,
+.czar-root.czar-reading .czar-paper-prose {
+  font-family: var(--czar-reading-font, var(--czar-font-body));
+  font-size: var(--czar-reading-size, 15px);
+  line-height: var(--czar-reading-leading, 1.7);
+  letter-spacing: var(--czar-reading-tracking, -0.005em);
+  font-weight: var(--czar-reading-weight, 400);
+  color: var(--czar-reading-color, var(--czar-text));
+  text-align: var(--czar-reading-align, left);
+}
+.czar-root.czar-reading .czar-paper {
+  background: var(--czar-reading-tint, var(--czar-paper, var(--czar-bg)));
+}
+.czar-root.czar-reading .czar-asst-flat,
+.czar-root.czar-reading .czar-bubble-asst {
+  background: var(--czar-reading-tint, transparent);
+}
+/* OpenDyslexic — self-hosted free font (OFL). Falls back gracefully when
+   the file is missing so the page never blocks. */
+@font-face {
+  font-family: "OpenDyslexic";
+  src: local("OpenDyslexic"),
+       url("/fonts/opendyslexic/OpenDyslexic-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "OpenDyslexic";
+  src: local("OpenDyslexic Bold"),
+       url("/fonts/opendyslexic/OpenDyslexic-Bold.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* ─────────────────────────────────────────────────
+   CZAR · Inline quill caret (replaces blinking block
+   on streaming deliverables when the user has
+   "show quill while writing" enabled).
+   ───────────────────────────────────────────────── */
+.czar-quill-caret {
+  display: inline-block;
+  vertical-align: -0.18em;
+  margin-left: 2px;
+  line-height: 1;
+  pointer-events: none;
+}
+/* When the deliverable's article uses .czar-stream-quill we suppress the
+   default block caret so the two don't both render. */
+.czar-root .czar-stream-quill::after,
+.czar-root .czar-stream-quill > :last-child::after { content: none !important; }
+
+/* ─────────────────────────────────────────────────
+   CZAR · Bubble-less assistant flow (Google AI overview style)
+   Used for chat replies that are NOT deliverables. The text reads as a quiet
+   column with a 2px accent rail in the left gutter. User bubbles untouched.
+   ───────────────────────────────────────────────── */
+.czar-root .czar-asst-rail {
+  width: 2px;
+  align-self: stretch;
+  background: var(--czar-accent);
+  opacity: 0.32;
+  border-radius: 99px;
+  min-height: 18px;
+}
+.czar-root .czar-asst-flat .czar-prose {
+  /* Slightly tighter spacing than the paper sheet — this is for fast-read
+     chat answers, not deliverables. */
+  padding: 0;
+}
+
+/* ═════════════════════════════════════════════════════════════════════════
+   PAPERSTUDIO · Themed app shell (.ps-app)
+   Scope: every protected route wraps its tree in `.ps-app`. Color tokens
+   are written at runtime by `PsThemeProvider` (see src/lib/psThemes.ts);
+   this stylesheet only handles structure — the grain overlay, button
+   gradients, hairline borders, and prose surface — and reads from the
+   tokens via var(...).
+
+   Modes/themes ship via two data attributes on .ps-app and <html>:
+     data-ps-theme="original|dark-luxe|editorial-paper|nordic-slate"
+     data-ps-mode="light|dark"
+     data-ps-premium="1"        ← only set for dark-luxe + dark mode
+   The premium flag drives the film grain + gold gradient buttons.
+
+   Marketing site (`.paperstudio-marketing`), CZAR (`.czar-root`), Auth,
+   and legal pages are NOT wrapped in `.ps-app`, so they remain untouched.
+   ═════════════════════════════════════════════════════════════════════════ */
+.ps-app {
+  /* Seed defaults = Classic (Notion B&W) light, so first paint before JS
+     hydrates the theme matches the new default. PsThemeProvider overwrites
+     these inline. */
+  --background: 40 14% 98%;
+  --foreground: 30 8% 20%;
+  --card: 0 0% 100%;
+  --card-foreground: 30 8% 18%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 30 8% 18%;
+  --primary: 30 8% 18%;
+  --primary-foreground: 0 0% 100%;
+  --primary-dark: 30 10% 10%;
+  --primary-mid: 30 6% 36%;
+  --primary-light: 30 6% 88%;
+  --primary-pale: 40 14% 96%;
+  --secondary: 40 12% 96%;
+  --secondary-foreground: 30 8% 22%;
+  --muted: 40 10% 95%;
+  --muted-foreground: 30 4% 46%;
+  --accent: 212 92% 45%;
+  --accent-foreground: 0 0% 100%;
+  --destructive: 5 75% 51%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 30 8% 90%;
+  --input: 30 8% 90%;
+  --ring: 30 8% 18%;
+  --radius: 0.375rem;
+  --surface: 0 0% 100%;
+  --surface-light: 40 12% 97%;
+  --sidebar-background: 40 12% 96%;
+  --sidebar-foreground: 30 8% 22%;
+  --sidebar-primary: 30 8% 18%;
+  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-accent: 30 6% 91%;
+  --sidebar-accent-foreground: 30 8% 18%;
+  --sidebar-border: 30 8% 90%;
+  --sidebar-ring: 212 92% 45%;
+
+  /* Typography vars — Classic uses Inter (Notion stack). Overridden per theme. */
+  --ps-font-display: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --ps-font-body: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --ps-font-mono: "iA Writer Mono", "JetBrains Mono", "Menlo", ui-monospace, monospace;
+
+  /* Spacing/radius/motion — Classic = tight Notion rhythm. Overridden per theme. */
+  --ps-radius: 0.375rem;
+  --ps-radius-sm: 0.25rem;
+  --ps-space-unit: 4px;
+  --ps-ease: cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* Premium shadows + grain (used only when data-ps-premium="1") */
+  --ps-shadow-soft: 0 1px 0 hsl(38 25% 88% / 0.04) inset, 0 8px 24px -12px hsl(0 0% 0% / 0.6);
+  --ps-shadow-elev: 0 1px 0 hsl(38 25% 88% / 0.06) inset, 0 24px 48px -20px hsl(0 0% 0% / 0.7);
+  --ps-grain: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.05 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-family: var(--ps-font-body);
+  font-feature-settings: "ss01", "cv01";
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  letter-spacing: -0.005em;
+  transition: background-color 220ms ease, color 220ms ease;
+}
+
+/* ── Theme-aware font cascade inside .ps-app ───────────────────────────────
+   Tailwind's font-sans / font-heading / font-mono are hardcoded in the config
+   (Lato / Nunito / DM Mono). Override them here so every theme's font stack
+   flows through naturally — no per-component changes needed. */
+.ps-app,
+.ps-app *:not(.czar-root):not(.czar-root *) {
+  font-family: inherit; /* let everything cascade from .ps-app */
+}
+.ps-app {
+  font-family: var(--ps-font-body);
+}
+.ps-app .font-sans {
+  font-family: var(--ps-font-body);
+}
+.ps-app .font-heading,
+.ps-app h1.font-heading,
+.ps-app h2.font-heading,
+.ps-app h3.font-heading {
+  font-family: var(--ps-font-display);
+  letter-spacing: -0.02em;
+}
+.ps-app h1:not([class*="font-"]),
+.ps-app h2:not([class*="font-"]),
+.ps-app h3:not([class*="font-"]),
+.ps-app h4:not([class*="font-"]) {
+  font-family: var(--ps-font-display);
+}
+.ps-app .font-mono,
+.ps-app code:not([class]),
+.ps-app pre:not([class]),
+.ps-app kbd {
+  font-family: var(--ps-font-mono);
+}
+/* Buttons inherit the body font unless explicitly overridden */
+.ps-app button:not([class*="font-"]) {
+  font-family: var(--ps-font-body);
+}
+/* Smooth letter-spacing per theme spacing rhythm */
+.ps-app {
+  letter-spacing: var(--ps-letter-spacing, -0.005em);
+}
+
+/* Cards: hairline border + soft elevation. Radius driven by theme. */
+.ps-app .bg-card,
+.ps-app [class*="bg-card"] {
+  background: hsl(var(--card));
+  border-color: hsl(var(--border));
+  box-shadow: var(--ps-shadow-soft);
+  border-radius: var(--ps-radius);
+}
+
+/* Inputs / textareas — hairline border + theme ring on focus */
+.ps-app input:not([type="checkbox"]):not([type="radio"]),
+.ps-app textarea,
+.ps-app select {
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  color: hsl(var(--foreground));
+  border-radius: var(--ps-radius-sm);
+  transition: border-color 160ms var(--ps-ease), box-shadow 160ms var(--ps-ease);
+}
+.ps-app input:focus-visible,
+.ps-app textarea:focus-visible,
+.ps-app select:focus-visible {
+  outline: none;
+  border-color: hsl(var(--ring) / 0.6);
+  box-shadow: 0 0 0 3px hsl(var(--ring) / 0.15);
+}
+.ps-app input::placeholder,
+.ps-app textarea::placeholder { color: hsl(var(--muted-foreground) / 0.7); }
+
+/* ── Sidebar refinements (default = app-classic: glowing left bar) ─────── */
+.ps-app aside nav button { border-radius: var(--ps-radius-sm); position: relative; }
+.ps-app[data-ps-sidebar="app-classic"] aside nav button.bg-sidebar-accent::before {
+  content: "";
+  position: absolute;
+  left: -3px;
+  top: 18%;
+  bottom: 18%;
+  width: 2px;
+  border-radius: 2px;
+  background: hsl(var(--sidebar-ring));
+  box-shadow: 0 0 12px hsl(var(--sidebar-ring) / 0.6);
+}
+
+/* ── Notion-exact sidebar treatment ─────────────────────────────────────
+   Lighter, flatter, no glow. Active item = simple bg fill, no left bar.
+   Hover is barely-there. Group labels are uppercase tracked. */
+.ps-app[data-ps-sidebar="notion-exact"] aside nav button {
+  border-radius: 4px;
+  font-weight: 500;
+  letter-spacing: -0.005em;
+  transition: background-color 80ms var(--ps-ease);
+}
+.ps-app[data-ps-sidebar="notion-exact"] aside nav button:hover {
+  background-color: hsl(var(--sidebar-accent) / 0.6);
+}
+.ps-app[data-ps-sidebar="notion-exact"] aside nav button.bg-sidebar-accent {
+  background-color: hsl(var(--sidebar-accent));
+  font-weight: 600;
+}
+.ps-app[data-ps-sidebar="notion-exact"] aside nav button.bg-sidebar-accent::before {
+  display: none;
+}
+
+/* Hairline scrollbar */
+.ps-app *::-webkit-scrollbar { width: 8px; height: 8px; }
+.ps-app *::-webkit-scrollbar-track { background: transparent; }
+.ps-app *::-webkit-scrollbar-thumb { background: hsl(var(--foreground) / 0.06); border-radius: 4px; }
+.ps-app *:hover::-webkit-scrollbar-thumb { background: hsl(var(--foreground) / 0.14); }
+
+/* Selection — uses the theme accent */
+.ps-app ::selection {
+  background: hsl(var(--accent) / 0.35);
+  color: hsl(var(--foreground));
+}
+
+/* Premium focus ring — uses theme ring color */
+.ps-app :focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px hsl(var(--background)), 0 0 0 3px hsl(var(--ring));
+  border-radius: 8px;
+}
+
+/* The Dashboard cockpit body uses an opinionated bg-[#F9F7F5]; remap it
+   to the theme surface so the re-skin lands without editing Dashboard.tsx. */
+.ps-app .bg-\[\#F9F7F5\] {
+  background: hsl(var(--surface-light)) !important;
+}
+
+/* The CzarUsageCard hard-codes a dark gradient; harmonise its hairline. */
+.ps-app .from-\[\#0E0E10\] {
+  border-color: hsl(var(--accent) / 0.18) !important;
+  box-shadow: var(--ps-shadow-elev);
+}
+
+/* ═══ Premium-only treatments — applied to dark-luxe + dark mode only ═══
+   The film grain overlay + gold gradient buttons are the signature of the
+   "luxe" aesthetic. Other themes get a clean, tasteful look without these
+   so they don't feel forced. */
+.ps-app[data-ps-premium="1"]::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background-image: var(--ps-grain);
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.6;
+  mix-blend-mode: overlay;
+}
+.ps-app[data-ps-premium="1"] > * { position: relative; z-index: 1; }
+
+.ps-app[data-ps-premium="1"] button.bg-primary,
+.ps-app[data-ps-premium="1"] [class*="bg-primary"]:not(.text-primary):not(.border-primary) {
+  background: linear-gradient(180deg, hsl(38 60% 64%), hsl(38 56% 54%));
+  color: hsl(30 14% 8%);
+  border: 1px solid hsl(38 50% 40% / 0.4);
+  box-shadow:
+    0 1px 0 hsl(38 80% 80% / 0.5) inset,
+    0 0 0 1px hsl(38 70% 70% / 0.2) inset,
+    0 8px 18px -10px hsl(38 60% 30% / 0.7);
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  transition: transform 120ms ease, box-shadow 200ms ease, filter 200ms ease;
+}
+.ps-app[data-ps-premium="1"] button.bg-primary:hover,
+.ps-app[data-ps-premium="1"] [class*="bg-primary"]:not(.text-primary):not(.border-primary):hover {
+  filter: brightness(1.06);
+  box-shadow:
+    0 1px 0 hsl(38 80% 80% / 0.6) inset,
+    0 0 0 1px hsl(38 70% 70% / 0.3) inset,
+    0 14px 28px -12px hsl(38 60% 30% / 0.8);
+}
+.ps-app[data-ps-premium="1"] button.bg-primary:active { transform: translateY(0.5px); }
+
+.ps-app[data-ps-premium="1"] .bg-primary.text-primary-foreground[class*="rounded-full"] {
+  background: hsl(38 58% 60%);
+  color: hsl(30 14% 8%);
+  border: none;
+}
+
+/* ═══ Prose surface (academic editor) ═══════════════════════════════════
+   In DARK modes, force a paper-cream background so academic content stays
+   readable. In LIGHT modes, the editor inherits the theme surface — no
+   override needed (the theme is already light/papery by design). */
+.ps-app[data-ps-mode="dark"] .ps-paper,
+.ps-app[data-ps-mode="dark"] .prose-academic {
+  background: hsl(40 30% 96%);
+  color: hsl(24 10% 12%);
+  border-radius: 14px;
+  box-shadow: 0 24px 60px -28px hsl(0 0% 0% / 0.7);
+}
+.ps-app[data-ps-mode="dark"] .prose-academic {
+  margin: 0.75rem;
+  padding: 1.5rem 1.25rem;
+}
+.ps-app[data-ps-mode="dark"] .prose-academic h1,
+.ps-app[data-ps-mode="dark"] .prose-academic h2,
+.ps-app[data-ps-mode="dark"] .prose-academic h3,
+.ps-app[data-ps-mode="dark"] .prose-academic h4 { color: hsl(24 10% 12%); }
+.ps-app[data-ps-mode="dark"] .prose-academic p,
+.ps-app[data-ps-mode="dark"] .prose-academic li,
+.ps-app[data-ps-mode="dark"] .prose-academic td,
+.ps-app[data-ps-mode="dark"] .prose-academic th { color: hsl(24 10% 14%); }
+.ps-app[data-ps-mode="dark"] .prose-academic blockquote {
+  color: hsl(24 8% 35%);
+  border-left-color: hsl(var(--accent));
+}
+.ps-app[data-ps-mode="dark"] .prose-academic code,
+.ps-app[data-ps-mode="dark"] .prose-academic pre {
+  background: hsl(40 25% 92%);
+  color: hsl(24 10% 14%);
+  border-color: hsl(30 15% 80%);
+}
+
+/* ═══ Per-theme prose typography ═════════════════════════════════════════
+   Each theme overrides the academic prose font so chapters/editor feel
+   native to the active aesthetic. Body uses the theme's body font, headings
+   use the theme's display font. Sizes/leading inherit from .prose-academic. */
+.ps-app .prose-academic { font-family: var(--ps-font-body), Georgia, serif; }
+.ps-app .prose-academic h1,
+.ps-app .prose-academic h2,
+.ps-app .prose-academic h3,
+.ps-app .prose-academic h4 { font-family: var(--ps-font-display); }
+.ps-app .prose-academic code,
+.ps-app .prose-academic pre { font-family: var(--ps-font-mono); }
+
+/* Editorial Paper bumps leading + adds optical refinements for serif body. */
+.ps-app[data-ps-theme="editorial-paper"] .prose-academic {
+  line-height: 2.05;
+  font-feature-settings: "liga", "kern", "onum";
+}
+.ps-app[data-ps-theme="editorial-paper"] .prose-academic h1 { letter-spacing: -0.02em; }
+
+/* Classic (Notion) tightens leading for Inter. */
+.ps-app[data-ps-theme="classic"] .prose-academic { line-height: 1.75; }
+.ps-app[data-ps-theme="classic"] .prose-academic h1,
+.ps-app[data-ps-theme="classic"] .prose-academic h2,
+.ps-app[data-ps-theme="classic"] .prose-academic h3 {
+  letter-spacing: -0.015em;
+  font-weight: 700;
+}
+
+/* Graphite Mono — slight monospaced flavour for headings. */
+.ps-app[data-ps-theme="graphite-mono"] .prose-academic h1,
+.ps-app[data-ps-theme="graphite-mono"] .prose-academic h2 { letter-spacing: -0.02em; }
+
+@media (prefers-reduced-motion: reduce) {
+  .ps-app[data-ps-premium="1"]::before { display: none; }
+  .ps-app { transition: none; }
+}
