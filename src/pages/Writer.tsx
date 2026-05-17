@@ -2275,7 +2275,7 @@ ${thesisArea}`);
 
             {/* ── EMPTY STATE: bare icon pair ── */}
             {!currentChapter?.content && !isGenerating && !currentLocked && (
-              <div className="flex items-center justify-center gap-6 px-3 py-2.5">
+              <div className="flex items-center gap-4 px-4 py-2.5">
                 <button
                   onClick={() => setShowPersonalise(true)}
                   title="Settings"
@@ -2288,9 +2288,9 @@ ${thesisArea}`);
                   onClick={() => setShowOutlineModal(true)}
                   title="Draft chapter"
                   aria-label="Draft chapter"
-                  className="p-1 text-muted-foreground hover:text-foreground transition-colors"
+                  className="inline-flex items-center gap-1 p-1 text-muted-foreground hover:text-foreground transition-colors"
                 >
-                  <PenLine size={14} />
+                  <PenLine size={14} /><span className="text-xs font-medium">Draft</span>
                 </button>
               </div>
             )}
