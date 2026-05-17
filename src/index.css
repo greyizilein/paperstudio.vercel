@@ -344,42 +344,42 @@
 
 .paperstudio-marketing[data-mode="dark"] {
   --ma-bg:            #050505;
-  --ma-surface:       #0D0D0D;
-  --ma-surface2:      #141414;
-  --ma-text:          #F0EAD8;
-  --ma-text-muted:    #7A7060;
-  --ma-text-dim:      #4A4438;
-  --ma-accent:        #C4384A;
-  --ma-accent-hover:  #A82D3D;
-  --ma-accent2:       #4A7A38;
-  --ma-accent2-hover: #3A6028;
-  --ma-gold:          #B89A5A;
-  --ma-border:        rgba(240,234,216,0.07);
-  --ma-border-bright: rgba(240,234,216,0.16);
-  --ma-nav-bg:        rgba(5,5,5,0.94);
-  --ma-footer-bg:     #020202;
+  --ma-surface:       #111111;
+  --ma-surface2:      #1C1C1C;
+  --ma-text:          #FFFFFF;
+  --ma-text-muted:    #A8A8A8;
+  --ma-text-dim:      #666666;
+  --ma-accent:        #E03040;
+  --ma-accent-hover:  #B82030;
+  --ma-accent2:       #4AAA38;
+  --ma-accent2-hover: #3A8A28;
+  --ma-gold:          #D4A840;
+  --ma-border:        rgba(255,255,255,0.08);
+  --ma-border-bright: rgba(255,255,255,0.16);
+  --ma-nav-bg:        rgba(5,5,5,0.96);
+  --ma-footer-bg:     #000000;
   background: #050505;
-  color: #F0EAD8;
+  color: #FFFFFF;
 }
 
 .paperstudio-marketing[data-mode="light"] {
-  --ma-bg:            #F8F4EE;
-  --ma-surface:       #F0E8DC;
-  --ma-surface2:      #FFFFFF;
-  --ma-text:          #1C1009;
-  --ma-text-muted:    #7A6A58;
-  --ma-text-dim:      #9A8A78;
-  --ma-accent:        #8B2635;
-  --ma-accent-hover:  #6E1E28;
-  --ma-accent2:       #2D4A22;
-  --ma-accent2-hover: #1E3416;
+  --ma-bg:            #FFFFFF;
+  --ma-surface:       #F4F4F4;
+  --ma-surface2:      #E8E8E8;
+  --ma-text:          #0A0A0A;
+  --ma-text-muted:    #3A3A3A;
+  --ma-text-dim:      #727272;
+  --ma-accent:        #C4384A;
+  --ma-accent-hover:  #A82D3D;
+  --ma-accent2:       #2D5A20;
+  --ma-accent2-hover: #1E4016;
   --ma-gold:          #8B6914;
-  --ma-border:        rgba(28,16,9,0.09);
-  --ma-border-bright: rgba(28,16,9,0.18);
-  --ma-nav-bg:        rgba(248,244,238,0.92);
-  --ma-footer-bg:     #EDE4D8;
-  background: #F8F4EE;
-  color: #1C1009;
+  --ma-border:        rgba(0,0,0,0.09);
+  --ma-border-bright: rgba(0,0,0,0.16);
+  --ma-nav-bg:        rgba(255,255,255,0.96);
+  --ma-footer-bg:     #F4F4F4;
+  background: #FFFFFF;
+  color: #0A0A0A;
 }
 .paperstudio-marketing h1,
 .paperstudio-marketing h2,

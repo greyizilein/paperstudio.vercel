@@ -62,7 +62,7 @@ const ProductMock = () => {
   }, []);
 
   return (
-    <section className="py-20 md:py-28" style={{ background: "#1a1714" }}>
+    <section className="py-20 md:py-28" style={{ background: "var(--ma-bg)" }}>
       <div className="max-w-5xl mx-auto px-6">
         <motion.div
           initial={{ opacity: 0, y: 20, filter: "blur(6px)" }}
