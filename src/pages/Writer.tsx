@@ -4,7 +4,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import {
   Check, Copy, Download, Settings, X, Plus, Trash2,
   Loader2, Sparkles, StopCircle, Wand2, BarChart2, Upload, Lock, MoreVertical, Image as ImageIcon, Cpu,
-  FolderOpen, ChevronRight
+  FolderOpen, ChevronRight, ArrowLeft
 } from "lucide-react";
 import { CzarIcon } from "@/components/icons/CzarIcon";
 import { HumanisingPill } from "@/components/shared/HumanisingPill";
@@ -959,6 +959,21 @@ export default function WriterPage() {
 - Questions: ${(project.research_questions || []).filter(Boolean).map((q, i) => `${i+1}. ${q}`).join("; ")}
 - Citation Style: ${project.citation_style}`);
 
+    // Central argument / thesis — extracted from the Introduction so all subsequent
+    // chapters can thread the same argument rather than restarting from scratch
+    if (currentChapter?.type !== "introduction" && currentChapter?.type !== "abstract") {
+      const introChapter = project.chapters.find(c => c.type === "introduction" && c.content);
+      if (introChapter) {
+        const introContent = introChapter.content || "";
+        // Strip markdown headings from the first ~1000 chars to get the opening argument prose
+        const thesisArea = introContent.slice(0, 1000).replace(/^#+\s+.*/gm, "").replace(/\n{3,}/g, "\n\n").trim();
+        if (thesisArea) {
+          parts.push(`## CENTRAL ARGUMENT & THESIS (extracted from Introduction — thread this throughout)
+${thesisArea}`);
+        }
+      }
+    }
+
     // Previous chapters — key content for coherence
     if (currentChapter && currentChapter.order_index > 0) {
       const prevChapters = project.chapters
@@ -1796,30 +1811,20 @@ export default function WriterPage() {
           <CzarIcon size={16} />
         </button>
         <div className="w-px h-4 bg-border mx-0.5 sm:mx-1 hidden sm:block" />
-        {/* Mobile chapter selector — settings icon + chapter number only */}
+        {/* Back to home */}
         <button
-          onClick={() => setMobileChaptersOpen(!mobileChaptersOpen)}
-          aria-label={`Chapter ${activeChapterIndex + 1} — open chapter menu`}
-          title="Chapters"
-          className="md:hidden inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-bold text-muted-foreground hover:bg-secondary"
+          onClick={() => navigate("/")}
+          aria-label="Back to home"
+          title="Home"
+          className="inline-flex items-center justify-center w-7 h-7 rounded-md text-muted-foreground hover:bg-secondary hover:text-foreground transition-all flex-shrink-0"
         >
-          <Settings size={13} />
-          <span className="font-mono">{activeChapterIndex + 1}</span>
+          <ArrowLeft size={15} />
         </button>
         <div className="text-[12px] sm:text-[13px] text-muted-foreground overflow-hidden text-ellipsis whitespace-nowrap flex-1 min-w-0 hidden sm:block">
           <strong className="text-foreground font-bold">{project.title.slice(0, 40)}</strong>
           <span className="hidden lg:inline">&nbsp;·&nbsp;{project.degree}&nbsp;·&nbsp;{project.citation_style}</span>
         </div>
         <div className="flex items-center gap-0.5 sm:gap-1 ml-auto flex-shrink-0">
-          {/* Sidebar toggle — desktop */}
-          <button
-            onClick={() => setShowSidebar(s => !s)}
-            title="Chapter list"
-            className="hidden sm:inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-bold text-muted-foreground hover:bg-secondary hover:text-foreground transition-all"
-          >
-            <Settings size={12} />
-            <span className="font-mono">{activeChapterIndex + 1}/{project.chapters.length}</span>
-          </button>
           {/* Overflow menu — all sizes */}
           <div className="relative">
             <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} aria-label="More" className="inline-flex items-center p-1.5 rounded-md text-muted-foreground hover:bg-secondary hover:text-foreground transition-all">
@@ -1835,6 +1840,7 @@ export default function WriterPage() {
                     { icon: Download, label: "Final PDF", onClick: () => { setShowFinalExport(true); setMobileMenuOpen(false); } },
                     { icon: Sparkles, label: "Settings", onClick: () => { setShowPersonalise(true); setMobileMenuOpen(false); } },
                     { icon: FolderOpen, label: "Projects", onClick: () => { setShowProjectsDrawer(true); setMobileMenuOpen(false); } },
+                    { icon: Plus, label: "New Project", onClick: () => { navigate("/new-project"); setMobileMenuOpen(false); } },
                   ].map((item) => (
                     <button key={item.label} onClick={item.onClick} title={item.label} className="flex flex-col items-center gap-1 px-2 py-3 rounded-xl bg-secondary/40 hover:bg-secondary text-foreground transition-all">
                       <item.icon size={18} />
@@ -1892,8 +1898,8 @@ export default function WriterPage() {
 
       {/* Projects drawer */}
       {showProjectsDrawer && (
-        <div className="fixed inset-0 z-[90] bg-foreground/20" onClick={() => setShowProjectsDrawer(false)}>
-          <div className="absolute left-0 top-11 bottom-0 w-[260px] bg-background border-r border-border flex flex-col animate-in slide-in-from-left duration-200" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 z-[90] bg-foreground/40 flex items-center justify-center p-4" onClick={() => setShowProjectsDrawer(false)}>
+          <div className="relative w-full max-w-[480px] max-h-[80dvh] bg-background border border-border rounded-2xl shadow-2xl flex flex-col animate-in fade-in zoom-in-95 duration-150" onClick={e => e.stopPropagation()}>
             {/* Header */}
             <div className="flex items-center justify-between px-4 py-3 border-b border-border flex-shrink-0">
               <span className="text-[13px] font-bold text-foreground">My Projects</span>
@@ -2020,28 +2026,33 @@ export default function WriterPage() {
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
           {/* Chapter strip — compact numbered dots */}
           <div className="h-10 border-b border-border flex items-center px-3 gap-2 overflow-x-auto flex-shrink-0 bg-background scrollbar-hide">
-            {project.chapters.sort((a, b) => a.order_index - b.order_index).map((ch, i) => {
-              const locked = isChapterLocked(ch);
-              const isActive = activeChapterIndex === ch.order_index;
-              return (
-                <button
-                  key={ch.id}
-                  onClick={() => { if (!locked) setActiveChapterIndex(ch.order_index); else toast.error("Complete the previous chapter first."); }}
-                  title={ch.title}
-                  className={cn(
-                    "w-8 h-8 rounded-full text-[12px] font-extrabold flex-shrink-0 flex items-center justify-center transition-all",
-                    locked && "opacity-40 cursor-not-allowed",
-                    isActive
-                      ? "bg-foreground text-background"
-                      : ch.status === "completed"
-                        ? "bg-green/15 text-green hover:bg-green/25"
-                        : "bg-secondary text-muted-foreground hover:bg-secondary/70 hover:text-foreground"
-                  )}
-                >
-                  {ch.status === "completed" ? "✓" : ch.type === "abstract" ? "A" : i + 1}
-                </button>
-              );
-            })}
+            {(() => {
+              const sorted = project.chapters.slice().sort((a, b) => a.order_index - b.order_index);
+              const nonAbstract = sorted.filter(c => c.type !== "abstract");
+              return sorted.map((ch) => {
+                const locked = isChapterLocked(ch);
+                const isActive = activeChapterIndex === ch.order_index;
+                const chapterNum = nonAbstract.findIndex(c => c.id === ch.id) + 1;
+                return (
+                  <button
+                    key={ch.id}
+                    onClick={() => { if (!locked) setActiveChapterIndex(ch.order_index); else toast.error("Complete the previous chapter first."); }}
+                    title={ch.title}
+                    className={cn(
+                      "w-8 h-8 rounded-full text-[12px] font-extrabold flex-shrink-0 flex items-center justify-center transition-all",
+                      locked && "opacity-40 cursor-not-allowed",
+                      isActive
+                        ? "bg-foreground text-background"
+                        : ch.status === "completed"
+                          ? "bg-green/15 text-green hover:bg-green/25"
+                          : "bg-secondary text-muted-foreground hover:bg-secondary/70 hover:text-foreground"
+                    )}
+                  >
+                    {ch.status === "completed" ? "✓" : ch.type === "abstract" ? "A" : chapterNum}
+                  </button>
+                );
+              });
+            })()}
           </div>
 
           {/* Content */}
