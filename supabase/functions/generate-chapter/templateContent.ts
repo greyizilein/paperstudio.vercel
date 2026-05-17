@@ -639,3 +639,125 @@ STRICT PROHIBITIONS FOR CHAPTER 5:
 - Do NOT reproduce numbered objectives or questions — refer to them in prose only
 - Do NOT include bullet points or numbered lists — use flowing prose paragraphs only
 `;
+
+export const SLR_TEMPLATE = `
+SYSTEMATIC LITERATURE REVIEW — PRISMA-Compliant Structure
+
+This chapter presents a systematic, reproducible, and transparent review of existing literature. Unlike a narrative literature review, it follows a protocol-driven approach documented according to PRISMA (Preferred Reporting Items for Systematic Reviews and Meta-Analyses) guidelines. Every decision — what was searched, what was included, what was excluded, and how findings were synthesised — must be transparent and reproducible.
+
+Section Architecture:
+
+## Introduction (200–250 words)
+- State the rationale for conducting a systematic review rather than a narrative review
+- Identify the specific research question(s) the review addresses (use PICO framework if health-related: Population, Intervention, Comparison, Outcome)
+- State the review objectives
+- Briefly describe the review's scope
+
+## Search Strategy (300–350 words)
+- List ALL databases searched (e.g., MEDLINE/PubMed, CINAHL, PsycINFO, Web of Science, Scopus, EMBASE, Google Scholar, JSTOR)
+- State the date ranges searched and the search date (when the search was last run)
+- List the exact search terms and Boolean operators used
+- Describe any grey literature or hand-searching conducted
+
+## Inclusion and Exclusion Criteria (250–300 words)
+- Present clearly delineated criteria under two headings: Inclusion and Exclusion
+- Inclusion criteria: publication type, date range, language, population, study design, outcome measures
+- Exclusion criteria: duplicates, non-peer-reviewed sources, irrelevant populations, study designs not meeting quality thresholds
+- Justify each criterion briefly in relation to the review question
+
+## Study Selection and PRISMA Flow (250–300 words)
+- Describe the four-stage PRISMA screening process in prose:
+  1. Records identified through database searching + additional sources (state totals)
+  2. Records after duplicates removed
+  3. Records screened on title/abstract with reasons for exclusion
+  4. Full-text articles assessed for eligibility with reasons for exclusion
+  5. Final studies included in synthesis (state total)
+- Insert a placeholder "[PRISMA Flow Diagram — Figure X]" at the appropriate point
+- Note inter-rater reliability for screening if applicable
+
+## Quality Appraisal (200–250 words)
+- State the quality appraisal tool used (e.g., CASP, Joanna Briggs Institute, Newcastle-Ottawa Scale, GRADE framework)
+- Describe the appraisal process: who assessed, how disagreements were resolved
+- Summarise the overall quality of included studies (high/moderate/low)
+
+## Data Extraction (150–200 words)
+- Describe the data extraction process and form used
+- List the key data extracted: author, year, country, study design, sample, intervention/exposure, outcomes, key findings
+- Insert a placeholder "[Data Extraction Table — Table X]" at the appropriate point
+
+## Synthesis of Findings (400–600 words, expandable based on number of studies)
+- Group findings thematically or by outcome
+- For each theme/outcome: synthesise findings across studies, noting convergence, divergence, and contradictions
+- Use narrative synthesis if statistical meta-analysis is not appropriate
+- If meta-analysis is used: report pooled effect sizes, confidence intervals, I² statistic for heterogeneity
+- Distinguish between high-quality and lower-quality evidence
+
+## Discussion (300–350 words)
+- Interpret what the synthesis means for the field
+- Identify consistent patterns and explain divergent findings
+- Compare findings to existing narrative reviews or theoretical predictions
+- State the current state of evidence: strong, moderate, weak, or conflicting
+
+## Limitations of the Review (150–200 words)
+- Language bias (English-only searches)
+- Publication bias (negative results less likely published)
+- Search comprehensiveness
+- Heterogeneity of included studies
+- Quality of evidence limitations
+
+## Conclusion (150–200 words)
+- Summarise what the systematic review found
+- State implications for research and practice
+- Identify unanswered questions that justify the current study's primary research contribution
+
+STRICT PROHIBITIONS:
+- Do NOT present this as a narrative literature review
+- Do NOT omit the PRISMA process description
+- Do NOT invent specific study counts or n= values — use representative placeholders
+- Do NOT skip quality appraisal — it is mandatory for a credible SLR
+- Do NOT include a general background section that duplicates Chapter 1
+`;
+
+export const CUSTOM_CHAPTER_TEMPLATE = `
+CUSTOM CHAPTER — CONTEXT-DERIVED STRUCTURE
+
+This chapter does not follow one of the standard dissertation structures. Use the chapter title, the project's research context, and all previous chapters to determine the most appropriate and academically rigorous structure for this chapter.
+
+Core Principle:
+Before beginning, reason through: What intellectual work does this chapter need to do? What question does it answer? How does it build on the argument from the previous chapter and prepare the ground for the next? The structure must emerge from the content requirements, not from a generic scaffold.
+
+Structural Guidance:
+
+## Chapter Introduction (150–200 words)
+- State what this chapter covers and why it is positioned here in the dissertation
+- Explain its relationship to the chapters that precede and follow it
+- Preview the main sections
+
+## Body Sections (3–5 sections)
+Choose section types appropriate to this chapter's intellectual purpose. Possible types:
+- Conceptual analysis: examining, defining, critiquing a key construct or framework
+- Empirical sub-review: targeted survey of evidence on a specific sub-question not covered in the main literature review
+- Theoretical development: building, extending, or applying a theoretical framework
+- Comparative analysis: contrasting two or more positions, cases, policies, or contexts
+- Methodological sub-discussion: for complex or unconventional research designs
+- Policy or practice analysis: examining real-world applications or professional implications
+- Historical or contextual review: grounding the current study in its intellectual history
+
+Each section must:
+- Open with a clear topic sentence announcing its argument
+- Build an analytical case (not just summarise)
+- Connect its argument to the research question(s) and central thesis
+- Close with a bridging sentence linking to the next section
+
+## Chapter Summary (150–200 words)
+- Consolidate the main points established in this chapter
+- Show what has been analytically resolved
+- Create a clear transition to the next chapter
+
+QUALITY STANDARDS:
+- Academic citations per the project's citation style throughout
+- No meta-commentary or self-referential statements
+- Precise and varied prose — avoid formulaic openings
+- Argument-driven, not description-driven
+`;
+

@@ -1,13 +1,15 @@
 // Single source of truth for which model handles which task.
-// Claude Sonnet 4.6 is the REASONING model for ALL tiers (including free).
+// Claude Opus 4.7 is the PhD/admin writing model (best synthesis quality).
+// Claude Sonnet 4.6 is the Masters writing model and REASONING model for all tiers.
 // Writing models are tier-gated:
 //   Free → Gemini 2.5 Flash
 //   Undergraduate → Gemini 2.5 Flash / GPT-5.2
-//   Masters → Gemini + GPT-5.2 + Claude Sonnet 4.6
-//   PhD / Custom → All models (Claude + Gemini + GPT-5.2 + Qwen)
+//   Masters → Gemini + Claude Sonnet 4.6
+//   PhD / Custom → Claude Opus 4.7 + fallbacks
 // Admin (grey.izilein@gmail.com) is treated as PhD tier.
 
-export const ANTHROPIC_MODEL = "claude-sonnet-4-5";
+export const ANTHROPIC_MODEL = "claude-sonnet-4-6";
+export const ANTHROPIC_OPUS_MODEL = "claude-opus-4-7";
 export const FALLBACK_GPT = "gemini-2.5-flash";
 export const FREE_MODEL = "gemini-2.5-flash";
 export const QWEN_MODEL = "qwen3.6-plus";
@@ -78,10 +80,12 @@ export function pickWriterModel(tier: string | null | undefined, opts: PickOpts 
   }
 
   // Masters/PhD/Custom/Admin: Claude writing access
+  // PhD and admin get Opus 4.7 for better novel synthesis; Masters gets Sonnet 4.6
   if (isAdmin || CLAUDE_TIERS.has(t)) {
+    const useOpus = isAdmin || t === "phd" || t === "custom";
     return {
       provider: "anthropic",
-      model: ANTHROPIC_MODEL,
+      model: useOpus ? ANTHROPIC_OPUS_MODEL : ANTHROPIC_MODEL,
       thinking: !!opts.allowThinking && (isAdmin || THINKING_TIERS.has(t)),
     };
   }

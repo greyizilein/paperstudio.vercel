@@ -14,6 +14,8 @@ import {
   CHAPTER_FOUR_QUAL_TEMPLATE,
   CHAPTER_FOUR_QUANT_TEMPLATE,
   CHAPTER_FIVE_TEMPLATE,
+  SLR_TEMPLATE,
+  CUSTOM_CHAPTER_TEMPLATE,
   SUPERIOR_PROMPT_TEMPLATE,
   buildUnifiedHeadingSchema,
 } from "./templateContent.ts";
@@ -165,8 +167,16 @@ function buildChapterStructureTemplate(
     case "conclusion":
       template = CHAPTER_FIVE_TEMPLATE;
       break;
+    case "systematic_literature_review":
+      template = SLR_TEMPLATE;
+      break;
+    case "custom":
+      template = CUSTOM_CHAPTER_TEMPLATE;
+      break;
     default:
-      return "";
+      // Unknown type: use the custom template so there's still guidance
+      template = CUSTOM_CHAPTER_TEMPLATE;
+      break;
   }
 
   const unifiedSchema = buildUnifiedHeadingSchema(chapterType, methodology, degree, includeHypotheses);
