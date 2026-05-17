@@ -154,17 +154,19 @@ export const MarketingPricing = () => {
           {tiers.map((tier, i) => {
             const isPrimary = tier.variant === "primary";
             const isDark = tier.variant === "dark";
-            const headerBg = isPrimary
-              ? "bg-primary text-primary-foreground"
-              : isDark
-              ? "bg-[hsl(24,10%,12%)] text-white"
-              : "bg-[hsl(40,20%,96%)] text-[hsl(24,10%,10%)]";
-            const cardBorder = isPrimary
-              ? "border-primary"
-              : isDark
-              ? "border-[hsl(24,10%,12%)]"
-              : "border-black/10";
             const isLoading = loadingTier === tier.name.toLowerCase();
+
+            const headerStyle: React.CSSProperties = isPrimary
+              ? { background: "var(--ma-accent)", color: "#FFFFFF" }
+              : isDark
+              ? { background: "var(--ma-surface2)", color: "var(--ma-text)" }
+              : { background: "var(--ma-surface2)", color: "var(--ma-text)" };
+
+            const cardBorderStyle: React.CSSProperties = isPrimary
+              ? { borderColor: "var(--ma-accent)" }
+              : isDark
+              ? { borderColor: "var(--ma-border-bright)" }
+              : { borderColor: "var(--ma-border)" };
 
             return (
               <motion.div
@@ -173,8 +175,8 @@ export const MarketingPricing = () => {
                 whileInView={{ opacity: 1, y: 0, filter: "blur(0px)" }}
                 viewport={{ once: true, amount: 0.2 }}
                 transition={{ duration: 0.5, delay: i * 0.08, ease: [0.16, 1, 0.3, 1] }}
-                className={`rounded-2xl flex flex-col border-2 overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-black/10 relative ${cardBorder}`}
-                style={{ background: "var(--ma-surface)" }}
+                className="rounded-2xl flex flex-col border-2 overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-black/10 relative"
+                style={{ background: "var(--ma-surface)", ...cardBorderStyle }}
               >
                 {tier.highlighted && (
                   <span className="absolute top-4 right-4 z-10 bg-amber-400 text-black text-[11px] font-bold px-3 py-1 rounded-full">
@@ -182,17 +184,17 @@ export const MarketingPricing = () => {
                   </span>
                 )}
 
-                <div className={`px-6 pt-6 pb-6 ${headerBg}`}>
-                  <p className={`text-xs font-bold tracking-[0.18em] uppercase ${isPrimary || isDark ? "opacity-70" : "text-black/55"}`}>
+                <div className="px-6 pt-6 pb-6" style={headerStyle}>
+                  <p className="text-xs font-bold tracking-[0.18em] uppercase" style={{ opacity: 0.65 }}>
                     {tier.name}
                   </p>
                   <div className="mt-3 flex items-baseline gap-2">
                     <span className="text-5xl font-extrabold tracking-tight tabular-nums">{tier.price}</span>
                   </div>
-                  <p className={`mt-1 text-sm ${isPrimary || isDark ? "opacity-70" : "text-black/55"}`}>
+                  <p className="mt-1 text-sm" style={{ opacity: 0.65 }}>
                     {tier.period}
                   </p>
-                  <p className={`mt-4 text-sm font-semibold leading-snug ${isPrimary || isDark ? "" : "text-black/85"}`}>
+                  <p className="mt-4 text-sm font-semibold leading-snug">
                     {tier.description}
                   </p>
                 </div>
@@ -202,14 +204,13 @@ export const MarketingPricing = () => {
                     {tier.features.map((f) => (
                       <li
                         key={f.label}
-                        className={`flex items-start gap-2.5 text-sm ${
-                          f.included ? "text-black/80" : "text-black/35"
-                        }`}
+                        className="flex items-start gap-2.5 text-sm"
+                        style={{ color: f.included ? "var(--ma-text-muted)" : "var(--ma-text-dim)" }}
                       >
                         {f.included ? (
-                          <Check size={16} className="shrink-0 mt-0.5 text-emerald-600" strokeWidth={3} />
+                          <Check size={16} className="shrink-0 mt-0.5 text-emerald-500" strokeWidth={3} />
                         ) : (
-                          <Minus size={16} className="shrink-0 mt-0.5 text-black/30" />
+                          <Minus size={16} className="shrink-0 mt-0.5" style={{ color: "var(--ma-text-dim)" }} />
                         )}
                         <span>{f.label}</span>
                       </li>
@@ -223,51 +224,60 @@ export const MarketingPricing = () => {
 
                     if (isPrimary) {
                       return (
-                        <Button
+                        <button
                           onClick={() => startCheckout(tier.name)}
                           disabled={isLoading}
-                          variant="ghost"
-                          className="w-full font-bold text-primary hover:bg-primary/5 active:scale-[0.98] transition-transform"
+                          className="w-full font-bold py-2 rounded-lg transition-opacity active:scale-[0.98]"
+                          style={{ color: "var(--ma-accent)", background: "transparent", border: "2px solid var(--ma-accent)", fontFamily: '"Geist", system-ui, sans-serif', fontSize: "0.9rem" }}
+                          onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "var(--ma-accent)"; (e.currentTarget as HTMLButtonElement).style.color = "#FFF"; }}
+                          onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "transparent"; (e.currentTarget as HTMLButtonElement).style.color = "var(--ma-accent)"; }}
                         >
                           {buttonContent}
-                        </Button>
+                        </button>
                       );
                     }
                     if (isDark) {
                       return (
-                        <Button
+                        <button
                           onClick={() => startCheckout(tier.name)}
                           disabled={isLoading}
-                          variant="outline"
-                          className="w-full font-bold border-2 border-[hsl(24,10%,12%)] text-[hsl(24,10%,12%)] hover:bg-[hsl(24,10%,12%)] hover:text-white active:scale-[0.98] transition-all"
+                          className="w-full font-bold py-2 rounded-lg transition-all active:scale-[0.98]"
+                          style={{ color: "var(--ma-text)", background: "transparent", border: "2px solid var(--ma-border-bright)", fontFamily: '"Geist", system-ui, sans-serif', fontSize: "0.9rem" }}
+                          onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "var(--ma-text)"; (e.currentTarget as HTMLButtonElement).style.color = "var(--ma-bg)"; }}
+                          onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "transparent"; (e.currentTarget as HTMLButtonElement).style.color = "var(--ma-text)"; }}
                         >
                           {buttonContent}
-                        </Button>
+                        </button>
                       );
                     }
                     if (tier.name === "Free") {
                       return (
-                        <Button
+                        <button
                           onClick={() => navigate("/auth?tab=signup")}
-                          variant="outline"
-                          className="w-full font-bold border-2 border-primary text-primary hover:bg-primary hover:text-primary-foreground active:scale-[0.98] transition-all"
+                          className="w-full font-bold py-2 rounded-lg transition-all active:scale-[0.98]"
+                          style={{ color: "var(--ma-accent)", background: "transparent", border: "2px solid var(--ma-accent)", fontFamily: '"Geist", system-ui, sans-serif', fontSize: "0.9rem" }}
+                          onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "var(--ma-accent)"; (e.currentTarget as HTMLButtonElement).style.color = "#FFF"; }}
+                          onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "transparent"; (e.currentTarget as HTMLButtonElement).style.color = "var(--ma-accent)"; }}
                         >
                           {tier.cta} →
-                        </Button>
+                        </button>
                       );
                     }
                     return (
-                      <Button
+                      <button
                         onClick={() => startCheckout(tier.name)}
                         disabled={isLoading}
-                        className="w-full font-bold bg-primary hover:bg-primary/90 text-primary-foreground active:scale-[0.98] transition-transform"
+                        className="w-full font-bold py-2 rounded-lg transition-opacity active:scale-[0.98]"
+                        style={{ background: "var(--ma-accent)", color: "#FFFFFF", border: "none", fontFamily: '"Geist", system-ui, sans-serif', fontSize: "0.9rem" }}
+                        onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.opacity = "0.88"; }}
+                        onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.opacity = "1"; }}
                       >
                         {buttonContent}
-                      </Button>
+                      </button>
                     );
                   })()}
                   {tier.name !== "Free" && (
-                    <p className="text-[10px] text-black/45 text-center mt-2">Charged in NGN at checkout</p>
+                    <p className="text-[10px] text-center mt-2" style={{ color: "var(--ma-text-dim)" }}>Charged in NGN at checkout</p>
                   )}
                 </div>
               </motion.div>

@@ -118,7 +118,7 @@ export const CTABanner = () => (
             fontStyle: "italic",
             fontWeight: 700,
             fontSize: "clamp(2.6rem, 6vw, 4.5rem)",
-            color: "#F5EDD8",
+            color: "#FFFFFF",
             lineHeight: 1.1,
             letterSpacing: "-0.02em",
             margin: "0 0 20px",
@@ -132,7 +132,7 @@ export const CTABanner = () => (
           style={{
             fontFamily: DA_FONTS.body,
             fontSize: "1.1rem",
-            color: "rgba(232,223,200,0.65)",
+            color: "rgba(255,255,255,0.65)",
             maxWidth: "480px",
             margin: "0 auto 44px",
             lineHeight: 1.65,
@@ -148,8 +148,8 @@ export const CTABanner = () => (
               display: "inline-flex",
               alignItems: "center",
               gap: "10px",
-              background: "#F5EDD8",
-              color: "#6E1825",
+              background: "#FFFFFF",
+              color: "#8B2030",
               fontFamily: DA_FONTS.body,
               fontWeight: 700,
               fontSize: "1.05rem",
@@ -163,12 +163,12 @@ export const CTABanner = () => (
             }}
             onMouseEnter={(e) => {
               const btn = e.currentTarget as HTMLButtonElement;
-              btn.style.background = "#ffffff";
+              btn.style.background = "#F0F0F0";
               btn.style.boxShadow = "0 8px 32px rgba(0,0,0,0.3)";
             }}
             onMouseLeave={(e) => {
               const btn = e.currentTarget as HTMLButtonElement;
-              btn.style.background = "#F5EDD8";
+              btn.style.background = "#FFFFFF";
               btn.style.boxShadow = "0 4px 20px rgba(0,0,0,0.25)";
             }}
             onMouseDown={(e) => { (e.currentTarget as HTMLButtonElement).style.transform = "scale(0.97)"; }}
@@ -186,7 +186,7 @@ export const CTABanner = () => (
           style={{
             fontFamily: DA_FONTS.body,
             fontSize: "0.78rem",
-            color: "rgba(232,223,200,0.4)",
+            color: "rgba(255,255,255,0.4)",
             marginTop: "18px",
           }}
         >
