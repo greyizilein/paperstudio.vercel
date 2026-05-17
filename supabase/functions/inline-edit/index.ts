@@ -17,6 +17,8 @@ const ACTION_PROMPTS: Record<string, string> = {
     "Insert a brief parenthetical explanation of the key concept in the following academic text (e.g., 'theoretical saturation (the point at which no new themes emerge from the data)'). Keep all other text identical. Return only the revised text — no commentary.",
   fix:
     "Fix any grammar errors, spelling mistakes, and citation formatting issues in the following academic text. Use the citation style that appears in the text. Return only the corrected text — no commentary.",
+  cite:
+    "Review the following academic text and improve its citations. Add in-text citations where a claim clearly needs one but lacks one (use a placeholder like [Author, Year] if the exact source is unknown). Fix any incorrectly formatted citations to match the specified citation style. Do not change any other wording. Return only the revised text — no commentary.",
 };
 
 serve(async (req) => {
@@ -43,7 +45,7 @@ serve(async (req) => {
     }
 
     let systemPrompt = ACTION_PROMPTS[action] || ACTION_PROMPTS.rewrite;
-    if (action === "fix" && citationStyle) {
+    if ((action === "fix" || action === "cite") && citationStyle) {
       systemPrompt += ` The citation style in use is ${citationStyle}.`;
     }
 

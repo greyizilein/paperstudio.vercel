@@ -14,18 +14,19 @@ const ACTIONS = [
   { id: "expand", label: "Expand", icon: "+" },
   { id: "explain", label: "Explain", icon: "?" },
   { id: "fix", label: "Fix", icon: "✓" },
+  { id: "cite", label: "Cite", icon: '‟' },
 ];
 
 export function ContextualToolbar({ rect, isLoading, activeAction, onAction }: Props) {
   const toolbarHeight = 40;
-  const toolbarWidth = 280; // approximate
+  const toolbarWidth = 340; // approximate with 6 actions
 
-  // Position above the selection, centered horizontally
-  let top = rect.top - toolbarHeight - 6;
+  // Prefer below the selection so the browser's native copy menu (above) doesn't block it
+  let top = rect.bottom + 8;
   let left = rect.left + rect.width / 2 - toolbarWidth / 2;
 
-  // Keep within viewport bounds
-  if (top < 8) top = rect.bottom + 6; // flip below if no room above
+  // Flip above if not enough room below
+  if (top + toolbarHeight > window.innerHeight - 8) top = rect.top - toolbarHeight - 8;
   if (left < 8) left = 8;
   if (left + toolbarWidth > window.innerWidth - 8) left = window.innerWidth - toolbarWidth - 8;
 
