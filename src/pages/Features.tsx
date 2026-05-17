@@ -1,6 +1,10 @@
 import { PageHero } from "@/components/firstdraft/PageHero";
 import { CTABand } from "@/components/firstdraft/CTABand";
-import { ContentSection } from "@/components/firstdraft/ContentSection";
+
+const FONTS = {
+  headline: '"Fraunces", "Playfair Display", Georgia, serif',
+  body: '"Geist", system-ui, sans-serif',
+};
 
 const features = [
   { emoji: '✍️', title: 'Chapters Crafted by PAPERSTUDIO', desc: 'Each chapter generated on demand with PAPERSTUDIO. Structured for your exact degree, methodology, framework, and citation style with word count precision within ±3%.' },
@@ -18,16 +22,66 @@ export default function FeaturesPage() {
   return (
     <div>
       <PageHero
-        title={<>Everything you need<br /><em className="not-italic text-aqua">For your dissertation.</em></>}
+        title={<>Everything you need<br /><em style={{ fontStyle: "italic", color: "var(--ma-accent)" }}>for your dissertation.</em></>}
         subtitle="From research framework selection to publication-ready export — every feature designed for academic excellence."
       />
-      <section className="py-[100px] px-6 md:px-20 max-w-[1200px] mx-auto">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <section style={{ padding: "100px 24px", maxWidth: "1200px", margin: "0 auto" }}>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))",
+            gap: "20px",
+          }}
+        >
           {features.map(f => (
-            <div key={f.title} className="rounded-2xl border-[1.5px] border-border p-8 bg-white hover:border-primary-light hover:shadow-[0_12px_36px_rgba(74,21,75,0.1)] hover:-translate-y-0.5 transition-all">
-              <div className="text-[32px] mb-4">{f.emoji}</div>
-              <h3 className="font-heading text-xl font-extrabold text-primary mb-2.5">{f.title}</h3>
-              <p className="text-sm text-muted-foreground leading-[1.7]">{f.desc}</p>
+            <div
+              key={f.title}
+              style={{
+                borderRadius: "16px",
+                border: "1px solid var(--ma-border)",
+                padding: "32px",
+                background: "var(--ma-surface)",
+                transition: "border-color 0.25s ease, transform 0.25s ease, box-shadow 0.25s ease",
+                cursor: "default",
+              }}
+              onMouseEnter={(e) => {
+                const el = e.currentTarget as HTMLDivElement;
+                el.style.borderColor = "var(--ma-border-bright)";
+                el.style.transform = "translateY(-2px)";
+                el.style.boxShadow = "0 12px 40px rgba(0,0,0,0.25)";
+              }}
+              onMouseLeave={(e) => {
+                const el = e.currentTarget as HTMLDivElement;
+                el.style.borderColor = "var(--ma-border)";
+                el.style.transform = "translateY(0)";
+                el.style.boxShadow = "none";
+              }}
+            >
+              <div style={{ fontSize: "32px", marginBottom: "16px" }}>{f.emoji}</div>
+              <h3
+                style={{
+                  fontFamily: FONTS.headline,
+                  fontStyle: "italic",
+                  fontWeight: 600,
+                  fontSize: "1.2rem",
+                  color: "var(--ma-accent)",
+                  marginBottom: "10px",
+                  lineHeight: 1.25,
+                }}
+              >
+                {f.title}
+              </h3>
+              <p
+                style={{
+                  fontFamily: FONTS.body,
+                  fontSize: "0.875rem",
+                  color: "var(--ma-text-muted)",
+                  lineHeight: 1.7,
+                  margin: 0,
+                }}
+              >
+                {f.desc}
+              </p>
             </div>
           ))}
         </div>

@@ -1,6 +1,11 @@
 import { PageHero } from "@/components/firstdraft/PageHero";
 import { CTABand } from "@/components/firstdraft/CTABand";
 
+const FONTS = {
+  headline: '"Fraunces", "Playfair Display", Georgia, serif',
+  body: '"Geist", system-ui, sans-serif',
+};
+
 const frameworks = [
   { name: 'PICO', disc: 'Medicine, Nursing, Public Health', comp: 'Population · Intervention · Comparison · Outcome', best: 'Clinical trials, systematic reviews' },
   { name: 'PICOS', disc: 'Medicine, EBP', comp: 'P · I · C · O · Study design', best: 'Reviews filtering by study type' },
@@ -15,45 +20,93 @@ const frameworks = [
   { name: 'Custom', disc: 'Any discipline', comp: 'User-defined components', best: 'Interdisciplinary or novel research designs' },
 ];
 
+const TABLE_STYLE: React.CSSProperties = {
+  width: "100%",
+  borderCollapse: "collapse",
+  fontSize: "14px",
+  fontFamily: FONTS.body,
+};
+
 export default function ResearchTools() {
   return (
     <div>
-      <PageHero title={<>15 Research Frameworks.<br /><em className="not-italic text-aqua">All built in.</em></>} subtitle="Choose the framework that fits your study. PAPERSTUDIO shapes your entire dissertation around it." />
-      <section className="py-[100px] px-6 md:px-20 max-w-[1200px] mx-auto">
-        <div className="overflow-x-auto mb-12">
-          <table className="w-full border-collapse text-sm">
+      <PageHero
+        title={<>15 Research Frameworks.<br /><em style={{ fontStyle: "italic", color: "var(--ma-accent)" }}>All built in.</em></>}
+        subtitle="Choose the framework that fits your study. PAPERSTUDIO shapes your entire dissertation around it."
+      />
+      <section style={{ padding: "100px 24px", maxWidth: "1200px", margin: "0 auto" }}>
+        <div style={{ overflowX: "auto", marginBottom: "48px" }}>
+          <table style={TABLE_STYLE}>
             <thead>
-              <tr className="bg-primary text-white">
-                <th className="px-4 py-3 text-left font-heading font-extrabold text-[13px]">Framework</th>
-                <th className="px-4 py-3 text-left font-heading font-extrabold text-[13px]">Discipline</th>
-                <th className="px-4 py-3 text-left font-heading font-extrabold text-[13px]">Components</th>
-                <th className="px-4 py-3 text-left font-heading font-extrabold text-[13px]">Best for</th>
+              <tr style={{ background: "var(--ma-accent)" }}>
+                {['Framework', 'Discipline', 'Components', 'Best for'].map(h => (
+                  <th key={h} style={{ padding: "12px 16px", textAlign: "left", fontFamily: FONTS.body, fontWeight: 700, fontSize: "13px", color: "#FFFFFF", whiteSpace: "nowrap" }}>{h}</th>
+                ))}
               </tr>
             </thead>
             <tbody>
               {frameworks.map((f, i) => (
-                <tr key={f.name} className={`border-b border-border hover:bg-primary-pale transition-colors ${i % 2 === 1 ? 'bg-surface-light' : ''}`}>
-                  <td className="px-4 py-3 font-bold text-foreground">{f.name}</td>
-                  <td className="px-4 py-3 text-foreground">{f.disc}</td>
-                  <td className="px-4 py-3 text-foreground">{f.comp}</td>
-                  <td className="px-4 py-3 text-foreground">{f.best}</td>
+                <tr
+                  key={f.name}
+                  style={{
+                    borderBottom: "1px solid var(--ma-border)",
+                    background: i % 2 === 1 ? "var(--ma-surface)" : "transparent",
+                    transition: "background 0.15s ease",
+                  }}
+                  onMouseEnter={(e) => { (e.currentTarget as HTMLTableRowElement).style.background = "rgba(196,56,74,0.06)"; }}
+                  onMouseLeave={(e) => { (e.currentTarget as HTMLTableRowElement).style.background = i % 2 === 1 ? "var(--ma-surface)" : "transparent"; }}
+                >
+                  <td style={{ padding: "12px 16px", fontWeight: 700, color: "var(--ma-text)" }}>{f.name}</td>
+                  <td style={{ padding: "12px 16px", color: "var(--ma-text-muted)" }}>{f.disc}</td>
+                  <td style={{ padding: "12px 16px", color: "var(--ma-text-muted)" }}>{f.comp}</td>
+                  <td style={{ padding: "12px 16px", color: "var(--ma-text-muted)" }}>{f.best}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-        <div className="bg-primary-pale rounded-2xl p-10 border border-primary-light">
-          <h3 className="font-heading text-[26px] font-black text-primary mb-3">How framework selection shapes your dissertation</h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-2">
+
+        {/* Info box */}
+        <div
+          style={{
+            background: "rgba(196,56,74,0.06)",
+            borderRadius: "16px",
+            padding: "40px",
+            border: "1px solid rgba(196,56,74,0.2)",
+          }}
+        >
+          <h3
+            style={{
+              fontFamily: FONTS.headline,
+              fontStyle: "italic",
+              fontWeight: 700,
+              fontSize: "1.625rem",
+              color: "var(--ma-accent)",
+              marginBottom: "12px",
+              lineHeight: 1.2,
+            }}
+          >
+            How framework selection shapes your dissertation
+          </h3>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))",
+              gap: "24px",
+              marginTop: "8px",
+            }}
+          >
             {[
               { ico: '❓', title: 'Research Questions', desc: 'Each component generates a question sub-component. Editable before the project locks in.' },
               { ico: '📋', title: 'Inclusion/Exclusion Criteria', desc: 'Auto-populates a criteria table in the Methodology chapter with framework-specific rows.' },
               { ico: '📊', title: 'Analysis Pre-selection', desc: 'PICO suggests meta-analysis. SPIDER suggests thematic analysis. CIMO suggests realist synthesis. Always overrideable.' },
-            ].map(i => (
-              <div key={i.title}>
-                <div className="text-[22px] mb-2">{i.ico}</div>
-                <div className="font-heading font-extrabold text-foreground mb-1.5">{i.title}</div>
-                <p className="text-sm text-muted-foreground leading-[1.65]">{i.desc}</p>
+            ].map(item => (
+              <div key={item.title}>
+                <div style={{ fontSize: "22px", marginBottom: "8px" }}>{item.ico}</div>
+                <div style={{ fontFamily: FONTS.headline, fontStyle: "italic", fontWeight: 600, fontSize: "1.05rem", color: "var(--ma-text)", marginBottom: "6px" }}>
+                  {item.title}
+                </div>
+                <p style={{ fontFamily: FONTS.body, fontSize: "14px", color: "var(--ma-text-muted)", lineHeight: 1.65, margin: 0 }}>{item.desc}</p>
               </div>
             ))}
           </div>
