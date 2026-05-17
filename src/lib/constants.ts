@@ -363,3 +363,87 @@ export const LANGUAGE_LEVEL_DESCRIPTIONS: Record<number, string> = {
   6: "Expert scholarly — dense, layered prose with original conceptual contributions",
   7: "PhD / publication-grade — field-shaping language, maximal theoretical density",
 };
+
+export interface ChapterGuide {
+  purpose: string;
+  checklist: string[];
+  tip: string;
+}
+
+export const CHAPTER_GUIDES: Record<string, ChapterGuide> = {
+  introduction: {
+    purpose: "Sets the stage for your entire dissertation. Tells the reader what you're researching, why it matters, what you set out to do, and how the dissertation is structured.",
+    checklist: [
+      "Research background and context — what is the problem or phenomenon?",
+      "Problem statement — why is this gap worth investigating?",
+      "Research aim and objectives — what will you achieve?",
+      "Research questions — the specific questions you will answer",
+      "Significance — why does this matter to theory or practice?",
+      "Scope and limitations — what is and isn't covered",
+      "Dissertation structure overview — a brief roadmap of each chapter",
+    ],
+    tip: "Write (or revise) the introduction last. Once you've completed your research you'll know exactly what the study is really about — your intro should reflect that, not your original assumptions.",
+  },
+  literature_review: {
+    purpose: "Shows you know the field. Synthesises existing research to identify a gap or debate that your study addresses. It's not a list of summaries — it's a critical argument built from sources.",
+    checklist: [
+      "Thematic structure — organised by themes or debates, not author by author",
+      "Critical engagement — evaluate, compare, and contrast rather than just describe",
+      "Theoretical framework — identify the theory or model your study builds on",
+      "Gap analysis — explicitly state what is missing in the existing literature",
+      "Transition to methodology — explain why the gap justifies your chosen approach",
+    ],
+    tip: "Use linking phrases to build an argument: 'While Smith (2019) found X, Jones (2021) challenges this by…'. This signals critical thinking. Examiners reward synthesis over description.",
+  },
+  methodology: {
+    purpose: "Explains and justifies HOW you conducted your research. Every choice — philosophy, design, sampling, collection, analysis — should be justified, not just described.",
+    checklist: [
+      "Research philosophy (positivism, interpretivism, pragmatism…)",
+      "Research approach (deductive, inductive, abductive)",
+      "Research design (experimental, survey, case study, ethnography…)",
+      "Sampling strategy — who, how many, and why this group",
+      "Data collection instruments (questionnaires, interviews, observations…)",
+      "Data analysis method (thematic analysis, regression, content analysis…)",
+      "Ethical considerations — consent, anonymity, data protection",
+      "Reliability, validity, or trustworthiness of the approach",
+    ],
+    tip: "For every choice, answer two questions: (1) What did you do? (2) Why is this appropriate for your research question? Examiners penalise chapters that describe without justifying.",
+  },
+  findings: {
+    purpose: "Presents and analyses your data. Reports results organised by research question or theme — then analyses what they mean. Does not simply list results.",
+    checklist: [
+      "Organised by research question or theme (not by data collection order)",
+      "Every result connects back to the research questions",
+      "Tables and figures are numbered, titled, and referenced in the text",
+      "Quantitative: report significance levels, effect sizes, confidence intervals",
+      "Qualitative: use direct quotes as evidence for each theme",
+      "Analysis and interpretation follow each result — not just raw data",
+    ],
+    tip: "A common mistake: presenting results without analysis. After every table or quote, explain what it means: 'This indicates that…', 'These figures suggest…'. The examiner wants your interpretation.",
+  },
+  conclusion: {
+    purpose: "Closes the argument. Directly answers your research questions, summarises key findings, discusses contributions to knowledge, and gives recommendations for practice and future research.",
+    checklist: [
+      "Summary of key findings — answer each research question explicitly",
+      "Contribution to knowledge — what does your study add that didn't exist before?",
+      "Practical implications — what should practitioners or policymakers do differently?",
+      "Limitations of your study — be honest about what you couldn't control",
+      "Recommendations for future research — what should come next?",
+      "Concluding reflection — return to the problem statement from Chapter 1",
+    ],
+    tip: "Avoid introducing new evidence in the conclusion. Everything here should flow from what you've already established. Think of it as 'paying off' all the questions you raised in Chapter 1.",
+  },
+  abstract: {
+    purpose: "A self-contained summary of the entire dissertation — problem, method, key findings, and conclusions — in 250–350 words. Written last, read first.",
+    checklist: [
+      "Background / context (1–2 sentences)",
+      "Research gap or problem (1 sentence)",
+      "Aim, objectives, or research questions (1–2 sentences)",
+      "Methodology overview — design, sample, analysis method (2–3 sentences)",
+      "Key findings (2–3 sentences)",
+      "Conclusions and implications (1–2 sentences)",
+      "Keywords — 5–7 terms listed below the abstract",
+    ],
+    tip: "Write the abstract after finishing all other chapters. Read your introduction, findings, and conclusion side by side, then summarise each section in 1–2 sentences. It should make sense to someone who hasn't read the dissertation.",
+  },
+};

@@ -27,7 +27,9 @@ import {
   FIGURE_NUMBERING_OPTIONS, TABLE_NUMBERING_OPTIONS,
   CAPTION_POSITION_OPTIONS, SOURCE_FORMAT_OPTIONS,
   QUANT_METHOD_DESCRIPTIONS, QUAL_METHOD_DESCRIPTIONS,
+  CHAPTER_GUIDES,
 } from "@/lib/constants";
+import { ContextualToolbar } from "@/components/writer/ContextualToolbar";
 import { ChartRenderer } from "@/components/firstdraft/ChartRenderer";
 import { FinalExport } from "@/components/FinalExport";
 import { ChapterOutlineModal, type OutlineHeading } from "@/components/ChapterOutlineModal";
@@ -330,6 +332,12 @@ export default function WriterPage() {
   const [allProjects, setAllProjects] = useState<Project[]>([]);
   const [isEditMode, setIsEditMode] = useState(false);
   const [editContent, setEditContent] = useState("");
+  // Inline text editing toolbar
+  const [textSelection, setTextSelection] = useState<{ text: string; rect: DOMRect } | null>(null);
+  const [inlineEditLoading, setInlineEditLoading] = useState(false);
+  const [inlineEditAction, setInlineEditAction] = useState<string | null>(null);
+  // Chapter guide panel
+  const [showGuide, setShowGuide] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
   const [showExportChModal, setShowExportChModal] = useState(false);
   const [showFinalExport, setShowFinalExport] = useState(false);
@@ -1633,6 +1641,87 @@ export default function WriterPage() {
     setPersonalise(prev => ({ ...prev, notes: reviseText }));
     pendingReviseRef.current = true;
   };
+
+  // ── Inline text-selection editing ──
+  const handleTextSelection = () => {
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0 || sel.isCollapsed) {
+      setTextSelection(null);
+      return;
+    }
+    const selectedText = sel.toString().trim();
+    if (!selectedText || selectedText.length < 4) {
+      setTextSelection(null);
+      return;
+    }
+    const range = sel.getRangeAt(0);
+    const rect = range.getBoundingClientRect();
+    setTextSelection({ text: selectedText, rect });
+  };
+
+  const handleInlineEdit = async (action: string) => {
+    if (!textSelection || !currentChapter || inlineEditLoading) return;
+    const selectedText = textSelection.text;
+    setInlineEditLoading(true);
+    setInlineEditAction(action);
+    try {
+      const resp = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/inline-edit`,
+        {
+          method: "POST",
+          headers: await authedHeaders(),
+          body: JSON.stringify({ selection: selectedText, action, citationStyle: project?.citation_style }),
+        }
+      );
+      if (!resp.ok || !resp.body) {
+        const err = await resp.json().catch(() => ({}));
+        toast.error(err.error || "Edit failed");
+        return;
+      }
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let replacement = "";
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+        for (const line of lines) {
+          if (!line.startsWith("data:")) continue;
+          const data = line.slice(5).trim();
+          if (data === "[DONE]") continue;
+          try {
+            const json = JSON.parse(data);
+            const delta = json.choices?.[0]?.delta?.content || "";
+            if (delta) replacement += delta;
+          } catch { /* ignore */ }
+        }
+      }
+      if (replacement) {
+        const newContent = currentChapter.content!.replace(selectedText, () => replacement.trim());
+        if (newContent !== currentChapter.content) {
+          const wc = countBodyWords(newContent);
+          handleUpdate({
+            ...project!,
+            chapters: project!.chapters.map(c =>
+              c.id === currentChapter.id ? { ...c, content: newContent, word_count_actual: wc } : c
+            ),
+          });
+          toast.success(`${action.charAt(0).toUpperCase() + action.slice(1)} applied`);
+        } else {
+          toast.info("Couldn't locate that text in the chapter — try selecting less");
+        }
+      }
+    } catch (e: any) {
+      toast.error(e.message || "Edit failed");
+    } finally {
+      setInlineEditLoading(false);
+      setInlineEditAction(null);
+      setTextSelection(null);
+    }
+  };
   // Check triggerGenerate flag in a requestAnimationFrame after render
   if (triggerGenerate) {
     requestAnimationFrame(() => {
@@ -2005,32 +2094,44 @@ export default function WriterPage() {
                 <span className="inline-block w-[2px] h-[14px] bg-primary align-text-bottom ml-px animate-pulse" />
               </div>
             ) : currentChapter?.content ? (
-              <div className={cn(
-                isEditMode ? "flex flex-col h-full" : "max-w-[680px] lg:max-w-[920px] xl:max-w-[1080px] 2xl:max-w-[1180px] mx-auto px-4 sm:px-10 py-6 prose-academic",
-                !isEditMode && editedChapterIds.has(currentChapter.id) && "border-l-4 border-l-green pl-5"
-              )}>
+              <div
+                className={cn(
+                  isEditMode ? "flex flex-col h-full" : "max-w-[680px] lg:max-w-[920px] xl:max-w-[1080px] 2xl:max-w-[1180px] mx-auto px-4 sm:px-10 py-6 prose-academic",
+                  !isEditMode && editedChapterIds.has(currentChapter.id) && "border-l-4 border-l-green pl-5"
+                )}
+                onMouseUp={!isEditMode ? handleTextSelection : undefined}
+                onTouchEnd={!isEditMode ? handleTextSelection : undefined}
+                onMouseDown={() => { if (!inlineEditLoading) setTextSelection(null); }}
+              >
                 {/* Chapter title in canvas */}
-                <div className={cn("flex items-start justify-between gap-3 mb-5", isEditMode && "flex-shrink-0 px-5 sm:px-10 pt-6 pb-2")}>
+                <div className={cn("flex items-start justify-between gap-2 mb-5", isEditMode && "flex-shrink-0 px-5 sm:px-10 pt-6 pb-2")}>
                   <h1 className="not-prose text-xl sm:text-2xl font-bold text-foreground leading-snug flex-1">{currentChapter?.title}</h1>
-                  <button
-                    onClick={() => {
-                      if (isEditMode) {
-                        if (currentChapter && editContent !== currentChapter.content) {
-                          const wc = countBodyWords(editContent);
-                          setEditedChapterIds(prev => new Set(prev).add(currentChapter.id));
-                          setEditedWordDeltas(prev => ({ ...prev, [currentChapter.id]: wc - (currentChapter.word_count_actual || 0) }));
-                          handleUpdate({ ...project, chapters: project.chapters.map(c => c.id === currentChapter.id ? { ...c, content: editContent, word_count_actual: wc } : c) });
+                  <div className="flex items-center gap-2 flex-shrink-0 mt-1">
+                    <button
+                      onClick={() => setShowGuide(s => !s)}
+                      title="Chapter guide"
+                      className="text-[11px] font-bold text-muted-foreground hover:text-foreground transition-colors w-5 h-5 rounded-full border border-border flex items-center justify-center hover:border-foreground/40"
+                    >?</button>
+                    <button
+                      onClick={() => {
+                        if (isEditMode) {
+                          if (currentChapter && editContent !== currentChapter.content) {
+                            const wc = countBodyWords(editContent);
+                            setEditedChapterIds(prev => new Set(prev).add(currentChapter.id));
+                            setEditedWordDeltas(prev => ({ ...prev, [currentChapter.id]: wc - (currentChapter.word_count_actual || 0) }));
+                            handleUpdate({ ...project, chapters: project.chapters.map(c => c.id === currentChapter.id ? { ...c, content: editContent, word_count_actual: wc } : c) });
+                          }
+                          setIsEditMode(false);
+                        } else {
+                          setEditContent(currentChapter.content || "");
+                          setIsEditMode(true);
                         }
-                        setIsEditMode(false);
-                      } else {
-                        setEditContent(currentChapter.content || "");
-                        setIsEditMode(true);
-                      }
-                    }}
-                    className="flex-shrink-0 mt-1 text-[11px] font-bold text-muted-foreground hover:text-foreground transition-colors"
-                  >
-                    {isEditMode ? <><Check size={11} className="inline mr-0.5" /> Done</> : <>✎ Edit</>}
-                  </button>
+                      }}
+                      className="text-[11px] font-bold text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      {isEditMode ? <><Check size={11} className="inline mr-0.5" /> Done</> : <>✎ Edit</>}
+                    </button>
+                  </div>
                 </div>
                 {/* Recovery banner — shown when a previous auto-saved draft is found */}
                 {showRecovery && recoveryContent && (
@@ -2114,8 +2215,13 @@ export default function WriterPage() {
             ) : (
               <div className="flex flex-col h-full">
                 {/* Chapter title */}
-                <div className="px-5 sm:px-12 pt-7 pb-2 flex-shrink-0">
-                  <h1 className="text-xl sm:text-2xl font-bold text-foreground leading-snug">{currentChapter?.title}</h1>
+                <div className="px-5 sm:px-12 pt-7 pb-2 flex-shrink-0 flex items-start justify-between gap-2">
+                  <h1 className="text-xl sm:text-2xl font-bold text-foreground leading-snug flex-1">{currentChapter?.title}</h1>
+                  <button
+                    onClick={() => setShowGuide(s => !s)}
+                    title="Chapter guide"
+                    className="mt-1 flex-shrink-0 text-[11px] font-bold text-muted-foreground hover:text-foreground transition-colors w-5 h-5 rounded-full border border-border flex items-center justify-center hover:border-foreground/40"
+                  >?</button>
                 </div>
                 {/* Alert banners at top of canvas */}
                 {(chType === "methodology" || chType === "findings") && (
@@ -2233,7 +2339,7 @@ export default function WriterPage() {
                     </button>
                     <div className="ml-auto">
                       <button onClick={handleAccept} className="inline-flex items-center gap-1 px-3 py-1 rounded-md text-xs font-bold bg-primary text-white hover:bg-primary/90 transition-colors">
-                        <Check size={11} /> Accept
+                        <Check size={11} /> Mark complete
                       </button>
                     </div>
                   </div>
@@ -2244,9 +2350,73 @@ export default function WriterPage() {
         </div>
       </div>
 
+      {/* ─── Contextual inline-edit toolbar (appears on text selection) ─── */}
+      {textSelection && (
+        <ContextualToolbar
+          rect={textSelection.rect}
+          isLoading={inlineEditLoading}
+          activeAction={inlineEditAction}
+          onAction={handleInlineEdit}
+        />
+      )}
+
+      {/* ─── Chapter Guide bottom sheet ─── */}
+      {showGuide && currentChapter && (() => {
+        const guide = CHAPTER_GUIDES[currentChapter.type as string];
+        if (!guide) return null;
+        return (
+          <>
+            <div className="fixed inset-0 z-[100] bg-foreground/20" onClick={() => setShowGuide(false)} />
+            <div className="fixed bottom-0 left-0 right-0 z-[101] bg-background border-t border-border rounded-t-2xl max-h-[75dvh] flex flex-col animate-in slide-in-from-bottom duration-200">
+              <div className="flex justify-center pt-3 pb-1 flex-shrink-0">
+                <div className="w-8 h-1 rounded-full bg-border" />
+              </div>
+              <div className="px-5 py-3 border-b border-border flex items-center justify-between flex-shrink-0">
+                <div>
+                  <div className="text-sm font-bold text-foreground">Chapter guide</div>
+                  <div className="text-[11px] text-muted-foreground mt-0.5">{currentChapter.title}</div>
+                </div>
+                <button onClick={() => setShowGuide(false)} className="text-muted-foreground hover:text-foreground"><X size={16} /></button>
+              </div>
+              <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5">
+                <div>
+                  <div className="text-[11px] font-extrabold uppercase tracking-wide text-muted-foreground mb-1.5">What is this chapter for?</div>
+                  <p className="text-[13px] text-foreground leading-relaxed">{guide.purpose}</p>
+                </div>
+                <div>
+                  <div className="text-[11px] font-extrabold uppercase tracking-wide text-muted-foreground mb-1.5">What to include</div>
+                  <ul className="space-y-1.5">
+                    {guide.checklist.map((item, i) => (
+                      <li key={i} className="flex items-start gap-2 text-[13px] text-foreground leading-snug">
+                        <span className="w-4 h-4 rounded-full bg-secondary flex items-center justify-center flex-shrink-0 mt-0.5 text-[9px] font-bold text-muted-foreground">{i + 1}</span>
+                        {item}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+                <div className="bg-secondary/50 rounded-xl px-4 py-3">
+                  <div className="text-[11px] font-extrabold uppercase tracking-wide text-muted-foreground mb-1">Tip</div>
+                  <p className="text-[13px] text-foreground leading-relaxed">{guide.tip}</p>
+                </div>
+              </div>
+            </div>
+          </>
+        );
+      })()}
+
       {/* ═══ PERSONALISE SLIDE PANEL ═══ */}
       <div className={cn("fixed inset-0 bg-foreground/20 z-[100] transition-opacity", showPersonalise ? "opacity-100" : "opacity-0 pointer-events-none")} onClick={() => setShowPersonalise(false)} />
-      <div className={cn("fixed top-11 right-0 bottom-0 w-[320px] bg-background border-l border-border flex flex-col z-[101] transition-transform duration-200 max-md:w-full", showPersonalise ? "translate-x-0" : "translate-x-full")}>
+      {/* Desktop: slides in from right. Mobile: slides up from bottom as a sheet. */}
+      <div className={cn(
+        "fixed bg-background flex flex-col z-[101] transition-transform duration-200",
+        "md:top-11 md:right-0 md:bottom-0 md:w-[320px] md:border-l md:border-border",
+        "max-md:bottom-0 max-md:left-0 max-md:right-0 max-md:rounded-t-2xl max-md:border-t max-md:border-border max-md:max-h-[88dvh] max-md:overflow-hidden",
+        showPersonalise ? "md:translate-x-0 max-md:translate-y-0" : "md:translate-x-full max-md:translate-y-full"
+      )}>
+        {/* Mobile drag handle */}
+        <div className="max-md:flex hidden justify-center pt-3 pb-1 flex-shrink-0">
+          <div className="w-8 h-1 rounded-full bg-border" />
+        </div>
         <div className="px-3.5 py-3 border-b border-border flex items-center justify-between flex-shrink-0">
           <div>
             <div className="font-heading text-sm font-black text-foreground">Personalise — {currentChapter?.title}</div>
