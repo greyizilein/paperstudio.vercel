@@ -4,7 +4,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import {
   Check, Copy, Download, Settings, X, Plus, Trash2,
   Loader2, Sparkles, StopCircle, Wand2, BarChart2, Upload, Lock, MoreVertical, Image as ImageIcon, Cpu,
-  FolderOpen, ChevronRight, ArrowLeft
+  FolderOpen, ChevronRight, ArrowLeft, PenLine
 } from "lucide-react";
 import { CzarIcon } from "@/components/icons/CzarIcon";
 import { HumanisingPill } from "@/components/shared/HumanisingPill";
@@ -2273,24 +2273,24 @@ ${thesisArea}`);
           {/* Bottom bar */}
           <div className="border-t border-border flex-shrink-0 bg-background">
 
-            {/* ── EMPTY STATE: equal Settings + Draft ── */}
+            {/* ── EMPTY STATE: bare icon pair ── */}
             {!currentChapter?.content && !isGenerating && !currentLocked && (
-              <div className="flex gap-2 px-3 py-2.5">
+              <div className="flex items-center justify-center gap-6 px-3 py-2.5">
                 <button
                   onClick={() => setShowPersonalise(true)}
                   title="Settings"
                   aria-label="Settings"
-                  className="flex-1 inline-flex items-center justify-center py-3.5 rounded-xl border border-border text-muted-foreground hover:border-foreground/40 hover:text-foreground transition-all"
+                  className="p-1 text-muted-foreground hover:text-foreground transition-colors"
                 >
-                  <Settings size={20} />
+                  <Settings size={14} />
                 </button>
                 <button
                   onClick={() => setShowOutlineModal(true)}
                   title="Draft chapter"
                   aria-label="Draft chapter"
-                  className="flex-1 inline-flex items-center justify-center py-3.5 rounded-xl bg-foreground text-background hover:opacity-90 transition-all"
+                  className="p-1 text-muted-foreground hover:text-foreground transition-colors"
                 >
-                  <Wand2 size={20} />
+                  <PenLine size={14} />
                 </button>
               </div>
             )}
