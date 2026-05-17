@@ -27,7 +27,7 @@ export const AI_MODELS: AIModel[] = [
     tier: "standard",
     description: "Fast, capable everyday model. Great for most writing tasks.",
     capabilities: ["Fast", "Long context", "Multimodal"],
-    gatewayModel: "google/gemini-2.5-flash",
+    gatewayModel: "gemini-2.5-flash",
     tierAccess: ["free", "undergraduate", "masters", "phd", "custom"],
   },
   {
@@ -37,17 +37,17 @@ export const AI_MODELS: AIModel[] = [
     tier: "advanced",
     description: "Next-gen Gemini Flash preview. Better reasoning at low latency.",
     capabilities: ["Next-gen", "Fast", "Multimodal", "Long context"],
-    gatewayModel: "google/gemini-3-flash-preview",
+    gatewayModel: "gemini-2.0-flash",
     tierAccess: ["undergraduate", "masters", "phd", "custom"],
   },
   {
     id: "gpt-5.2",
-    name: "GPT-5.2",
-    provider: "OpenAI",
+    name: "Gemini 2.5 Flash",
+    provider: "Google",
     tier: "advanced",
-    description: "Solid reasoning at low latency. Reliable everyday OpenAI model.",
+    description: "Solid reasoning at low latency. Reliable everyday model.",
     capabilities: ["Fast", "Reliable reasoning", "Multimodal", "Long context"],
-    gatewayModel: "openai/gpt-5.2",
+    gatewayModel: "gemini-2.5-flash",
     tierAccess: ["undergraduate", "masters", "phd", "custom"],
   },
   {
@@ -57,7 +57,7 @@ export const AI_MODELS: AIModel[] = [
     tier: "premium",
     description: "Deep reasoning, big context, multimodal. Strong on complex chapters.",
     capabilities: ["Deep reasoning", "Long context", "Multimodal"],
-    gatewayModel: "google/gemini-2.5-pro",
+    gatewayModel: "gemini-2.5-pro",
     tierAccess: ["masters", "phd", "custom"],
   },
   {
@@ -67,7 +67,7 @@ export const AI_MODELS: AIModel[] = [
     tier: "premium",
     description: "Best academic prose, adaptive thinking, tool use. Masters & above.",
     capabilities: ["Best academic prose", "Tool use", "Long context", "Adaptive thinking"],
-    gatewayModel: "anthropic/claude-sonnet-4-5",
+    gatewayModel: "claude-sonnet-4-5",
     tierAccess: ["masters", "phd", "custom"],
   },
   {
@@ -77,7 +77,7 @@ export const AI_MODELS: AIModel[] = [
     tier: "premium",
     description: "Top-tier Gemini reasoning. PhD only.",
     capabilities: ["Top-tier reasoning", "Long context", "Multimodal"],
-    gatewayModel: "google/gemini-3.1-pro-preview",
+    gatewayModel: "gemini-2.0-flash",
     tierAccess: ["phd", "custom"],
   },
 ];
@@ -92,7 +92,7 @@ export function getModelById(id: string): AIModel | undefined {
 
 export function getGatewayModelId(modelId: string): string {
   const model = getModelById(modelId);
-  return model?.gatewayModel || "google/gemini-2.5-flash";
+  return model?.gatewayModel || "gemini-2.5-flash";
 }
 
 /** Models the tier can actually USE. */

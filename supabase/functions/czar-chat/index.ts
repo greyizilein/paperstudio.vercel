@@ -1164,7 +1164,7 @@ Deno.serve(async (req) => {
               onDelta: enqueueDelta,
             });
           } else {
-            await streamLovable({
+            await streamGoogle({
               model: pick.model,
               system: systemPrompt,
               messages: [...historyMsgs, { role: "user", content: finalUserContent }],
@@ -1497,7 +1497,7 @@ function sseResponse(producer: (write: (event: string, data: any) => void, human
 // ─────────────────────────────────────────────────────────────────────
 // Lovable AI Gateway streaming (Gemini / GPT)
 // ─────────────────────────────────────────────────────────────────────
-async function streamLovable(opts: {
+async function streamGoogle(opts: {
   model: string;
   system: string;
   messages: { role: string; content: string }[];
@@ -1514,7 +1514,7 @@ async function streamLovable(opts: {
   });
   if (!res.ok || !res.body) {
     const txt = await res.text().catch(() => "");
-    throw new Error(`Lovable AI ${res.status}: ${txt.slice(0, 300)}`);
+    throw new Error(`Google AI ${res.status}: ${txt.slice(0, 300)}`);
   }
   const reader = res.body.getReader();
   const decoder = new TextDecoder();

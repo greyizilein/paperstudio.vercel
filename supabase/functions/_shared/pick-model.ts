@@ -28,8 +28,8 @@ export interface PickOpts {
 }
 
 export interface PickResult {
-  /** Provider key — "anthropic" | "lovable" (Lovable AI Gateway) */
-  provider: "anthropic" | "lovable";
+  /** Provider key — "anthropic" | "google" | "qwen" */
+  provider: "anthropic" | "google" | "qwen";
   /** Concrete model id used in API calls. */
   model: string;
   /** Whether extended thinking should be enabled (Anthropic only). */
@@ -56,7 +56,7 @@ export function pickWriterModel(tier: string | null | undefined, opts: PickOpts 
 
   // Utility calls always use the cheapest model — even for admin.
   if (opts.isUtility) {
-    return { provider: "lovable", model: FREE_MODEL, thinking: false };
+    return { provider: "google", model: FREE_MODEL, thinking: false };
   }
 
   // REASONING tasks always use Claude for ALL tiers (including free).
@@ -69,12 +69,12 @@ export function pickWriterModel(tier: string | null | undefined, opts: PickOpts 
   }
 
   if (!isAdmin && (t === "free" || t === "none")) {
-    return { provider: "lovable", model: FREE_MODEL, thinking: false };
+    return { provider: "google", model: FREE_MODEL, thinking: false };
   }
 
   // Undergraduate: Gemini/GPT-5.2, no Claude writing access
   if (t === "undergraduate") {
-    return { provider: "lovable", model: FREE_MODEL, thinking: false };
+    return { provider: "google", model: FREE_MODEL, thinking: false };
   }
 
   // Masters/PhD/Custom/Admin: Claude writing access
@@ -86,7 +86,7 @@ export function pickWriterModel(tier: string | null | undefined, opts: PickOpts 
     };
   }
 
-  return { provider: "lovable", model: FREE_MODEL, thinking: false };
+  return { provider: "google", model: FREE_MODEL, thinking: false };
 }
 
 /** Whether the given tier is allowed to escalate to Claude thinking mode. */
