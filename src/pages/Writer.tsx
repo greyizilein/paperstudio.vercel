@@ -2278,15 +2278,19 @@ ${thesisArea}`);
               <div className="flex gap-2 px-3 py-2.5">
                 <button
                   onClick={() => setShowPersonalise(true)}
-                  className="flex-1 inline-flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-border text-sm font-bold text-muted-foreground hover:border-foreground/40 hover:text-foreground transition-all"
+                  title="Settings"
+                  aria-label="Settings"
+                  className="flex-1 inline-flex items-center justify-center py-3.5 rounded-xl border border-border text-muted-foreground hover:border-foreground/40 hover:text-foreground transition-all"
                 >
-                  <Settings size={14} /> Settings
+                  <Settings size={20} />
                 </button>
                 <button
                   onClick={() => setShowOutlineModal(true)}
-                  className="flex-1 inline-flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-foreground text-background text-sm font-bold hover:opacity-90 transition-all"
+                  title="Draft chapter"
+                  aria-label="Draft chapter"
+                  className="flex-1 inline-flex items-center justify-center py-3.5 rounded-xl bg-foreground text-background hover:opacity-90 transition-all"
                 >
-                  <Sparkles size={14} /> Draft →
+                  <Wand2 size={20} />
                 </button>
               </div>
             )}
@@ -3011,12 +3015,12 @@ ${thesisArea}`);
 
           {/* ═══ NO-CITE / INFO NOTICES ═══ */}
           {isReuseCiteChapter && (
-            <div className="bg-[#fff8ee] border border-[#f0ddb0] rounded-md px-3 py-2 text-xs text-[#9a6000] leading-relaxed">
+            <div className="bg-amber-50/80 border border-amber-200 rounded-md px-3 py-2 text-xs text-amber-800 leading-relaxed">
               <b>Citation rule:</b> Chapter 4 synthesises your data with existing literature from Chapters 1 & 2. No new sources are introduced — only references already cited in earlier chapters.
             </div>
           )}
           {isNoCiteChapter && chType === "conclusion" && (
-            <div className="bg-[#fff8ee] border border-[#f0ddb0] rounded-md px-3 py-2 text-xs text-[#9a6000] leading-relaxed">
+            <div className="bg-amber-50/80 border border-amber-200 rounded-md px-3 py-2 text-xs text-amber-800 leading-relaxed">
               <b>Citation rule:</b> Chapter 5 contains no citations at all. It summarises your findings and provides recommendations without referencing any sources.
             </div>
           )}
@@ -3295,11 +3299,11 @@ ${thesisArea}`);
 
       {/* ═══ FINAL EXPORT OVERLAY ═══ */}
       {showFinalExport && (
-        <div className="fixed inset-0 z-[300] flex flex-col bg-[#F5F2EE] overflow-auto">
-          <div className="sticky top-0 z-10 flex items-center justify-between px-4 py-3 bg-[#F5F2EE] border-b border-[#e8e2d9]">
-            <span className="text-sm font-black text-[#1a1a1a]">Final Export</span>
+        <div className="fixed inset-0 z-[300] flex flex-col bg-background overflow-auto">
+          <div className="sticky top-0 z-10 flex items-center justify-between px-4 py-3 bg-background border-b border-border">
+            <span className="text-sm font-black text-foreground">Final Export</span>
             <button onClick={() => setShowFinalExport(false)}
-              className="p-1.5 rounded-lg text-[#7a7060] hover:bg-[#e8e2d9] transition-colors">
+              className="p-1.5 rounded-lg text-muted-foreground hover:bg-secondary transition-colors">
               <X size={16} />
             </button>
           </div>
