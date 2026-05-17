@@ -91,7 +91,7 @@ const cardVariants = {
 export const FeaturesSection = () => (
   <section
     id="features-section"
-    style={{ background: "#0E0C08", padding: "96px 0 112px" }}
+    style={{ background: "var(--ma-bg)", padding: "96px 0 112px" }}
   >
     <div style={{ maxWidth: "1152px", margin: "0 auto", padding: "0 24px" }}>
       {/* Section heading */}
@@ -110,7 +110,7 @@ export const FeaturesSection = () => (
             fontWeight: 600,
             letterSpacing: "0.12em",
             textTransform: "uppercase",
-            color: "#B89A5A",
+            color: "var(--ma-gold)",
             marginBottom: "16px",
           }}
         >
@@ -122,7 +122,7 @@ export const FeaturesSection = () => (
             fontStyle: "italic",
             fontWeight: 600,
             fontSize: "clamp(2rem, 4.5vw, 3.25rem)",
-            color: "#E8DFC8",
+            color: "var(--ma-text)",
             lineHeight: 1.15,
             letterSpacing: "-0.02em",
             margin: 0,
@@ -135,7 +135,7 @@ export const FeaturesSection = () => (
             marginTop: "18px",
             fontFamily: DA_FONTS.body,
             fontSize: "1.05rem",
-            color: "#8A7A62",
+            color: "var(--ma-text-muted)",
             maxWidth: "520px",
             margin: "18px auto 0",
             lineHeight: 1.65,
@@ -162,15 +162,15 @@ export const FeaturesSection = () => (
             whileInView="visible"
             viewport={{ once: true, amount: 0.15 }}
             style={{
-              background: "#1A160E",
-              border: "1px solid rgba(232,223,200,0.08)",
+              background: "var(--ma-surface)",
+              border: "1px solid var(--ma-border)",
               borderRadius: "16px",
               padding: "28px 28px 30px",
               cursor: "default",
               transition: "border-color 0.25s ease, transform 0.25s ease, box-shadow 0.25s ease",
             }}
             whileHover={{
-              borderColor: "rgba(232,223,200,0.18)",
+              borderColor: "var(--ma-border-bright)",
               y: -2,
               boxShadow: "0 12px 40px rgba(0,0,0,0.35)",
             }}
@@ -199,7 +199,7 @@ export const FeaturesSection = () => (
                 fontStyle: "italic",
                 fontWeight: 600,
                 fontSize: "1.15rem",
-                color: "#E8DFC8",
+                color: "var(--ma-text)",
                 margin: "0 0 10px",
                 lineHeight: 1.25,
               }}
@@ -212,7 +212,7 @@ export const FeaturesSection = () => (
               style={{
                 fontFamily: DA_FONTS.body,
                 fontSize: "0.875rem",
-                color: "#8A7A62",
+                color: "var(--ma-text-muted)",
                 lineHeight: 1.7,
                 margin: 0,
               }}

@@ -336,10 +336,50 @@
    ───────────────────────────────────────────────────────────────────────── */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
 
+/* ── Marketing theme tokens ── */
 .paperstudio-marketing {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
-  background: #1a1714;
-  color: #fff;
+  font-family: 'Geist', 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  transition: background 0.35s ease, color 0.35s ease;
+}
+
+.paperstudio-marketing[data-mode="dark"] {
+  --ma-bg:            #0E0C08;
+  --ma-surface:       #1A160E;
+  --ma-surface2:      #241E14;
+  --ma-text:          #E8DFC8;
+  --ma-text-muted:    #8A7A62;
+  --ma-text-dim:      #6B6050;
+  --ma-accent:        #C4384A;
+  --ma-accent-hover:  #A82D3D;
+  --ma-accent2:       #4A7A38;
+  --ma-accent2-hover: #3A6028;
+  --ma-gold:          #B89A5A;
+  --ma-border:        rgba(232,223,200,0.07);
+  --ma-border-bright: rgba(232,223,200,0.18);
+  --ma-nav-bg:        rgba(14,12,8,0.92);
+  --ma-footer-bg:     #0A0804;
+  background: #0E0C08;
+  color: #E8DFC8;
+}
+
+.paperstudio-marketing[data-mode="light"] {
+  --ma-bg:            #F8F4EE;
+  --ma-surface:       #F0E8DC;
+  --ma-surface2:      #FFFFFF;
+  --ma-text:          #1C1009;
+  --ma-text-muted:    #7A6A58;
+  --ma-text-dim:      #9A8A78;
+  --ma-accent:        #8B2635;
+  --ma-accent-hover:  #6E1E28;
+  --ma-accent2:       #2D4A22;
+  --ma-accent2-hover: #1E3416;
+  --ma-gold:          #8B6914;
+  --ma-border:        rgba(28,16,9,0.09);
+  --ma-border-bright: rgba(28,16,9,0.18);
+  --ma-nav-bg:        rgba(248,244,238,0.92);
+  --ma-footer-bg:     #EDE4D8;
+  background: #F8F4EE;
+  color: #1C1009;
 }
 .paperstudio-marketing h1,
 .paperstudio-marketing h2,

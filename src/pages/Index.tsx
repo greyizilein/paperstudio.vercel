@@ -8,10 +8,12 @@ import { CzarSection } from "@/components/firstdraft/marketing/CzarSection";
 import { MarketingPricing } from "@/components/firstdraft/marketing/Pricing";
 import { CTABanner } from "@/components/firstdraft/marketing/CTABanner";
 import { MarketingFooter } from "@/components/firstdraft/marketing/Footer";
+import { MarketingThemeProvider, useMarketingTheme } from "@/contexts/MarketingThemeContext";
 
-const Index = () => {
+const IndexInner = () => {
+  const { mode } = useMarketingTheme();
   return (
-    <div className="paperstudio-marketing min-h-screen">
+    <div className="paperstudio-marketing min-h-screen" data-mode={mode}>
       <MarketingNavbar />
       <main>
         <MarketingHero />
@@ -27,5 +29,11 @@ const Index = () => {
     </div>
   );
 };
+
+const Index = () => (
+  <MarketingThemeProvider>
+    <IndexInner />
+  </MarketingThemeProvider>
+);
 
 export default Index;

@@ -88,7 +88,7 @@ export const MarketingHero = () => {
 
   return (
     <section
-      style={{ background: "#0E0C08", minHeight: "100vh", position: "relative", overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center" }}
+      style={{ background: "var(--ma-bg)", minHeight: "100vh", position: "relative", overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center" }}
     >
       {/* Animated mesh gradients */}
       <style>{`
@@ -227,9 +227,9 @@ export const MarketingHero = () => {
               gap: "6px",
               padding: "5px 14px",
               borderRadius: "999px",
-              border: "1px solid rgba(184,154,90,0.25)",
-              background: "rgba(184,154,90,0.06)",
-              color: "#B89A5A",
+              border: "1px solid rgba(184,154,90,0.3)",
+              background: "rgba(184,154,90,0.08)",
+              color: "var(--ma-gold)",
               fontSize: "0.72rem",
               fontFamily: '"Geist", system-ui, sans-serif',
               fontWeight: 500,
@@ -237,7 +237,7 @@ export const MarketingHero = () => {
               textTransform: "uppercase",
             }}
           >
-            <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#B89A5A", display: "inline-block" }} />
+            <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "var(--ma-gold)", display: "inline-block" }} />
             Academic AI Writing Platform
           </span>
         </motion.div>
@@ -253,7 +253,7 @@ export const MarketingHero = () => {
             fontWeight: 600,
             fontSize: "clamp(2.8rem, 7vw, 5.5rem)",
             lineHeight: 1.08,
-            color: "#E8DFC8",
+            color: "var(--ma-text)",
             letterSpacing: "-0.02em",
             margin: "0 0 8px",
           }}
@@ -267,14 +267,14 @@ export const MarketingHero = () => {
                 animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
                 exit={{ opacity: 0, y: -18, filter: "blur(4px)" }}
                 transition={{ duration: 0.38, ease: [0.16, 1, 0.3, 1] }}
-                style={{ display: "inline-block", color: "#E8DFC8" }}
+                style={{ display: "inline-block", color: "var(--ma-text)" }}
               >
                 {cyclingWords[wordIndex]}
               </motion.span>
             </AnimatePresence>
           </span>
           .{" "}
-          <em style={{ color: "#C4384A", fontStyle: "italic" }}>Finally.</em>
+          <em style={{ color: "var(--ma-accent)", fontStyle: "italic" }}>Finally.</em>
         </motion.h1>
 
         {/* Subheadline */}
@@ -285,7 +285,7 @@ export const MarketingHero = () => {
           style={{
             marginTop: "24px",
             fontSize: "clamp(1rem, 2.2vw, 1.2rem)",
-            color: "#8A7A62",
+            color: "var(--ma-text-muted)",
             maxWidth: "600px",
             margin: "24px auto 0",
             lineHeight: 1.65,
@@ -305,8 +305,8 @@ export const MarketingHero = () => {
           <Link to="/auth?tab=signup">
             <button
               style={{
-                background: "#C4384A",
-                color: "#E8DFC8",
+                background: "var(--ma-accent)",
+                color: "#F5EDD8",
                 fontFamily: '"Geist", system-ui, sans-serif',
                 fontWeight: 600,
                 fontSize: "1rem",
@@ -314,11 +314,11 @@ export const MarketingHero = () => {
                 borderRadius: "8px",
                 border: "none",
                 cursor: "pointer",
-                transition: "background 0.2s, transform 0.15s",
+                transition: "opacity 0.2s, transform 0.15s",
                 letterSpacing: "0.01em",
               }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "#A82D3D"; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "#C4384A"; }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.opacity = "0.88"; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.opacity = "1"; }}
               onMouseDown={(e) => { (e.currentTarget as HTMLButtonElement).style.transform = "scale(0.97)"; }}
               onMouseUp={(e) => { (e.currentTarget as HTMLButtonElement).style.transform = "scale(1)"; }}
             >
@@ -329,25 +329,23 @@ export const MarketingHero = () => {
             <button
               style={{
                 background: "transparent",
-                color: "#8A7A62",
+                color: "var(--ma-text-muted)",
                 fontFamily: '"Geist", system-ui, sans-serif',
                 fontWeight: 500,
                 fontSize: "1rem",
                 padding: "14px 28px",
                 borderRadius: "8px",
-                border: "1px solid rgba(232,223,200,0.12)",
+                border: "1px solid var(--ma-border-bright)",
                 cursor: "pointer",
                 transition: "color 0.2s, border-color 0.2s",
               }}
               onMouseEnter={(e) => {
                 const btn = e.currentTarget as HTMLButtonElement;
-                btn.style.color = "#E8DFC8";
-                btn.style.borderColor = "rgba(232,223,200,0.25)";
+                btn.style.color = "var(--ma-text)";
               }}
               onMouseLeave={(e) => {
                 const btn = e.currentTarget as HTMLButtonElement;
-                btn.style.color = "#8A7A62";
-                btn.style.borderColor = "rgba(232,223,200,0.12)";
+                btn.style.color = "var(--ma-text-muted)";
               }}
             >
               Watch demo
@@ -376,7 +374,7 @@ export const MarketingHero = () => {
           ].map((stat, i) => (
             <div key={i} style={{ display: "flex", alignItems: "center", gap: "6px" }}>
               {i > 0 && (
-                <span style={{ width: "3px", height: "3px", borderRadius: "50%", background: "rgba(232,223,200,0.15)", display: "inline-block", marginRight: "8px" }} />
+                <span style={{ width: "3px", height: "3px", borderRadius: "50%", background: "var(--ma-border-bright)", display: "inline-block", marginRight: "8px" }} />
               )}
               <span
                 style={{
@@ -384,7 +382,7 @@ export const MarketingHero = () => {
                   fontStyle: "italic",
                   fontWeight: 600,
                   fontSize: "1.1rem",
-                  color: "#E8DFC8",
+                  color: "var(--ma-text)",
                 }}
               >
                 {stat.value}
@@ -393,7 +391,7 @@ export const MarketingHero = () => {
                 style={{
                   fontFamily: '"Geist", system-ui, sans-serif',
                   fontSize: "0.8rem",
-                  color: "#6B6050",
+                  color: "var(--ma-text-dim)",
                 }}
               >
                 {stat.label}
@@ -414,7 +412,8 @@ export const MarketingHero = () => {
           left: "50%",
           transform: "translateX(-50%)",
           animation: "da-bounce 2s ease-in-out infinite",
-          color: "rgba(232,223,200,0.25)",
+          color: "var(--ma-text-muted)",
+          opacity: 0.4,
         }}
       >
         <ChevronDown size={22} />

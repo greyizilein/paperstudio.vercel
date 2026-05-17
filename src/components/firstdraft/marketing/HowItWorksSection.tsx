@@ -33,7 +33,7 @@ const steps = [
 export const HowItWorksSection = () => (
   <section
     id="how-it-works-section"
-    style={{ background: "#1A160E", padding: "96px 0 112px", position: "relative", overflow: "hidden" }}
+    style={{ background: "var(--ma-surface)", padding: "96px 0 112px", position: "relative", overflow: "hidden" }}
   >
     {/* Subtle background tint */}
     <div
@@ -67,7 +67,7 @@ export const HowItWorksSection = () => (
             fontWeight: 600,
             letterSpacing: "0.12em",
             textTransform: "uppercase",
-            color: "#B89A5A",
+            color: "var(--ma-gold)",
             marginBottom: "16px",
           }}
         >
@@ -79,7 +79,7 @@ export const HowItWorksSection = () => (
             fontStyle: "italic",
             fontWeight: 600,
             fontSize: "clamp(2rem, 4.5vw, 3.25rem)",
-            color: "#E8DFC8",
+            color: "var(--ma-text)",
             lineHeight: 1.15,
             letterSpacing: "-0.02em",
             margin: 0,
@@ -156,7 +156,7 @@ export const HowItWorksSection = () => (
                     fontFamily: DA_FONTS.mono,
                     fontSize: "0.7rem",
                     fontWeight: 600,
-                    color: "#C4384A",
+                    color: "var(--ma-accent)",
                     letterSpacing: "0.04em",
                   }}
                 >
@@ -186,7 +186,7 @@ export const HowItWorksSection = () => (
                 fontStyle: "italic",
                 fontWeight: 600,
                 fontSize: "1.35rem",
-                color: "#E8DFC8",
+                color: "var(--ma-text)",
                 margin: "0 0 12px",
                 lineHeight: 1.25,
               }}
@@ -197,7 +197,7 @@ export const HowItWorksSection = () => (
               style={{
                 fontFamily: DA_FONTS.body,
                 fontSize: "0.9rem",
-                color: "#8A7A62",
+                color: "var(--ma-text-muted)",
                 lineHeight: 1.7,
                 margin: "0 0 16px",
                 maxWidth: "320px",
@@ -213,13 +213,13 @@ export const HowItWorksSection = () => (
                 fontFamily: DA_FONTS.body,
                 fontSize: "0.72rem",
                 fontWeight: 500,
-                color: "#B89A5A",
+                color: "var(--ma-gold)",
                 letterSpacing: "0.04em",
               }}
             >
               <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-                <circle cx="6" cy="6" r="5" stroke="#B89A5A" strokeWidth="1" fill="none" />
-                <path d="M6 3 L6 6 L8 8" stroke="#B89A5A" strokeWidth="1" strokeLinecap="round" />
+                <circle cx="6" cy="6" r="5" stroke="currentColor" strokeWidth="1" fill="none" />
+                <path d="M6 3 L6 6 L8 8" stroke="currentColor" strokeWidth="1" strokeLinecap="round" />
               </svg>
               {step.detail}
             </span>
