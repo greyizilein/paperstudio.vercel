@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
-import { useParams, useNavigate, Link } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   Check, Copy, Download, Settings, X, Plus, Trash2,
-  Loader2, Sparkles, StopCircle, Wand2, BarChart2, Upload, Lock, MoreVertical, Image as ImageIcon, Cpu
+  Loader2, Sparkles, StopCircle, Wand2, BarChart2, Upload, Lock, MoreVertical, Image as ImageIcon, Cpu,
+  FolderOpen, ChevronRight
 } from "lucide-react";
 import { CzarIcon } from "@/components/icons/CzarIcon";
 import { HumanisingPill } from "@/components/shared/HumanisingPill";
@@ -35,7 +36,7 @@ import { streamGenerateChapter } from "@/lib/streamChat";
 import { extractBodyContent, countWords } from "@/lib/streamChat";
 import { AI_MODELS, DEFAULT_MODEL_ID, TIER_COLORS, getModelById, isModelLockedForTier, getMinTierLabel } from "@/lib/aiModels";
 import { useAuth } from "@/contexts/AuthContext";
-import { fetchProjects, updateProject, getUserSubscription, incrementWordsUsed, type Subscription } from "@/lib/projectService";
+import { fetchProjects, updateProject, getUserSubscription, incrementWordsUsed, deleteProject, type Subscription } from "@/lib/projectService";
 import { UserProfilePopover } from "@/components/dashboard/UserProfilePopover";
 import { BookLoader } from "@/components/ui/BookLoader";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -325,6 +326,8 @@ export default function WriterPage() {
   const [personaliseMode, setPersonaliseMode] = useState<"standard" | "custom" | "advanced">("standard");
   const [showPersonalise, setShowPersonalise] = useState(false);
   const [showSidebar, setShowSidebar] = useState(false);
+  const [showProjectsDrawer, setShowProjectsDrawer] = useState(false);
+  const [allProjects, setAllProjects] = useState<Project[]>([]);
   const [isEditMode, setIsEditMode] = useState(false);
   const [editContent, setEditContent] = useState("");
   const [showExportModal, setShowExportModal] = useState(false);
@@ -649,6 +652,7 @@ export default function WriterPage() {
     setLoading(true);
     try {
       const [projects, sub] = await Promise.all([fetchProjects(user.id), getUserSubscription(user.id)]);
+      setAllProjects(projects);
       // Override subscription for test user — full unlimited access
       if (user.email === "grey.izilein@gmail.com") {
         setSubscription({ tier: "phd", word_limit: 999999, words_used: 0, status: "active" });
@@ -692,7 +696,7 @@ export default function WriterPage() {
           if (firstPending) setActiveChapterIndex(firstPending.order_index);
       } else {
         toast.error("Project not found");
-        navigate("/dashboard");
+        navigate("/new-project");
       }
     } catch (err: any) { toast.error(err.message); }
     finally { setLoading(false); }
@@ -1694,14 +1698,14 @@ export default function WriterPage() {
         <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none z-10">
           <HumanisingPill active={humanising} />
         </div>
-        <Link
-          to="/dashboard"
-          aria-label="Dashboard"
-          title="Dashboard"
+        <button
+          onClick={() => setShowProjectsDrawer(s => !s)}
+          aria-label="Projects"
+          title="My projects"
           className="flex items-center justify-center w-7 h-7 rounded-md bg-foreground text-background hover:opacity-90 transition-opacity flex-shrink-0"
         >
           <CzarIcon size={16} />
-        </Link>
+        </button>
         <div className="w-px h-4 bg-border mx-0.5 sm:mx-1 hidden sm:block" />
         {/* Mobile chapter selector — settings icon + chapter number only */}
         <button
@@ -1741,7 +1745,7 @@ export default function WriterPage() {
                     { icon: Download, label: "Export", onClick: () => { setShowExportChModal(true); setMobileMenuOpen(false); } },
                     { icon: Download, label: "Final PDF", onClick: () => { setShowFinalExport(true); setMobileMenuOpen(false); } },
                     { icon: Sparkles, label: "Settings", onClick: () => { setShowPersonalise(true); setMobileMenuOpen(false); } },
-                    { icon: BarChart2, label: "Dashboard", onClick: () => { navigate("/dashboard"); } },
+                    { icon: FolderOpen, label: "Projects", onClick: () => { setShowProjectsDrawer(true); setMobileMenuOpen(false); } },
                   ].map((item) => (
                     <button key={item.label} onClick={item.onClick} title={item.label} className="flex flex-col items-center gap-1 px-2 py-3 rounded-xl bg-secondary/40 hover:bg-secondary text-foreground transition-all">
                       <item.icon size={18} />
@@ -1792,6 +1796,86 @@ export default function WriterPage() {
             })}
             <div className="px-3.5 py-2 text-xs text-muted-foreground">
               <b className="text-foreground">{subscription.words_used.toLocaleString()}</b> / {subscription.word_limit.toLocaleString()} words used
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Projects drawer */}
+      {showProjectsDrawer && (
+        <div className="fixed inset-0 z-[90] bg-foreground/20" onClick={() => setShowProjectsDrawer(false)}>
+          <div className="absolute left-0 top-11 bottom-0 w-[260px] bg-background border-r border-border flex flex-col animate-in slide-in-from-left duration-200" onClick={e => e.stopPropagation()}>
+            {/* Header */}
+            <div className="flex items-center justify-between px-4 py-3 border-b border-border flex-shrink-0">
+              <span className="text-[13px] font-bold text-foreground">My Projects</span>
+              <button onClick={() => setShowProjectsDrawer(false)} className="text-muted-foreground hover:text-foreground"><X size={15} /></button>
+            </div>
+            {/* Subscription strip */}
+            <div className="flex items-center gap-2 px-4 py-2 bg-secondary/30 border-b border-border flex-shrink-0">
+              <span className="w-1.5 h-1.5 rounded-full" style={{ background: subscription.status === "active" ? "#4DB68A" : "#dc2626" }} />
+              <span className="text-[11px] font-bold capitalize text-foreground">{subscription.tier}</span>
+              <span className="text-[10px] text-muted-foreground ml-auto">{subscription.words_used.toLocaleString()}/{subscription.word_limit.toLocaleString()} words</span>
+            </div>
+            {/* Project list */}
+            <div className="flex-1 overflow-y-auto">
+              {allProjects.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-full gap-2 text-muted-foreground px-4 text-center">
+                  <FolderOpen size={24} className="opacity-40" />
+                  <p className="text-[12px]">No projects yet</p>
+                </div>
+              ) : allProjects.map(p => {
+                const done = p.chapters.filter(c => c.status === "completed").length;
+                const total = p.chapters.length;
+                const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+                const isCurrent = p.id === projectId;
+                return (
+                  <div
+                    key={p.id}
+                    onClick={() => { setShowProjectsDrawer(false); navigate(`/writer/${p.id}`); }}
+                    className={cn(
+                      "flex items-center gap-2.5 px-4 py-3 border-b border-border/50 cursor-pointer transition-colors hover:bg-secondary/40",
+                      isCurrent && "bg-primary/5"
+                    )}
+                  >
+                    <div className={cn("w-2 h-2 rounded-full flex-shrink-0", isCurrent ? "bg-primary" : pct === 100 ? "bg-green" : "bg-border")} />
+                    <div className="flex-1 min-w-0">
+                      <div className={cn("text-[12px] font-bold truncate", isCurrent ? "text-primary" : "text-foreground")}>{p.title}</div>
+                      <div className="text-[10px] text-muted-foreground mt-0.5">{done}/{total} ch · {pct}%</div>
+                    </div>
+                    <button
+                      onClick={async e => {
+                        e.stopPropagation();
+                        if (!confirm(`Delete "${p.title}"?`)) return;
+                        try {
+                          await deleteProject(p.id);
+                          setAllProjects(prev => prev.filter(proj => proj.id !== p.id));
+                          toast.success("Project deleted");
+                          if (p.id === projectId) navigate("/new-project");
+                        } catch (err: any) { toast.error(err.message); }
+                      }}
+                      className="text-muted-foreground hover:text-destructive p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      <Trash2 size={11} />
+                    </button>
+                    <ChevronRight size={13} className="text-muted-foreground flex-shrink-0" />
+                  </div>
+                );
+              })}
+            </div>
+            {/* Footer: new project + settings */}
+            <div className="px-4 py-3 border-t border-border flex flex-col gap-2 flex-shrink-0">
+              <button
+                onClick={() => { setShowProjectsDrawer(false); navigate("/new-project"); }}
+                className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-primary text-primary-foreground text-[12px] font-bold hover:bg-primary/90 transition-colors"
+              >
+                <Plus size={13} /> New project
+              </button>
+              <button
+                onClick={() => { setShowProjectsDrawer(false); navigate("/settings?tab=billing"); }}
+                className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-[11px] font-semibold text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors"
+              >
+                Billing & plan
+              </button>
             </div>
           </div>
         </div>
@@ -2101,45 +2185,70 @@ export default function WriterPage() {
 
           {/* Bottom bar */}
           <div className="border-t border-border flex-shrink-0 bg-background">
-            <div className="flex items-center gap-2 px-4 py-1.5 border-b border-border">
-              <span className="text-[11px] font-mono text-muted-foreground">
-                <b className={currentWC >= targetWC ? "text-green" : ""}>{currentWC.toLocaleString()}</b> / {targetWC.toLocaleString()}w
-              </span>
-              <div className="flex-1 h-[2px] bg-border rounded-sm overflow-hidden">
-                <div className="h-full bg-primary rounded-sm transition-all duration-500" style={{ width: `${wcPct}%` }} />
+
+            {/* ── EMPTY STATE: big Draft CTA ── */}
+            {!currentChapter?.content && !isGenerating && !currentLocked && (
+              <div className="flex items-center justify-between gap-3 px-4 py-3">
+                <button
+                  onClick={() => setShowPersonalise(true)}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border text-xs font-bold text-muted-foreground hover:border-primary hover:text-primary transition-all flex-shrink-0"
+                >
+                  <Settings size={13} /> Settings
+                </button>
+                <button
+                  onClick={() => setShowOutlineModal(true)}
+                  className="flex-1 inline-flex items-center justify-center gap-2 py-2.5 rounded-full bg-primary text-white text-sm font-bold hover:bg-primary/90 transition-all"
+                >
+                  <Sparkles size={15} /> Draft with AI →
+                </button>
               </div>
-              <span className="text-[11px] font-mono text-muted-foreground">{wcPct}%</span>
-            </div>
-            <div className="flex items-start gap-2 px-4 py-2">
-              <textarea
-                value={personalise.notes}
-                onChange={(e) => setPersonalise(p => ({ ...p, notes: e.target.value }))}
-                placeholder="Add specific instructions for this chapter (optional)…"
-                className="flex-1 border-none outline-none text-[13px] text-foreground resize-none h-7 leading-snug py-1 bg-transparent placeholder:text-muted-foreground focus:h-[52px] transition-all"
-              />
-            </div>
-            {currentChapter?.status === "completed" && !isGenerating && (
-              <div className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-4 py-1.5 border-t border-border flex-wrap">
-                {/* Continue Writing button when below 95% */}
-                {currentChapter.word_count_actual && currentChapter.word_count_target && currentChapter.word_count_actual < currentChapter.word_count_target && (
-                  <button onClick={() => handleContinueWriting(currentChapter.content || "", (currentChapter.word_count_target || 0) - (currentChapter.word_count_actual || 0))}
-                    className="inline-flex items-center justify-center gap-1 w-full sm:w-auto px-2.5 py-1.5 sm:py-1 rounded-md text-xs font-bold bg-aqua/10 text-aqua border border-aqua/20 hover:bg-aqua/20 transition-all">
-                    <Plus size={11} /> Continue Writing
-                  </button>
-                )}
-                <button onClick={() => setShowOutlineModal(true)} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-bold text-muted-foreground hover:bg-secondary hover:text-foreground transition-all">
-                  <Wand2 size={11} /> Draft again
-                </button>
-                <div className="w-px h-3 bg-border" />
-                <button onClick={() => setShowReviseModal(true)} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-bold text-muted-foreground hover:bg-secondary hover:text-foreground transition-all">
-                  Revise
-                </button>
-                <div className="ml-auto">
-                  <button onClick={handleAccept} className="inline-flex items-center gap-1 px-3 py-1 rounded-md text-xs font-bold bg-primary text-white hover:bg-primary/90 transition-colors">
-                    <Check size={11} /> Accept
-                  </button>
+            )}
+
+            {/* ── GENERATING / COMPLETED: word count + notes + actions ── */}
+            {(isGenerating || currentChapter?.content) && (
+              <>
+                <div className="flex items-center gap-2 px-4 py-1.5 border-b border-border">
+                  <span className="text-[11px] font-mono text-muted-foreground">
+                    <b className={currentWC >= targetWC ? "text-green" : ""}>{currentWC.toLocaleString()}</b> / {targetWC.toLocaleString()}w
+                  </span>
+                  <div className="flex-1 h-[2px] bg-border rounded-sm overflow-hidden">
+                    <div className="h-full bg-primary rounded-sm transition-all duration-500" style={{ width: `${wcPct}%` }} />
+                  </div>
+                  <span className="text-[11px] font-mono text-muted-foreground">{wcPct}%</span>
                 </div>
-              </div>
+                {!isGenerating && (
+                  <div className="flex items-start gap-2 px-4 py-2">
+                    <textarea
+                      value={personalise.notes}
+                      onChange={(e) => setPersonalise(p => ({ ...p, notes: e.target.value }))}
+                      placeholder="Notes for next draft (optional)…"
+                      className="flex-1 border-none outline-none text-[13px] text-foreground resize-none h-7 leading-snug py-1 bg-transparent placeholder:text-muted-foreground focus:h-[52px] transition-all"
+                    />
+                  </div>
+                )}
+                {currentChapter?.status === "completed" && !isGenerating && (
+                  <div className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-4 py-1.5 border-t border-border flex-wrap">
+                    {currentChapter.word_count_actual && currentChapter.word_count_target && currentChapter.word_count_actual < currentChapter.word_count_target && (
+                      <button onClick={() => handleContinueWriting(currentChapter.content || "", (currentChapter.word_count_target || 0) - (currentChapter.word_count_actual || 0))}
+                        className="inline-flex items-center justify-center gap-1 w-full sm:w-auto px-2.5 py-1.5 sm:py-1 rounded-md text-xs font-bold bg-aqua/10 text-aqua border border-aqua/20 hover:bg-aqua/20 transition-all">
+                        <Plus size={11} /> Continue Writing
+                      </button>
+                    )}
+                    <button onClick={() => setShowOutlineModal(true)} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-bold text-muted-foreground hover:bg-secondary hover:text-foreground transition-all">
+                      <Wand2 size={11} /> Draft again
+                    </button>
+                    <div className="w-px h-3 bg-border" />
+                    <button onClick={() => setShowReviseModal(true)} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-bold text-muted-foreground hover:bg-secondary hover:text-foreground transition-all">
+                      Revise
+                    </button>
+                    <div className="ml-auto">
+                      <button onClick={handleAccept} className="inline-flex items-center gap-1 px-3 py-1 rounded-md text-xs font-bold bg-primary text-white hover:bg-primary/90 transition-colors">
+                        <Check size={11} /> Accept
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </>
             )}
           </div>
         </div>
