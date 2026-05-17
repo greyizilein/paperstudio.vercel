@@ -6,7 +6,7 @@ const DA_FONTS = {
 };
 
 const QuillIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 64 64" fill="none" aria-hidden="true" style={{ color: "#B89A5A" }}>
+  <svg width="14" height="14" viewBox="0 0 64 64" fill="none" aria-hidden="true" style={{ color: "var(--ma-gold)" }}>
     <path
       d="M50 6 C 40 10, 32 18, 27 30 C 24 38, 23 46, 24 52 L 28 52 C 30 46, 33 40, 38 34 C 44 26, 49 18, 52 10 C 53 8, 52 6, 50 6 Z"
       fill="currentColor"
@@ -71,7 +71,7 @@ const FooterLink = ({ href, label, external }: { href: string; label: string; ex
   const style: React.CSSProperties = {
     fontFamily: DA_FONTS.body,
     fontSize: "0.85rem",
-    color: "#6B6050",
+    color: "var(--ma-text-dim)",
     textDecoration: "none",
     transition: "color 0.2s",
     display: "block",
@@ -100,12 +100,12 @@ const FooterLink = ({ href, label, external }: { href: string; label: string; ex
 export const MarketingFooter = () => (
   <footer
     style={{
-      background: "#0A0804",
-      borderTop: "1px solid rgba(232,223,200,0.06)",
+      background: "var(--ma-footer-bg)",
+      borderTop: "1px solid var(--ma-border)",
     }}
   >
     <style>{`
-      .footer-da-link:hover { color: #A8967A !important; }
+      .footer-da-link:hover { color: var(--ma-text-muted) !important; }
     `}</style>
 
     <div
@@ -156,7 +156,7 @@ export const MarketingFooter = () => (
                 fontStyle: "italic",
                 fontWeight: 600,
                 fontSize: "1.1rem",
-                color: "#E8DFC8",
+                color: "var(--ma-text)",
                 letterSpacing: "0.05em",
               }}
             >
@@ -167,7 +167,7 @@ export const MarketingFooter = () => (
             style={{
               fontFamily: DA_FONTS.body,
               fontSize: "0.82rem",
-              color: "#6B6050",
+              color: "var(--ma-text-dim)",
               lineHeight: 1.65,
               marginTop: "14px",
               maxWidth: "240px",
@@ -194,7 +194,7 @@ export const MarketingFooter = () => (
                     fontStyle: "italic",
                     fontWeight: 600,
                     fontSize: "1.1rem",
-                    color: "#A8967A",
+                    color: "var(--ma-gold)",
                   }}
                 >
                   {s.val}
@@ -203,7 +203,7 @@ export const MarketingFooter = () => (
                   style={{
                     fontFamily: DA_FONTS.body,
                     fontSize: "0.7rem",
-                    color: "#6B6050",
+                    color: "var(--ma-text-dim)",
                     marginTop: "2px",
                   }}
                 >
@@ -224,7 +224,7 @@ export const MarketingFooter = () => (
                 fontWeight: 600,
                 letterSpacing: "0.12em",
                 textTransform: "uppercase",
-                color: "#4A4035",
+                color: "var(--ma-text-dim)",
                 marginBottom: "16px",
               }}
             >
@@ -244,7 +244,7 @@ export const MarketingFooter = () => (
       {/* Bottom bar */}
       <div
         style={{
-          borderTop: "1px solid rgba(232,223,200,0.05)",
+          borderTop: "1px solid var(--ma-border)",
           padding: "22px 0 24px",
           display: "flex",
           flexWrap: "wrap",
@@ -257,7 +257,7 @@ export const MarketingFooter = () => (
           style={{
             fontFamily: DA_FONTS.body,
             fontSize: "0.75rem",
-            color: "#4A4035",
+            color: "var(--ma-text-dim)",
           }}
         >
           © {new Date().getFullYear()} PAPERSTUDIO. All rights reserved.
@@ -267,7 +267,7 @@ export const MarketingFooter = () => (
             fontFamily: DA_FONTS.headline,
             fontStyle: "italic",
             fontSize: "0.8rem",
-            color: "#4A4035",
+            color: "var(--ma-text-dim)",
           }}
         >
           Made for students who can't afford a writer.

@@ -43,7 +43,7 @@ const QuillSmall = () => (
 export const CzarSection = () => (
   <section
     style={{
-      background: "#0E0C08",
+      background: "var(--ma-bg)",
       padding: "96px 0 112px",
       position: "relative",
       overflow: "hidden",
@@ -139,7 +139,7 @@ export const CzarSection = () => (
             fontStyle: "italic",
             fontWeight: 700,
             fontSize: "clamp(2.4rem, 5vw, 3.75rem)",
-            color: "#E8DFC8",
+            color: "var(--ma-text)",
             lineHeight: 1.1,
             letterSpacing: "-0.02em",
             margin: "0 0 20px",
@@ -152,7 +152,7 @@ export const CzarSection = () => (
           style={{
             fontFamily: DA_FONTS.body,
             fontSize: "1.05rem",
-            color: "#8A7A62",
+            color: "var(--ma-text-muted)",
             lineHeight: 1.7,
             margin: "0 0 16px",
             maxWidth: "460px",
@@ -164,7 +164,7 @@ export const CzarSection = () => (
           style={{
             fontFamily: DA_FONTS.body,
             fontSize: "1.05rem",
-            color: "#8A7A62",
+            color: "var(--ma-text-muted)",
             lineHeight: 1.7,
             margin: "0 0 36px",
             maxWidth: "460px",
@@ -189,7 +189,7 @@ export const CzarSection = () => (
                 gap: "10px",
                 fontFamily: DA_FONTS.body,
                 fontSize: "0.9rem",
-                color: "#8A7A62",
+                color: "var(--ma-text-muted)",
               }}
             >
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
@@ -208,8 +208,8 @@ export const CzarSection = () => (
               display: "inline-flex",
               alignItems: "center",
               gap: "10px",
-              background: "#4A7A38",
-              color: "#E8DFC8",
+              background: "var(--ma-accent2)",
+              color: "#F5EDD8",
               fontFamily: DA_FONTS.body,
               fontWeight: 600,
               fontSize: "1rem",
@@ -220,8 +220,8 @@ export const CzarSection = () => (
               transition: "background 0.2s, transform 0.15s",
               letterSpacing: "0.01em",
             }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "#3d6630"; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "#4A7A38"; }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.opacity = "0.88"; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.opacity = "1"; }}
             onMouseDown={(e) => { (e.currentTarget as HTMLButtonElement).style.transform = "scale(0.97)"; }}
             onMouseUp={(e) => { (e.currentTarget as HTMLButtonElement).style.transform = "scale(1)"; }}
           >
@@ -239,7 +239,7 @@ export const CzarSection = () => (
         viewport={{ once: true, amount: 0.2 }}
         transition={{ duration: 0.7, delay: 0.12, ease: [0.16, 1, 0.3, 1] }}
         style={{
-          background: "#1A160E",
+          background: "var(--ma-surface)",
           border: "1px solid rgba(74,122,56,0.15)",
           borderRadius: "18px",
           overflow: "hidden",
@@ -254,7 +254,7 @@ export const CzarSection = () => (
             gap: "10px",
             padding: "14px 20px",
             borderBottom: "1px solid rgba(232,223,200,0.06)",
-            background: "#241E14",
+            background: "var(--ma-surface2)",
           }}
         >
           <div
@@ -278,7 +278,7 @@ export const CzarSection = () => (
                 fontStyle: "italic",
                 fontWeight: 600,
                 fontSize: "0.95rem",
-                color: "#E8DFC8",
+                color: "var(--ma-text)",
                 lineHeight: 1,
               }}
             >
@@ -348,7 +348,7 @@ export const CzarSection = () => (
                   border: `1px solid ${msg.role === "czar" ? "rgba(74,122,56,0.14)" : "rgba(196,56,74,0.14)"}`,
                   fontFamily: DA_FONTS.body,
                   fontSize: "0.82rem",
-                  color: "#C8BCA8",
+                  color: "var(--ma-text-muted)",
                   lineHeight: 1.6,
                 }}
               >
@@ -421,7 +421,7 @@ export const CzarSection = () => (
             display: "flex",
             alignItems: "center",
             gap: "10px",
-            background: "#0E0C08",
+            background: "var(--ma-bg)",
             borderRadius: "10px",
             border: "1px solid rgba(232,223,200,0.08)",
             padding: "10px 14px",
@@ -432,7 +432,7 @@ export const CzarSection = () => (
               flex: 1,
               fontFamily: DA_FONTS.body,
               fontSize: "0.8rem",
-              color: "#4A5A40",
+              color: "var(--ma-text-dim)",
               fontStyle: "italic",
             }}
           >
