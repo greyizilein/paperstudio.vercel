@@ -343,23 +343,23 @@
 }
 
 .paperstudio-marketing[data-mode="dark"] {
-  --ma-bg:            #0E0C08;
-  --ma-surface:       #1A160E;
-  --ma-surface2:      #241E14;
-  --ma-text:          #E8DFC8;
-  --ma-text-muted:    #8A7A62;
-  --ma-text-dim:      #6B6050;
+  --ma-bg:            #050505;
+  --ma-surface:       #0D0D0D;
+  --ma-surface2:      #141414;
+  --ma-text:          #F0EAD8;
+  --ma-text-muted:    #7A7060;
+  --ma-text-dim:      #4A4438;
   --ma-accent:        #C4384A;
   --ma-accent-hover:  #A82D3D;
   --ma-accent2:       #4A7A38;
   --ma-accent2-hover: #3A6028;
   --ma-gold:          #B89A5A;
-  --ma-border:        rgba(232,223,200,0.07);
-  --ma-border-bright: rgba(232,223,200,0.18);
-  --ma-nav-bg:        rgba(14,12,8,0.92);
-  --ma-footer-bg:     #0A0804;
-  background: #0E0C08;
-  color: #E8DFC8;
+  --ma-border:        rgba(240,234,216,0.07);
+  --ma-border-bright: rgba(240,234,216,0.16);
+  --ma-nav-bg:        rgba(5,5,5,0.94);
+  --ma-footer-bg:     #020202;
+  background: #050505;
+  color: #F0EAD8;
 }
 
 .paperstudio-marketing[data-mode="light"] {
