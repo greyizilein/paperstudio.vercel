@@ -324,6 +324,9 @@ export default function WriterPage() {
   // Panels & modals
   const [personaliseMode, setPersonaliseMode] = useState<"standard" | "custom" | "advanced">("standard");
   const [showPersonalise, setShowPersonalise] = useState(false);
+  const [showSidebar, setShowSidebar] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [editContent, setEditContent] = useState("");
   const [showExportModal, setShowExportModal] = useState(false);
   const [showExportChModal, setShowExportChModal] = useState(false);
   const [showFinalExport, setShowFinalExport] = useState(false);
@@ -336,6 +339,9 @@ export default function WriterPage() {
   const [dynamicTheorists, setDynamicTheorists] = useState<string[]>([]);
   const [theoristsLoading, setTheoristsLoading] = useState(false);
   const theoristsCacheRef = useRef<Record<string, string[]>>({});
+
+  // Reset edit mode when switching chapters
+  useEffect(() => { setIsEditMode(false); }, [activeChapterIndex]);
 
   // Restore personalise from chapter draft_config when switching chapters
   useEffect(() => {
@@ -1712,21 +1718,17 @@ export default function WriterPage() {
           <span className="hidden lg:inline">&nbsp;·&nbsp;{project.degree}&nbsp;·&nbsp;{project.citation_style}</span>
         </div>
         <div className="flex items-center gap-0.5 sm:gap-1 ml-auto flex-shrink-0">
-          {/* Desktop actions */}
-          <button onClick={handleCopy} aria-label={copied ? "Copied" : "Copy chapter"} title={copied ? "Copied" : "Copy chapter"} className="hidden sm:inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-bold text-muted-foreground hover:bg-secondary hover:text-foreground transition-all">
-            {copied ? <Check size={12} /> : <Copy size={12} />} {copied ? "Copied" : "Copy"}
+          {/* Sidebar toggle — desktop */}
+          <button
+            onClick={() => setShowSidebar(s => !s)}
+            title="Chapter list"
+            className="hidden sm:inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-bold text-muted-foreground hover:bg-secondary hover:text-foreground transition-all"
+          >
+            <Settings size={12} />
+            <span className="font-mono">{activeChapterIndex + 1}/{project.chapters.length}</span>
           </button>
-          <button onClick={() => setShowFinalExport(true)} aria-label="Final export" title="Final export" className="hidden sm:inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-bold bg-primary text-white hover:bg-primary/90 transition-all">
-            <Download size={12} /> Final Export
-          </button>
-          <button onClick={() => setShowExportModal(true)} aria-label="Export chapter" title="Export current chapter" className="hidden sm:inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-bold text-muted-foreground border border-border bg-background hover:border-primary hover:text-primary transition-all">
-            <Download size={12} /> Export
-          </button>
-          <button onClick={() => navigate("/dashboard")} aria-label="Dashboard" title="Dashboard" className="hidden sm:inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-bold text-muted-foreground hover:bg-secondary hover:text-foreground transition-all">
-            <BarChart2 size={12} />
-          </button>
-          {/* Mobile overflow menu — paper-card style icon list */}
-          <div className="relative sm:hidden">
+          {/* Overflow menu — all sizes */}
+          <div className="relative">
             <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} aria-label="More" className="inline-flex items-center p-1.5 rounded-md text-muted-foreground hover:bg-secondary hover:text-foreground transition-all">
               <MoreVertical size={16} />
             </button>
@@ -1736,9 +1738,9 @@ export default function WriterPage() {
                 <div className="absolute right-0 top-full mt-2 w-[260px] bg-background border border-border rounded-2xl shadow-2xl z-[81] p-2 grid grid-cols-3 gap-2 animate-in fade-in zoom-in-95 duration-150">
                   {[
                     { icon: Copy, label: copied ? "Copied" : "Copy", onClick: () => { handleCopy(); setMobileMenuOpen(false); } },
-                    { icon: Download, label: "Export", onClick: () => { setShowFinalExport(true); setMobileMenuOpen(false); } },
-                    { icon: Sparkles, label: "Personalise", onClick: () => { setShowPersonalise(true); setMobileMenuOpen(false); } },
-                    { icon: Cpu, label: "Models", onClick: () => { setShowPersonalise(true); setShowModelPicker(false); setMobileMenuOpen(false); } },
+                    { icon: Download, label: "Export", onClick: () => { setShowExportChModal(true); setMobileMenuOpen(false); } },
+                    { icon: Download, label: "Final PDF", onClick: () => { setShowFinalExport(true); setMobileMenuOpen(false); } },
+                    { icon: Sparkles, label: "Settings", onClick: () => { setShowPersonalise(true); setMobileMenuOpen(false); } },
                     { icon: BarChart2, label: "Dashboard", onClick: () => { navigate("/dashboard"); } },
                   ].map((item) => (
                     <button key={item.label} onClick={item.onClick} title={item.label} className="flex flex-col items-center gap-1 px-2 py-3 rounded-xl bg-secondary/40 hover:bg-secondary text-foreground transition-all">
@@ -1797,8 +1799,8 @@ export default function WriterPage() {
 
       {/* Shell */}
       <div className="flex flex-1 overflow-hidden min-h-0">
-        {/* Left Nav — desktop only */}
-        <nav className="w-[192px] flex-shrink-0 border-r border-border bg-background flex-col overflow-y-auto py-2 hidden md:flex">
+        {/* Left Nav — toggled via showSidebar */}
+        {showSidebar && <nav className="w-[192px] flex-shrink-0 border-r border-border bg-background flex-col overflow-y-auto py-2 flex animate-in slide-in-from-left duration-200">
           <div className="text-[10px] font-extrabold tracking-[0.08em] uppercase text-muted-foreground px-3.5 pt-2.5 pb-1">Chapters</div>
           {project.chapters.sort((a, b) => a.order_index - b.order_index).map(ch => {
             const locked = isChapterLocked(ch);
@@ -1839,7 +1841,7 @@ export default function WriterPage() {
               Export all
             </button>
           </div>
-        </nav>
+        </nav>}
 
         {/* Editor */}
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
@@ -1902,6 +1904,27 @@ export default function WriterPage() {
                 <Lock size={11} /> Locked
               </span>
             )}
+            {!isGenerating && currentChapter?.status === "completed" && (
+              <button
+                onClick={() => {
+                  if (isEditMode) {
+                    if (currentChapter && editContent !== currentChapter.content) {
+                      const wc = countBodyWords(editContent);
+                      setEditedChapterIds(prev => new Set(prev).add(currentChapter.id));
+                      setEditedWordDeltas(prev => ({ ...prev, [currentChapter.id]: wc - (currentChapter.word_count_actual || 0) }));
+                      handleUpdate({ ...project, chapters: project.chapters.map(c => c.id === currentChapter.id ? { ...c, content: editContent, word_count_actual: wc } : c) });
+                    }
+                    setIsEditMode(false);
+                  } else {
+                    setEditContent(currentChapter.content || "");
+                    setIsEditMode(true);
+                  }
+                }}
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold border border-border text-muted-foreground hover:border-primary hover:text-primary transition-all"
+              >
+                {isEditMode ? <><Check size={11} /> Done editing</> : <>✎ Edit</>}
+              </button>
+            )}
           </div>
 
           {/* Content */}
@@ -1954,8 +1977,8 @@ export default function WriterPage() {
               </div>
             ) : currentChapter?.content ? (
               <div className={cn(
-                "max-w-[680px] lg:max-w-[920px] xl:max-w-[1080px] 2xl:max-w-[1180px] mx-auto px-4 sm:px-10 py-6 prose-academic",
-                editedChapterIds.has(currentChapter.id) && "border-l-4 border-l-green pl-5"
+                isEditMode ? "flex flex-col h-full" : "max-w-[680px] lg:max-w-[920px] xl:max-w-[1080px] 2xl:max-w-[1180px] mx-auto px-4 sm:px-10 py-6 prose-academic",
+                !isEditMode && editedChapterIds.has(currentChapter.id) && "border-l-4 border-l-green pl-5"
               )}>
                 {/* Recovery banner — shown when a previous auto-saved draft is found */}
                 {showRecovery && recoveryContent && (
@@ -1986,42 +2009,49 @@ export default function WriterPage() {
                     }} className="text-[11px] text-muted-foreground hover:text-foreground ml-auto">Dismiss</button>
                   </div>
                 )}
-                <Markdown remarkPlugins={[remarkGfm]} components={{
-                  ol: ({ children, ...props }: any) => <ol {...props}>{children}</ol>,
-                  ul: ({ children, ...props }: any) => <ul {...props}>{children}</ul>,
-                  p({ children, ...props }: any) {
-                    const text = String(children);
-                    if (/^\[Space for Figure[\s\d.]+\]$/i.test(text.trim())) return null;
-                    const figMatch = text.match(/<!-- FIGURE:([^:]+):([^:]+):(.+?) -->/);
-                    if (figMatch) {
-                      const figId = `fig-${figMatch[1]}`;
-                      const img = inlineImages[figId];
-                      return (
-                        <div className="my-6 flex flex-col items-center">
-                          <p className="text-[13px] font-bold text-foreground mb-2">Figure {figMatch[1]}: {figMatch[2].trim()}</p>
-                          {img?.status === "done" && img.imageUrl ? (
-                            <img src={img.imageUrl} alt={figMatch[2].trim()} className="max-w-full rounded-lg shadow-md border border-border" />
-                          ) : (
-                            <div className="w-full h-32 rounded-lg bg-secondary/40 flex items-center justify-center border border-border">
-                              <span className="text-xs text-muted-foreground italic">[Figure placeholder — generate images to view]</span>
-                            </div>
-                          )}
-                          {/* description intentionally hidden — sent only to image model */}
-                        </div>
-                      );
+                {isEditMode ? (
+                  <textarea
+                    value={editContent}
+                    onChange={(e) => setEditContent(e.target.value)}
+                    autoFocus
+                    className="flex-1 w-full resize-none bg-transparent outline-none text-[14px] text-foreground leading-relaxed font-mono px-5 sm:px-10 py-6 min-h-[600px]"
+                    placeholder="Chapter content…"
+                  />
+                ) : (
+                  <Markdown remarkPlugins={[remarkGfm]} components={{
+                    ol: ({ children, ...props }: any) => <ol {...props}>{children}</ol>,
+                    ul: ({ children, ...props }: any) => <ul {...props}>{children}</ul>,
+                    p({ children, ...props }: any) {
+                      const text = String(children);
+                      if (/^\[Space for Figure[\s\d.]+\]$/i.test(text.trim())) return null;
+                      const figMatch = text.match(/<!-- FIGURE:([^:]+):([^:]+):(.+?) -->/);
+                      if (figMatch) {
+                        const figId = `fig-${figMatch[1]}`;
+                        const img = inlineImages[figId];
+                        return (
+                          <div className="my-6 flex flex-col items-center">
+                            <p className="text-[13px] font-bold text-foreground mb-2">Figure {figMatch[1]}: {figMatch[2].trim()}</p>
+                            {img?.status === "done" && img.imageUrl ? (
+                              <img src={img.imageUrl} alt={figMatch[2].trim()} className="max-w-full rounded-lg shadow-md border border-border" />
+                            ) : (
+                              <div className="w-full h-32 rounded-lg bg-secondary/40 flex items-center justify-center border border-border">
+                                <span className="text-xs text-muted-foreground italic">[Figure placeholder — generate images to view]</span>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      }
+                      return <p {...props}>{children}</p>;
+                    },
+                    code({ inline, className, children, ...props }: any) {
+                      const match = /language-(\w+)/.exec(className || "");
+                      if (!inline && match && match[1] === "chart") {
+                        return <ChartRenderer content={String(children).replace(/\n$/, "")} />;
+                      }
+                      return <code className={className} {...props}>{children}</code>;
                     }
-                    return <p {...props}>{children}</p>;
-                  },
-                  code({ inline, className, children, ...props }: any) {
-                    const match = /language-(\w+)/.exec(className || "");
-                    if (!inline && match && match[1] === "chart") {
-                      return <ChartRenderer content={String(children).replace(/\n$/, "")} />;
-                    }
-                    return <code className={className} {...props}>{children}</code>;
-                  }
-                }}>{currentChapter.content.replace(/<!-- FIGURE:([^:]+):([^:]+):(.+?) -->/g, '\n\n<!-- FIGURE:$1:$2:$3 -->\n\n')}</Markdown>
-
-                {/* Quality Review removed */}
+                  }}>{currentChapter.content.replace(/<!-- FIGURE:([^:]+):([^:]+):(.+?) -->/g, '\n\n<!-- FIGURE:$1:$2:$3 -->\n\n')}</Markdown>
+                )}
               </div>
             ) : currentLocked ? (
               <div className="flex flex-col items-center justify-center h-full p-10 text-center">
@@ -2030,20 +2060,19 @@ export default function WriterPage() {
                 <p className="text-[13px] text-muted-foreground max-w-[240px] leading-relaxed">Complete the previous chapter first. Chapters must be written in order so PAPERSTUDIO can maintain context and coherence across your dissertation.</p>
               </div>
             ) : (
-              <div className="flex flex-col items-center justify-center h-full p-10 text-center">
-                {/* Methodology settings banner for Ch3/Ch4 */}
+              <div className="flex flex-col h-full">
+                {/* Alert banners at top of canvas */}
                 {(chType === "methodology" || chType === "findings") && (
-                  <div className="mb-4 flex items-center gap-3 rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 text-sm max-w-[380px]">
+                  <div className="mx-4 sm:mx-10 mt-4 flex items-center gap-3 rounded-lg bg-amber-50 border border-amber-200 px-4 py-2.5 text-sm">
                     <span className="text-amber-700 font-medium flex-1 text-left text-[12px]">
-                      ⚠️ Configure methodology settings (data collection, sampling, sample size, philosophy) in <strong>Personalise</strong> before drafting this chapter.
+                      ⚠️ Tip: open <strong>Settings</strong> to configure methodology details before drafting.
                     </span>
-                    <button onClick={() => setShowPersonalise(true)} className="px-3 py-1 rounded bg-amber-600 text-white text-xs font-bold hover:bg-amber-700 flex-shrink-0">Open</button>
+                    <button onClick={() => setShowPersonalise(true)} className="px-2.5 py-1 rounded bg-amber-600 text-white text-xs font-bold hover:bg-amber-700 flex-shrink-0">Settings</button>
                   </div>
                 )}
-                {/* Recovery banner in empty state */}
                 {showRecovery && recoveryContent && (
-                  <div className="mb-4 flex items-center gap-3 rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 text-sm max-w-[340px]">
-                    <span className="text-amber-700 font-semibold flex-1">A draft was auto-saved before your last session ended. Restore it?</span>
+                  <div className="mx-4 sm:mx-10 mt-4 flex items-center gap-3 rounded-lg bg-amber-50 border border-amber-200 px-4 py-2.5 text-sm">
+                    <span className="text-amber-700 font-semibold flex-1 text-[12px]">A draft was auto-saved. Restore it?</span>
                     <button onClick={() => {
                       if (!currentChapter || !project) return;
                       const wc = countBodyWords(recoveryContent);
@@ -2051,40 +2080,18 @@ export default function WriterPage() {
                       localStorage.removeItem(recoveryKeyRef.current);
                       setShowRecovery(false); setRecoveryContent(null);
                       toast.success("Draft restored.");
-                    }} className="px-3 py-1 rounded bg-amber-600 text-white text-xs font-bold hover:bg-amber-700">Restore</button>
+                    }} className="px-2.5 py-1 rounded bg-amber-600 text-white text-xs font-bold hover:bg-amber-700">Restore</button>
                     <button onClick={() => { localStorage.removeItem(recoveryKeyRef.current); setShowRecovery(false); setRecoveryContent(null); }} className="text-[11px] text-amber-600 hover:underline">Discard</button>
                   </div>
                 )}
-                <h3 className="text-sm font-bold text-foreground mb-1">{emptyState.title}</h3>
-                <p className="text-[13px] text-muted-foreground max-w-[240px] leading-relaxed mb-4">{emptyState.desc}</p>
-                <div className="flex flex-col items-center gap-2">
-                  {selectedModel && (() => {
-                    const isClaude = selectedModel.provider === "Anthropic";
-                    const tier = (subscription?.tier || "free").toLowerCase();
-                    const thinkingAllowed = isTestUser || tier === "masters" || tier === "phd" || tier === "custom";
-                    const thinking = isClaude && (selectedModel.id === "claude-sonnet-4-6-thinking" || isTestUser) && thinkingAllowed;
-                    const label = isClaude
-                      ? `${selectedModel.name}${thinking ? " · Thinking ON" : ""}`
-                      : `${selectedModel.name} · ${tier === "free" ? "Free" : tier}`;
-                    return (
-                      <div
-                        className={cn(
-                          "px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border",
-                          isClaude
-                            ? "bg-primary/10 text-primary border-primary/20"
-                            : "bg-secondary text-muted-foreground border-border"
-                        )}
-                        title="Active model for chapter writing and reasoning tasks"
-                      >
-                        {label}
-                      </div>
-                    );
-                  })()}
-                  <div className="flex gap-2">
-                    <button onClick={() => setShowPersonalise(true)} className="px-3 py-1.5 rounded-md text-xs font-bold border border-border text-foreground hover:border-primary hover:text-primary transition-all">Personalise</button>
-                    <button onClick={() => setShowOutlineModal(true)} className="px-3 py-1.5 rounded-md text-xs font-bold bg-primary text-white hover:bg-primary/90 transition-colors">Draft</button>
-                  </div>
-                </div>
+                {/* Full canvas textarea */}
+                <textarea
+                  value={personalise.notes}
+                  onChange={(e) => setPersonalise(p => ({ ...p, notes: e.target.value }))}
+                  placeholder={`${emptyState.title}\n\n${emptyState.desc}\n\nOr just tap ✨ Draft below and the AI will start writing.`}
+                  autoFocus
+                  className="flex-1 w-full resize-none bg-transparent outline-none text-[15px] text-foreground px-5 sm:px-12 py-6 placeholder:text-muted-foreground/35 leading-relaxed"
+                />
               </div>
             )}
             {error && (
