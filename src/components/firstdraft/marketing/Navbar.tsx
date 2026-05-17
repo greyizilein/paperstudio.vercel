@@ -268,8 +268,7 @@ export const MarketingNavbar = () => {
             exit={{ opacity: 0, height: 0 }}
             transition={{ duration: 0.25 }}
             style={{
-              background: "var(--ma-nav-bg)",
-              backdropFilter: "blur(16px)",
+              background: "var(--ma-bg)",
               borderTop: "1px solid var(--ma-border)",
             }}
             className="md:hidden overflow-hidden px-6 pb-6 pt-2"
@@ -283,13 +282,14 @@ export const MarketingNavbar = () => {
                   display: "block",
                   padding: "12px 0",
                   fontSize: "0.875rem",
-                  color: "var(--ma-text-muted)",
+                  color: "var(--ma-text)",
                   fontFamily: '"Geist", system-ui, sans-serif',
                   textDecoration: "none",
                   borderBottom: "1px solid var(--ma-border)",
                   transition: "color 0.2s",
                 }}
-                className="hover:!text-[--ma-text]"
+                onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = "var(--ma-accent)"; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = "var(--ma-text)"; }}
               >
                 {link.label}
               </Link>

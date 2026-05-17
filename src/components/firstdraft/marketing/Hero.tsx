@@ -65,8 +65,8 @@ export const MarketingHero = () => {
       >
         <style>{`
           @media (max-width: 860px) {
-            .hero-grid { grid-template-columns: 1fr !important; gap: 48px !important; padding: 100px 24px 64px !important; }
-            .hero-video-wrap { order: -1; height: 280px !important; }
+            .hero-grid { grid-template-columns: 1fr !important; gap: 32px !important; padding: 100px 24px 64px !important; }
+            .hero-video-wrap { height: 260px !important; border-radius: 14px !important; }
           }
         `}</style>
 

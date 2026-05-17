@@ -134,7 +134,7 @@ export const MarketingPricing = () => {
     <section
       id="pricing"
       className="py-24 md:py-32"
-      style={{ background: "hsl(40, 33%, 98%)", color: "hsl(24, 10%, 10%)" }}
+      style={{ background: "var(--ma-bg)", color: "var(--ma-text)" }}
     >
       <div className="max-w-6xl mx-auto px-6">
         <motion.div
@@ -145,7 +145,7 @@ export const MarketingPricing = () => {
           className="text-center mb-16"
         >
           <h2 className="text-3xl md:text-4xl font-bold tracking-tight">Per-project pricing</h2>
-          <p className="mt-4 text-black/55 max-w-lg mx-auto">
+          <p className="mt-4 max-w-lg mx-auto" style={{ color: "var(--ma-text-muted)" }}>
             Pay once per dissertation. References don't count toward word limits. Redrafts are free up to your tier's limit.
           </p>
         </motion.div>
@@ -173,7 +173,8 @@ export const MarketingPricing = () => {
                 whileInView={{ opacity: 1, y: 0, filter: "blur(0px)" }}
                 viewport={{ once: true, amount: 0.2 }}
                 transition={{ duration: 0.5, delay: i * 0.08, ease: [0.16, 1, 0.3, 1] }}
-                className={`rounded-2xl flex flex-col border-2 overflow-hidden bg-white transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-black/10 relative ${cardBorder}`}
+                className={`rounded-2xl flex flex-col border-2 overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-black/10 relative ${cardBorder}`}
+                style={{ background: "var(--ma-surface)" }}
               >
                 {tier.highlighted && (
                   <span className="absolute top-4 right-4 z-10 bg-amber-400 text-black text-[11px] font-bold px-3 py-1 rounded-full">
@@ -196,7 +197,7 @@ export const MarketingPricing = () => {
                   </p>
                 </div>
 
-                <div className="px-6 py-6 flex-1 flex flex-col bg-white">
+                <div className="px-6 py-6 flex-1 flex flex-col" style={{ background: "var(--ma-surface)" }}>
                   <ul className="space-y-3 mb-6 flex-1">
                     {tier.features.map((f) => (
                       <li

@@ -105,7 +105,7 @@ export const MarketingFooter = () => (
     }}
   >
     <style>{`
-      .footer-da-link:hover { color: var(--ma-text-muted) !important; }
+      .footer-da-link:hover { color: var(--ma-text) !important; }
     `}</style>
 
     <div
