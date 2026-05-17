@@ -182,7 +182,7 @@ export const MarketingNavbar = () => {
                     size="sm"
                     style={{
                       background: "var(--ma-accent)",
-                      color: "#F5EDD8",
+                      color: "#FFFFFF",
                       fontFamily: '"Geist", system-ui, sans-serif',
                       fontWeight: 600,
                       border: "none",
@@ -214,7 +214,7 @@ export const MarketingNavbar = () => {
                     size="sm"
                     style={{
                       background: "var(--ma-accent)",
-                      color: "#F5EDD8",
+                      color: "#FFFFFF",
                       fontFamily: '"Geist", system-ui, sans-serif',
                       fontWeight: 600,
                       border: "none",
@@ -309,7 +309,7 @@ export const MarketingNavbar = () => {
                   <Link to="/dashboard" onClick={() => setMobileOpen(false)}>
                     <Button
                       className="w-full"
-                      style={{ background: "var(--ma-accent)", color: "#F5EDD8", fontFamily: '"Geist", system-ui, sans-serif', fontWeight: 600 }}
+                      style={{ background: "var(--ma-accent)", color: "#FFFFFF", fontFamily: '"Geist", system-ui, sans-serif', fontWeight: 600 }}
                     >
                       Open Studio
                     </Button>
@@ -329,7 +329,7 @@ export const MarketingNavbar = () => {
                   <Link to="/auth?tab=signup" onClick={() => setMobileOpen(false)}>
                     <Button
                       className="w-full"
-                      style={{ background: "var(--ma-accent)", color: "#F5EDD8", fontFamily: '"Geist", system-ui, sans-serif', fontWeight: 600 }}
+                      style={{ background: "var(--ma-accent)", color: "#FFFFFF", fontFamily: '"Geist", system-ui, sans-serif', fontWeight: 600 }}
                     >
                       Get Started
                     </Button>

@@ -209,7 +209,7 @@ export const CzarSection = () => (
               alignItems: "center",
               gap: "10px",
               background: "var(--ma-accent2)",
-              color: "#F5EDD8",
+              color: "#FFFFFF",
               fontFamily: DA_FONTS.body,
               fontWeight: 600,
               fontSize: "1rem",
