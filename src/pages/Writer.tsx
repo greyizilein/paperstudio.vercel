@@ -1955,64 +1955,6 @@ export default function WriterPage() {
             })}
           </div>
 
-          {/* Chapter header */}
-          <div className="px-3 sm:px-5 py-2 sm:py-2.5 border-b border-border flex items-center gap-1.5 sm:gap-2.5 flex-shrink-0 bg-background flex-wrap">
-            <span className="font-heading text-sm sm:text-base font-black text-foreground tracking-tight flex-1 min-w-0 truncate">{currentChapter?.title}</span>
-            <span className={cn("inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold whitespace-nowrap",
-              currentChapter?.status === "completed" ? "bg-green/10 text-green border border-green/20" :
-              isGenerating ? "bg-aqua/10 text-aqua border border-aqua/20" : "bg-secondary text-muted-foreground"
-            )}>
-              {isGenerating && <span className="w-[5px] h-[5px] rounded-full bg-aqua animate-pulse" />}
-              {isGenerating ? "Drafting" : currentChapter?.status === "completed" ? "Complete" : "Not started"}
-            </span>
-            {(isNoCiteChapter || isReuseCiteChapter) && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-[#fff8ee] text-[#9a6000] border border-[#f0ddb0]">
-                {isNoCiteChapter ? "No citations" : "Reuse citations only"}
-              </span>
-            )}
-            {selectedModel && (
-              <button
-                onClick={() => setShowPersonalise(true)}
-                title="Active model — click to change in Personalise"
-                className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border bg-secondary text-muted-foreground border-border hover:border-primary hover:text-primary transition-all"
-              >
-                <Cpu size={11} /> {selectedModel.name}
-              </button>
-            )}
-            {isGenerating && (
-              <button onClick={() => handleStopGeneration()}
-                className="inline-flex items-center gap-1 px-3 py-1 rounded-md text-xs font-bold bg-destructive text-white hover:bg-destructive/90 transition-colors">
-                <StopCircle size={12} /> Stop
-              </button>
-            )}
-            {!isGenerating && currentLocked && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-secondary text-muted-foreground">
-                <Lock size={11} /> Locked
-              </span>
-            )}
-            {!isGenerating && currentChapter?.status === "completed" && (
-              <button
-                onClick={() => {
-                  if (isEditMode) {
-                    if (currentChapter && editContent !== currentChapter.content) {
-                      const wc = countBodyWords(editContent);
-                      setEditedChapterIds(prev => new Set(prev).add(currentChapter.id));
-                      setEditedWordDeltas(prev => ({ ...prev, [currentChapter.id]: wc - (currentChapter.word_count_actual || 0) }));
-                      handleUpdate({ ...project, chapters: project.chapters.map(c => c.id === currentChapter.id ? { ...c, content: editContent, word_count_actual: wc } : c) });
-                    }
-                    setIsEditMode(false);
-                  } else {
-                    setEditContent(currentChapter.content || "");
-                    setIsEditMode(true);
-                  }
-                }}
-                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold border border-border text-muted-foreground hover:border-primary hover:text-primary transition-all"
-              >
-                {isEditMode ? <><Check size={11} /> Done editing</> : <>✎ Edit</>}
-              </button>
-            )}
-          </div>
-
           {/* Content */}
           <div className="flex-1 overflow-y-auto relative bg-background">
             {isGenerating && !streamingContent ? (
@@ -2022,6 +1964,7 @@ export default function WriterPage() {
               </div>
             ) : isGenerating && streamingContent ? (
               <div className="max-w-[680px] lg:max-w-[920px] xl:max-w-[1080px] 2xl:max-w-[1180px] mx-auto px-4 sm:px-10 py-6 prose-academic">
+                <h1 className="not-prose text-xl sm:text-2xl font-bold text-foreground mb-6 leading-snug">{currentChapter?.title}</h1>
                 <Markdown remarkPlugins={[remarkGfm]} components={{
                   ol: ({ children, ...props }: any) => <ol {...props}>{children}</ol>,
                   ul: ({ children, ...props }: any) => <ul {...props}>{children}</ul>,
@@ -2066,6 +2009,29 @@ export default function WriterPage() {
                 isEditMode ? "flex flex-col h-full" : "max-w-[680px] lg:max-w-[920px] xl:max-w-[1080px] 2xl:max-w-[1180px] mx-auto px-4 sm:px-10 py-6 prose-academic",
                 !isEditMode && editedChapterIds.has(currentChapter.id) && "border-l-4 border-l-green pl-5"
               )}>
+                {/* Chapter title in canvas */}
+                <div className={cn("flex items-start justify-between gap-3 mb-5", isEditMode && "flex-shrink-0 px-5 sm:px-10 pt-6 pb-2")}>
+                  <h1 className="not-prose text-xl sm:text-2xl font-bold text-foreground leading-snug flex-1">{currentChapter?.title}</h1>
+                  <button
+                    onClick={() => {
+                      if (isEditMode) {
+                        if (currentChapter && editContent !== currentChapter.content) {
+                          const wc = countBodyWords(editContent);
+                          setEditedChapterIds(prev => new Set(prev).add(currentChapter.id));
+                          setEditedWordDeltas(prev => ({ ...prev, [currentChapter.id]: wc - (currentChapter.word_count_actual || 0) }));
+                          handleUpdate({ ...project, chapters: project.chapters.map(c => c.id === currentChapter.id ? { ...c, content: editContent, word_count_actual: wc } : c) });
+                        }
+                        setIsEditMode(false);
+                      } else {
+                        setEditContent(currentChapter.content || "");
+                        setIsEditMode(true);
+                      }
+                    }}
+                    className="flex-shrink-0 mt-1 text-[11px] font-bold text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    {isEditMode ? <><Check size={11} className="inline mr-0.5" /> Done</> : <>✎ Edit</>}
+                  </button>
+                </div>
                 {/* Recovery banner — shown when a previous auto-saved draft is found */}
                 {showRecovery && recoveryContent && (
                   <div className="mb-4 flex items-center gap-3 rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 text-sm">
@@ -2147,6 +2113,10 @@ export default function WriterPage() {
               </div>
             ) : (
               <div className="flex flex-col h-full">
+                {/* Chapter title */}
+                <div className="px-5 sm:px-12 pt-7 pb-2 flex-shrink-0">
+                  <h1 className="text-xl sm:text-2xl font-bold text-foreground leading-snug">{currentChapter?.title}</h1>
+                </div>
                 {/* Alert banners at top of canvas */}
                 {(chType === "methodology" || chType === "findings") && (
                   <div className="mx-4 sm:mx-10 mt-4 flex items-center gap-3 rounded-lg bg-amber-50 border border-amber-200 px-4 py-2.5 text-sm">
@@ -2187,26 +2157,47 @@ export default function WriterPage() {
           {/* Bottom bar */}
           <div className="border-t border-border flex-shrink-0 bg-background">
 
-            {/* ── EMPTY STATE: big Draft CTA ── */}
+            {/* ── EMPTY STATE: equal Settings + Draft ── */}
             {!currentChapter?.content && !isGenerating && !currentLocked && (
-              <div className="flex items-center gap-2 px-3 py-2.5">
+              <div className="flex gap-2 px-3 py-2.5">
                 <button
                   onClick={() => setShowPersonalise(true)}
-                  className="inline-flex items-center gap-1.5 px-3 py-2.5 rounded-xl border border-border text-xs font-bold text-muted-foreground hover:border-foreground/40 hover:text-foreground transition-all flex-shrink-0"
+                  className="flex-1 inline-flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-border text-sm font-bold text-muted-foreground hover:border-foreground/40 hover:text-foreground transition-all"
                 >
-                  <Settings size={13} /> Settings
+                  <Settings size={14} /> Settings
                 </button>
                 <button
                   onClick={() => setShowOutlineModal(true)}
-                  className="flex-1 inline-flex items-center justify-center gap-2 py-2.5 rounded-xl bg-foreground text-background text-sm font-bold hover:opacity-90 transition-all"
+                  className="flex-1 inline-flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-foreground text-background text-sm font-bold hover:opacity-90 transition-all"
                 >
-                  <Sparkles size={15} /> Draft →
+                  <Sparkles size={14} /> Draft →
                 </button>
               </div>
             )}
 
-            {/* ── GENERATING / COMPLETED: word count + notes + actions ── */}
-            {(isGenerating || currentChapter?.content) && (
+            {/* ── GENERATING: word count + Stop ── */}
+            {isGenerating && (
+              <div className="flex items-center gap-2 px-3 py-2.5">
+                <div className="flex-1 flex items-center gap-2">
+                  <span className="text-[11px] font-mono text-muted-foreground whitespace-nowrap">
+                    <b className={currentWC >= targetWC ? "text-green" : ""}>{currentWC.toLocaleString()}</b> / {targetWC.toLocaleString()}w
+                  </span>
+                  <div className="flex-1 h-[2px] bg-border rounded-sm overflow-hidden">
+                    <div className="h-full bg-primary rounded-sm transition-all duration-500" style={{ width: `${wcPct}%` }} />
+                  </div>
+                  <span className="text-[11px] font-mono text-muted-foreground">{wcPct}%</span>
+                </div>
+                <button
+                  onClick={() => handleStopGeneration()}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl border border-border text-xs font-bold text-muted-foreground hover:border-destructive hover:text-destructive transition-all flex-shrink-0"
+                >
+                  <StopCircle size={13} /> Stop
+                </button>
+              </div>
+            )}
+
+            {/* ── COMPLETED: notes + actions ── */}
+            {currentChapter?.content && !isGenerating && (
               <>
                 <div className="flex items-center gap-2 px-4 py-1.5 border-b border-border">
                   <span className="text-[11px] font-mono text-muted-foreground">
@@ -2217,17 +2208,15 @@ export default function WriterPage() {
                   </div>
                   <span className="text-[11px] font-mono text-muted-foreground">{wcPct}%</span>
                 </div>
-                {!isGenerating && (
-                  <div className="flex items-start gap-2 px-4 py-2">
-                    <textarea
-                      value={personalise.notes}
-                      onChange={(e) => setPersonalise(p => ({ ...p, notes: e.target.value }))}
-                      placeholder="Notes for next draft (optional)…"
-                      className="flex-1 border-none outline-none text-[13px] text-foreground resize-none h-7 leading-snug py-1 bg-transparent placeholder:text-muted-foreground focus:h-[52px] transition-all"
-                    />
-                  </div>
-                )}
-                {currentChapter?.status === "completed" && !isGenerating && (
+                <div className="flex items-start gap-2 px-4 py-2">
+                  <textarea
+                    value={personalise.notes}
+                    onChange={(e) => setPersonalise(p => ({ ...p, notes: e.target.value }))}
+                    placeholder="Notes for next draft (optional)…"
+                    className="flex-1 border-none outline-none text-[13px] text-foreground resize-none h-7 leading-snug py-1 bg-transparent placeholder:text-muted-foreground focus:h-[52px] transition-all"
+                  />
+                </div>
+                {currentChapter?.status === "completed" && (
                   <div className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-4 py-1.5 border-t border-border flex-wrap">
                     {currentChapter.word_count_actual && currentChapter.word_count_target && currentChapter.word_count_actual < currentChapter.word_count_target && (
                       <button onClick={() => handleContinueWriting(currentChapter.content || "", (currentChapter.word_count_target || 0) - (currentChapter.word_count_actual || 0))}
