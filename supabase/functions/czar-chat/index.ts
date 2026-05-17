@@ -18,7 +18,7 @@ const corsHeaders = {
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 const SUPABASE_SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY")!;
+const GOOGLE_AI_API_KEY = Deno.env.get("GOOGLE_AI_API_KEY")!;
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY")!;
 import { buildPptxBase64, type PptxSpec } from "../_shared/pptx-builder.ts";
 const ADMIN_EMAIL = "grey.izilein@gmail.com";
@@ -60,7 +60,7 @@ interface ChatRequest {
 // Default when no override is present is GPT 5.2.
 // ─────────────────────────────────────────────────────────────────────
 function pickWritingModel(tier: string, isAdmin: boolean, think: boolean, toolsRequested: boolean, modelOverride?: string, wantsImage?: boolean, isDataAnalysis?: boolean, isAgentMode?: boolean): {
-  provider: "anthropic" | "lovable" | "qwen";
+  provider: "anthropic" | "google" | "qwen";
   model: string;
   thinking: boolean;
   tools: boolean;
@@ -78,7 +78,7 @@ function pickWritingModel(tier: string, isAdmin: boolean, think: boolean, toolsR
       if (isAgentMode) {
         return { provider: "anthropic", model: "claude-sonnet-4-6", thinking: true, tools: true };
       }
-      return { provider: "lovable", model: "openai/gpt-5.2", thinking: false, tools: false };
+      return { provider: "google", model: "gemini-2.5-flash", thinking: false, tools: false };
     case "qwen3.6-plus":
       // Qwen runs through DashScope (OpenAI-compatible). No agentic tools yet.
       // Agent mode falls back to Claude, identical to GPT-5.2 behaviour.
@@ -94,7 +94,7 @@ function pickWritingModel(tier: string, isAdmin: boolean, think: boolean, toolsR
       if (isDataAnalysis || isAgentMode) {
         return { provider: "anthropic", model: "claude-opus-4-7", thinking: think, tools };
       }
-      return { provider: "lovable", model: "openai/gpt-5.2", thinking: false, tools: false };
+      return { provider: "google", model: "gemini-2.5-flash", thinking: false, tools: false };
     case "gemini-3-pro":
       // Gemini stays image-only. For non-image turns, route through Claude
       // Sonnet 4.6 (with image tool still available) for this turn only.
@@ -108,7 +108,7 @@ function pickWritingModel(tier: string, isAdmin: boolean, think: boolean, toolsR
   }
 
   // Default: GPT 5.2 for all non-agent turns.
-  return { provider: "lovable", model: "openai/gpt-5.2", thinking: false, tools: false };
+  return { provider: "google", model: "gemini-2.5-flash", thinking: false, tools: false };
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -306,12 +306,12 @@ async function summariseLargeText(
       const ctrl = new AbortController();
       const timer = setTimeout(() => ctrl.abort(), 25_000);
       try {
-        const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        const res = await fetch("https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", {
           method: "POST",
           signal: ctrl.signal,
-          headers: { Authorization: `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
+          headers: { Authorization: `Bearer ${GOOGLE_AI_API_KEY}`, "Content-Type": "application/json" },
           body: JSON.stringify({
-            model: "google/gemini-2.5-flash",
+            model: "gemini-2.5-flash",
             max_tokens: 1500,
             messages: [{ role: "system", content: sys }, { role: "user", content: usr }],
           }),
@@ -1503,9 +1503,9 @@ async function streamLovable(opts: {
   messages: { role: string; content: string }[];
   onDelta: (text: string) => void;
 }) {
-  const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+  const res = await fetch("https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", {
     method: "POST",
-    headers: { Authorization: `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
+    headers: { Authorization: `Bearer ${GOOGLE_AI_API_KEY}`, "Content-Type": "application/json" },
     body: JSON.stringify({
       model: opts.model,
       stream: true,
@@ -2039,19 +2039,18 @@ async function executeTool(
   return { error: `Unknown tool: ${name}` };
 }
 
-// Gemini Nano Banana image generation via Lovable AI Gateway. Returns a
-// data:image/png;base64,... URL that renders directly in markdown.
-async function generateImageNanoBanana(prompt: string, aspectRatio: string): Promise<{ image_url?: string; prompt_used: string; error?: string }> {
+// Gemini image generation via Google AI native API. Returns a
+// data:image/{type};base64,... URL that renders directly in markdown.
+async function generateImageNanoBanana(prompt: string, _aspectRatio: string): Promise<{ image_url?: string; prompt_used: string; error?: string }> {
   try {
-    const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const model = "gemini-2.0-flash-preview-image-generation";
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GOOGLE_AI_API_KEY}`;
+    const res = await fetch(url, {
       method: "POST",
-      headers: { Authorization: `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash-image",
-        messages: [
-          { role: "user", content: `Aspect ratio: ${aspectRatio}. ${prompt}` },
-        ],
-        modalities: ["image", "text"],
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { responseModalities: ["TEXT", "IMAGE"] },
       }),
     });
     if (!res.ok) {
@@ -2060,12 +2059,14 @@ async function generateImageNanoBanana(prompt: string, aspectRatio: string): Pro
       return { prompt_used: prompt, error: `Image generation failed (${res.status})` };
     }
     const data = await res.json();
-    const url: string | undefined = data.choices?.[0]?.message?.images?.[0]?.image_url?.url;
-    if (!url) {
+    const parts = data?.candidates?.[0]?.content?.parts ?? [];
+    const imagePart = parts.find((p: any) => p.inlineData?.data);
+    if (!imagePart?.inlineData) {
       console.error("[czar-chat] generate_image: no image in response", JSON.stringify(data).slice(0, 500));
       return { prompt_used: prompt, error: "No image returned" };
     }
-    return { image_url: url, prompt_used: prompt };
+    const { mimeType, data: b64 } = imagePart.inlineData;
+    return { image_url: `data:${mimeType || "image/png"};base64,${b64}`, prompt_used: prompt };
   } catch (e: any) {
     return { prompt_used: prompt, error: e?.message || "Unknown error" };
   }
@@ -2146,11 +2147,11 @@ async function webSearchGemini(query: string, focus: string): Promise<{ answer: 
     focus === "news" ? "Prioritise recent news from reputable outlets. " : "";
   const prompt = `${focusHint}Answer this query concisely (under 250 words) using live web information, then list the most relevant sources you used.\n\nQuery: ${query}`;
   try {
-    const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const res = await fetch("https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", {
       method: "POST",
-      headers: { Authorization: `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
+      headers: { Authorization: `Bearer ${GOOGLE_AI_API_KEY}`, "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
+        model: "gemini-2.5-flash",
         messages: [
           { role: "system", content: "You are a precise web research assistant. Answer with grounded facts, cite sources by URL." },
           { role: "user", content: prompt },
@@ -2190,11 +2191,11 @@ async function webSearchGemini(query: string, focus: string): Promise<{ answer: 
 async function generateFollowups(reply: string, lastUserMsg: string): Promise<string[]> {
   const sys = `You generate 3 short, contextual follow-up questions a user might ask next. Return ONLY a JSON array of 3 strings, each under 60 characters. No preamble, no markdown, no code fence — just the raw JSON array.`;
   const usr = `User just asked: "${lastUserMsg.slice(0, 300)}"\n\nAssistant just replied:\n${reply.slice(0, 1500)}\n\nReturn 3 follow-up questions as a JSON array.`;
-  const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+  const res = await fetch("https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", {
     method: "POST",
-    headers: { Authorization: `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
+    headers: { Authorization: `Bearer ${GOOGLE_AI_API_KEY}`, "Content-Type": "application/json" },
     body: JSON.stringify({
-      model: "google/gemini-2.5-flash-lite",
+      model: "gemini-2.0-flash-lite",
       messages: [{ role: "system", content: sys }, { role: "user", content: usr }],
     }),
   });

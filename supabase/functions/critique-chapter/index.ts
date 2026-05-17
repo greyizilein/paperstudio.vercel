@@ -87,9 +87,9 @@ serve(async (req) => {
   }
 
   try {
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    const LOVABLE_API_KEY = Deno.env.get("GOOGLE_AI_API_KEY");
     if (!LOVABLE_API_KEY) {
-      return new Response(JSON.stringify({ error: "LOVABLE_API_KEY is not configured" }), {
+      return new Response(JSON.stringify({ error: "GOOGLE_AI_API_KEY is not configured" }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -143,18 +143,14 @@ serve(async (req) => {
       }
     }
 
-    // ── Gateway fallback chain: GPT-5.2 (paid/admin) → Gemini Flash ──
+    // ── Google AI fallback (free tier / Claude rate-limited) ──
     if (!rawText) {
-      const fallbackChain: string[] = [];
-      if (tier.isAdmin || (tier.tier !== "free" && tier.tier !== "none")) {
-        fallbackChain.push("openai/gpt-5.2");
-      }
-      fallbackChain.push("google/gemini-2.5-flash");
+      const fallbackChain: string[] = ["gemini-2.5-flash"];
 
       for (const candidate of fallbackChain) {
         try {
-          console.log(`[critique-chapter] → Lovable Gateway model=${candidate}`);
-          const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+          console.log(`[critique-chapter] → Google AI model=${candidate}`);
+          const response = await fetch("https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", {
             method: "POST",
             headers: {
               Authorization: `Bearer ${LOVABLE_API_KEY}`,

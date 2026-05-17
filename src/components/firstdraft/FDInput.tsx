@@ -1,13 +1,16 @@
 import { cn } from "@/lib/utils";
 
-export const FDInput = ({ label, value, onChange, placeholder, type = "text", className }: any) => (
+export const FDInput = ({ label, value, onChange, placeholder, type = "text", className, autoComplete, name, id }: any) => (
   <div className="flex flex-col gap-2">
-    {label && <label className="text-sm font-semibold text-foreground">{label}</label>}
+    {label && <label htmlFor={id} className="text-sm font-semibold text-foreground">{label}</label>}
     <input
+      id={id}
+      name={name}
       type={type}
       value={value}
       onChange={(e: React.ChangeEvent<HTMLInputElement>) => onChange(e.target.value)}
       placeholder={placeholder}
+      autoComplete={autoComplete}
       className={cn(
         "bg-background border border-border rounded-xl px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all",
         className

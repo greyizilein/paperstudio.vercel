@@ -10,8 +10,8 @@
 //  5. Stitch [HEAD] + [summarised middle] + [TAIL] with a clear banner so the
 //     downstream model knows it's reading a faithful summary, not raw text.
 
-const SUMMARY_GATEWAY = "https://ai.gateway.lovable.dev/v1/chat/completions";
-const SUMMARY_MODEL = "google/gemini-2.5-flash";
+const SUMMARY_GATEWAY = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
+const SUMMARY_MODEL = "gemini-2.5-flash";
 
 export interface MapReduceOptions {
   /** Words above which the map-reduce path triggers. */

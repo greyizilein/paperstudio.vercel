@@ -8,8 +8,8 @@
 // Admin (grey.izilein@gmail.com) is treated as PhD tier.
 
 export const ANTHROPIC_MODEL = "claude-sonnet-4-5";
-export const FALLBACK_GPT = "openai/gpt-5.2";
-export const FREE_MODEL = "google/gemini-2.5-flash";
+export const FALLBACK_GPT = "gemini-2.5-flash";
+export const FREE_MODEL = "gemini-2.5-flash";
 export const QWEN_MODEL = "qwen3.6-plus";
 
 export const ADMIN_EMAIL = "grey.izilein@gmail.com";

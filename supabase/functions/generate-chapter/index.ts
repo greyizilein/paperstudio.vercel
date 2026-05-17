@@ -54,12 +54,12 @@ const ALLOWED_MODELS: Record<string, string> = {
   "claude-sonnet-4-6": "claude-sonnet-4-5",
   "claude-opus-4": "claude-opus-4-1",
   "claude-opus-4-6": "claude-opus-4-5",
-  "gpt-5.2": "openai/gpt-5.2",
-  "gpt-5-flagship": "openai/gpt-5",
-  "gemini-2.5-flash": "google/gemini-2.5-flash",
-  "gemini-2.5-pro": "google/gemini-2.5-pro",
-  "gemini-3-flash": "google/gemini-3-flash-preview",
-  "gemini-3-pro": "google/gemini-3.1-pro-preview",
+  "gpt-5.2": "gemini-2.5-flash",
+  "gpt-5-flagship": "gemini-2.5-pro",
+  "gemini-2.5-flash": "gemini-2.5-flash",
+  "gemini-2.5-pro": "gemini-2.5-pro",
+  "gemini-3-flash": "gemini-2.0-flash",
+  "gemini-3-pro": "gemini-2.0-flash",
 };
 
 // Models reserved for SYSTEM use only (never user-selectable in PaperStudio).
@@ -82,12 +82,12 @@ const TIER_ACCESS: Record<string, string[]> = {
 };
 
 function resolveModel(modelId?: string): string {
-  if (!modelId) return "google/gemini-2.5-flash";
+  if (!modelId) return "gemini-2.5-flash";
   if (BLOCKED_USER_MODELS.has(modelId)) {
     console.warn(`[generate-chapter] BLOCKED user-selected model "${modelId}" — falling back to Claude default`);
     return CLAUDE_MODEL;
   }
-  return ALLOWED_MODELS[modelId] || "google/gemini-2.5-flash";
+  return ALLOWED_MODELS[modelId] || "gemini-2.5-flash";
 }
 
 function buildStatisticsInstructions(chapterType: string, methodology: string): string {
@@ -871,10 +871,10 @@ serve(async (req) => {
       );
     }
 
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    const LOVABLE_API_KEY = Deno.env.get("GOOGLE_AI_API_KEY");
     if (!LOVABLE_API_KEY) {
       return new Response(
-        JSON.stringify({ error: "LOVABLE_API_KEY is not configured" }),
+        JSON.stringify({ error: "GOOGLE_AI_API_KEY is not configured" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -919,7 +919,7 @@ serve(async (req) => {
     // Hard lock: free tier (non-admin) never uses paid models — only Flash.
     // Admin bypasses this lock entirely and honours the picked model.
     if (!isAdmin && (userTier === "free" || userTier === "none")) {
-      resolvedModel = "google/gemini-2.5-flash";
+      resolvedModel = "gemini-2.5-flash";
     }
 
     // If the user didn't explicitly pick a model, upgrade paid tiers (and admin) to Claude.
@@ -933,7 +933,7 @@ serve(async (req) => {
       const allowed = TIER_ACCESS[modelId];
       if (allowed && !allowed.includes(userTier)) {
         console.warn(`[generate-chapter] tier ${userTier} blocked from ${modelId}; using Gemini 2.5 Flash`);
-        resolvedModel = "google/gemini-2.5-flash";
+        resolvedModel = "gemini-2.5-flash";
       }
     }
 
@@ -1107,14 +1107,14 @@ REMEMBER (the system prompt is the contract; this is just a checklist):
         const msg = e instanceof Error ? e.message : String(e);
         if (e instanceof AnthropicRateLimitError) {
           console.warn(`[generate-chapter] Claude rate-limited (${e.status}) — falling back to GPT-5.2`);
-          resolvedModel = "openai/gpt-5.2";
+          resolvedModel = "gemini-2.5-flash";
           // fall through to gateway path below
         } else {
           // Auth/quota errors: try GPT-5.2 fallback for paid tiers/admin instead of failing hard.
           const isAuthOrQuota = /401|403|402|429|529|unauthor|forbidden|invalid.*key|api.*key|quota|credit|insufficient/i.test(msg);
           if (isAuthOrQuota && (isAdmin || userTier !== "free")) {
             console.warn(`[generate-chapter] Claude failed (${msg.slice(0, 120)}) — falling back to GPT-5.2`);
-            resolvedModel = "openai/gpt-5.2";
+            resolvedModel = "gemini-2.5-flash";
             // fall through
           } else {
             console.error("[generate-chapter] Claude error (no fallback):", msg.slice(0, 300));
@@ -1129,20 +1129,19 @@ REMEMBER (the system prompt is the contract; this is just a checklist):
       }
     }
 
-    // ── Qwen / Lovable Gateway branch (with credit-aware fallback) ──
+    // ── Qwen / Google AI branch (with credit-aware fallback) ──
     // If the chosen non-Claude provider returns 402 (credits exhausted),
     // automatically try the next available model so the user isn't stranded.
-    // For paid tiers/admin: GPT-5.2 → Gemini Flash. Free tier just gets the error.
     // Detached upstream abort for gateway path too — independent of req.signal.
     const upstreamAbortGw = new AbortController();
     async function callGateway(modelToTry: string): Promise<Response> {
       const isQ = modelToTry.startsWith("qwen");
       const url = isQ
         ? "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions"
-        : "https://ai.gateway.lovable.dev/v1/chat/completions";
+        : "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
       const key = isQ ? Deno.env.get("DASHSCOPE_API_KEY") : LOVABLE_API_KEY;
       if (!key) throw new Error(isQ ? "DashScope API key not configured." : "AI gateway key not configured.");
-      console.log(`[generate-chapter] → ${isQ ? "DashScope" : "Lovable Gateway"} model=${modelToTry}`);
+      console.log(`[generate-chapter] → ${isQ ? "DashScope" : "Google AI"} model=${modelToTry}`);
       return await fetch(url, {
         method: "POST",
         headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
@@ -1162,8 +1161,8 @@ REMEMBER (the system prompt is the contract; this is just a checklist):
     // Fallback chain — try resolved model first, then GPT-5.2, then Gemini Flash for paid/admin.
     const fallbackChain: string[] = [resolvedModel];
     if (isAdmin || (userTier !== "free" && userTier !== "none")) {
-      if (!fallbackChain.includes("openai/gpt-5.2")) fallbackChain.push("openai/gpt-5.2");
-      if (!fallbackChain.includes("google/gemini-2.5-flash")) fallbackChain.push("google/gemini-2.5-flash");
+      if (!fallbackChain.includes("gemini-2.5-flash")) fallbackChain.push("gemini-2.5-flash");
+      if (!fallbackChain.includes("gemini-2.5-flash")) fallbackChain.push("gemini-2.5-flash");
     }
 
     let response: Response | null = null;

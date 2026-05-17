@@ -31,7 +31,7 @@ interface FigureDesc {
 }
 
 async function processJob(jobId: string) {
-  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+  const LOVABLE_API_KEY = Deno.env.get("GOOGLE_AI_API_KEY");
   const sb = createClient(
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
@@ -50,7 +50,7 @@ async function processJob(jobId: string) {
   }
   if (!LOVABLE_API_KEY) {
     await sb.from("image_jobs")
-      .update({ status: "failed", error: "LOVABLE_API_KEY not configured" })
+      .update({ status: "failed", error: "GOOGLE_AI_API_KEY not configured" })
       .eq("id", jobId);
     return;
   }
@@ -92,7 +92,7 @@ async function processJob(jobId: string) {
     }
 
     if (imageUrl) {
-      const b64 = imageUrl.replace("data:image/png;base64,", "");
+      const b64 = imageUrl.replace(/^data:[^;]+;base64,/, "");
       const safeName = fig.title.replace(/[^a-z0-9]+/gi, "_").toLowerCase().slice(0, 60);
       generatedImages.push({
         filename: `${safeName || "figure"}_${i + 1}.png`,

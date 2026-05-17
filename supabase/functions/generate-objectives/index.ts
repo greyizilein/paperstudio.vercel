@@ -9,7 +9,7 @@ const corsHeaders = {
 };
 
 // Use a capable model for high-quality academic objective generation
-const OBJECTIVES_MODEL = "google/gemini-2.5-pro";
+const OBJECTIVES_MODEL = "gemini-2.5-pro";
 
 /** Best-effort JSON extraction from a Claude reply (may be wrapped in prose or fences). */
 function extractJson(text: string): any | null {
@@ -38,10 +38,10 @@ serve(async (req) => {
     const useClaude = shouldUseClaude(tier);
     const useThinking = shouldUseThinking(tier);
 
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    const LOVABLE_API_KEY = Deno.env.get("GOOGLE_AI_API_KEY");
     if (!LOVABLE_API_KEY) {
       return new Response(
-        JSON.stringify({ error: "LOVABLE_API_KEY is not configured" }),
+        JSON.stringify({ error: "GOOGLE_AI_API_KEY is not configured" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -109,7 +109,7 @@ You MUST respond using the suggest_theorists tool.`;
         }
       }
 
-      const tResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      const tResp = await fetch("https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", {
         method: "POST",
         headers: { Authorization: `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -229,7 +229,7 @@ Each objective and question must be directly derived from the dissertation title
       }
     }
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const response = await fetch("https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${LOVABLE_API_KEY}`,
