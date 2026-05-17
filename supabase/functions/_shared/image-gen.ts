@@ -1,15 +1,11 @@
 // Image generation primitives shared between `generate-images` (single-figure
 // inline use) and `process-image-job` (batch background worker).
 //
-// Models are ordered SPEED-first. Edge functions have a ~150s budget; the slow
-// Pro model used to time out before any client ever saw the response. Flash
-// models finish in ~10-15s and produce pro-quality output. Pro is kept as
-// the very last fallback.
+// Uses Google AI's Gemini image generation API directly.
 
 const IMAGE_MODELS = [
-  "google/gemini-3.1-flash-image-preview", // Nano Banana 2 — fast + pro quality (PRIMARY)
-  "google/gemini-2.5-flash-image",          // Nano Banana — fast fallback
-  "google/gemini-3-pro-image-preview",      // slow premium — last resort
+  "gemini-2.0-flash-preview-image-generation",
+  "gemini-2.0-flash-exp",
 ];
 
 const MODEL_TIMEOUT_MS = 45_000;
@@ -92,16 +88,13 @@ export async function generateImage(prompt: string, apiKey: string, requestId = 
     for (let attempt = 0; attempt < 2; attempt++) {
       const t0 = Date.now();
       try {
-        const resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+        const resp = await fetch(url, {
           method: "POST",
-          headers: {
-            Authorization: `Bearer ${apiKey}`,
-            "Content-Type": "application/json",
-          },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            model,
-            messages: [{ role: "user", content: prompt }],
-            modalities: ["image", "text"],
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: { responseModalities: ["TEXT", "IMAGE"] },
           }),
           signal: AbortSignal.timeout(MODEL_TIMEOUT_MS),
         });
@@ -120,12 +113,15 @@ export async function generateImage(prompt: string, apiKey: string, requestId = 
           const short = errText.slice(0, 200);
           attempts.push({ model, status: "failure", duration_ms: ms, error: `HTTP ${resp.status}: ${short}` });
           console.error(`[gimg req=${requestId}] ${model} failed (${resp.status}, ${ms}ms): ${short}`);
-          break; // try next model
+          break;
         }
 
         const data = await resp.json();
-        const imageUrl = data.choices?.[0]?.message?.images?.[0]?.image_url?.url;
-        if (imageUrl && imageUrl.startsWith("data:image/png;base64,")) {
+        const parts = data?.candidates?.[0]?.content?.parts ?? [];
+        const imagePart = parts.find((p: any) => p.inlineData?.data);
+        if (imagePart?.inlineData) {
+          const { mimeType, data: b64 } = imagePart.inlineData;
+          const imageUrl = `data:${mimeType || "image/png"};base64,${b64}`;
           attempts.push({ model, status: "success", duration_ms: ms });
           console.log(`[gimg req=${requestId}] ${model} ok in ${ms}ms`);
           return { imageUrl, attempts, modelUsed: model };

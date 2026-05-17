@@ -414,7 +414,7 @@ Deno.serve(async (req) => {
   // Anthropic tool loop, GPT-5.2 / Gemini route through the Lovable Gateway,
   // and Qwen routes through DashScope. All non-Claude providers use an
   // OpenAI-compatible tool-calling loop.
-  type Provider = "anthropic" | "lovable" | "qwen";
+  type Provider = "anthropic" | "google" | "qwen";
   let provider: Provider = "anthropic";
   let correctionModel = "claude-sonnet-4-5";
   switch (model_id) {
@@ -423,17 +423,15 @@ Deno.serve(async (req) => {
       provider = "anthropic"; correctionModel = "claude-opus-4-5"; break;
     case "claude-haiku-4-5-20251001":
       provider = "anthropic"; correctionModel = "claude-haiku-4-5-20251001"; break;
-    case "gpt-5.2":
-      provider = "lovable"; correctionModel = "openai/gpt-5.2"; break;
     case "gemini-3-pro":
-      provider = "lovable"; correctionModel = "google/gemini-3-flash-preview"; break;
+      provider = "google"; correctionModel = "gemini-2.0-flash"; break;
     case "qwen3.6-plus":
       provider = "qwen"; correctionModel = "qwen3.6-plus"; break;
     case "claude-sonnet-4-6":
     default:
       provider = "anthropic"; correctionModel = "claude-sonnet-4-5"; break;
   }
-  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY") || "";
+  const GOOGLE_AI_API_KEY = Deno.env.get("GOOGLE_AI_API_KEY") || "";
   const DASHSCOPE_API_KEY = Deno.env.get("DASHSCOPE_API_KEY") || "";
 
   // ── Stream setup ──
@@ -626,13 +624,13 @@ Workflow:
             return { contentBlocks: data.content || [], stopReason: data.stop_reason || "end_turn" };
           }
 
-          // OpenAI-compatible providers (Lovable Gateway, DashScope/Qwen).
+          // OpenAI-compatible providers (Google AI, DashScope/Qwen).
           const url = provider === "qwen"
             ? "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions"
-            : "https://ai.gateway.lovable.dev/v1/chat/completions";
-          const key = provider === "qwen" ? DASHSCOPE_API_KEY : LOVABLE_API_KEY;
+            : "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
+          const key = provider === "qwen" ? DASHSCOPE_API_KEY : GOOGLE_AI_API_KEY;
           if (!key) {
-            const err: any = new Error(provider === "qwen" ? "DashScope API key not configured." : "Lovable AI key not configured.");
+            const err: any = new Error(provider === "qwen" ? "DashScope API key not configured." : "Google AI API key not configured.");
             err.status = 500;
             throw err;
           }
