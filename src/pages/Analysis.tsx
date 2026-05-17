@@ -1,6 +1,11 @@
 import { PageHero } from "@/components/firstdraft/PageHero";
 import { CTABand } from "@/components/firstdraft/CTABand";
 
+const FONTS = {
+  headline: '"Fraunces", "Playfair Display", Georgia, serif',
+  body: '"Geist", system-ui, sans-serif',
+};
+
 const quant = [
   { method: 'Descriptive Statistics', when: 'Always — baseline for all quantitative studies', output: 'Mean, SD, range, frequency tables', chart: 'Bar chart, histogram' },
   { method: 'Independent t-test', when: 'Comparing two unrelated groups', output: 't, df, p, Cohen\'s d, 95% CI', chart: 'Box plot or grouped bar' },
@@ -18,25 +23,70 @@ const qual = [
   { method: 'IPA', when: 'Lived experience, small samples (6–15)', output: 'Superordinate + subordinate themes, rich textual description' },
 ];
 
+const TABLE_STYLE: React.CSSProperties = {
+  width: "100%",
+  borderCollapse: "collapse",
+  fontSize: "14px",
+  fontFamily: FONTS.body,
+};
+
+function DataTable({ rows, headers }: { rows: string[][]; headers: string[] }) {
+  return (
+    <div style={{ overflowX: "auto", marginBottom: "48px" }}>
+      <table style={TABLE_STYLE}>
+        <thead>
+          <tr style={{ background: "var(--ma-accent)" }}>
+            {headers.map(h => (
+              <th key={h} style={{ padding: "12px 16px", textAlign: "left", fontWeight: 700, fontSize: "13px", color: "#FFFFFF" }}>{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row, i) => (
+            <tr
+              key={i}
+              style={{
+                borderBottom: "1px solid var(--ma-border)",
+                background: i % 2 === 1 ? "var(--ma-surface)" : "transparent",
+                transition: "background 0.15s ease",
+              }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLTableRowElement).style.background = "rgba(196,56,74,0.06)"; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLTableRowElement).style.background = i % 2 === 1 ? "var(--ma-surface)" : "transparent"; }}
+            >
+              {row.map((cell, j) => (
+                <td key={j} style={{ padding: "12px 16px", fontWeight: j === 0 ? 700 : 400, color: j === 0 ? "var(--ma-text)" : "var(--ma-text-muted)" }}>{cell}</td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 export default function AnalysisPage() {
   return (
     <div>
-      <PageHero title={<>29 Analysis Methods.<br /><em className="not-italic text-aqua">All writing included.</em></>} subtitle="Select your analysis type and PAPERSTUDIO writes the full findings chapter." />
-      <section className="py-[100px] px-6 md:px-20 max-w-[1200px] mx-auto">
-        <h2 className="font-heading text-[32px] font-black text-foreground mb-6 tracking-tight">Quantitative Methods</h2>
-        <div className="overflow-x-auto mb-12">
-          <table className="w-full border-collapse text-sm">
-            <thead><tr className="bg-primary text-white"><th className="px-4 py-3 text-left font-heading font-extrabold text-[13px]">Method</th><th className="px-4 py-3 text-left font-heading font-extrabold text-[13px]">When to use</th><th className="px-4 py-3 text-left font-heading font-extrabold text-[13px]">Outputs</th><th className="px-4 py-3 text-left font-heading font-extrabold text-[13px]">Chart</th></tr></thead>
-            <tbody>{quant.map((q, i) => <tr key={q.method} className={`border-b border-border hover:bg-primary-pale ${i % 2 === 1 ? 'bg-surface-light' : ''}`}><td className="px-4 py-3 font-bold">{q.method}</td><td className="px-4 py-3">{q.when}</td><td className="px-4 py-3">{q.output}</td><td className="px-4 py-3">{q.chart}</td></tr>)}</tbody>
-          </table>
-        </div>
-        <h2 className="font-heading text-[32px] font-black text-foreground mb-6 tracking-tight">Qualitative Methods</h2>
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse text-sm">
-            <thead><tr className="bg-primary text-white"><th className="px-4 py-3 text-left font-heading font-extrabold text-[13px]">Method</th><th className="px-4 py-3 text-left font-heading font-extrabold text-[13px]">When to use</th><th className="px-4 py-3 text-left font-heading font-extrabold text-[13px]">Outputs</th></tr></thead>
-            <tbody>{qual.map((q, i) => <tr key={q.method} className={`border-b border-border hover:bg-primary-pale ${i % 2 === 1 ? 'bg-surface-light' : ''}`}><td className="px-4 py-3 font-bold">{q.method}</td><td className="px-4 py-3">{q.when}</td><td className="px-4 py-3">{q.output}</td></tr>)}</tbody>
-          </table>
-        </div>
+      <PageHero
+        title={<>29 Analysis Methods.<br /><em style={{ fontStyle: "italic", color: "var(--ma-accent)" }}>All writing included.</em></>}
+        subtitle="Select your analysis type and PAPERSTUDIO writes the full findings chapter."
+      />
+      <section style={{ padding: "100px 24px", maxWidth: "1200px", margin: "0 auto" }}>
+        <h2 style={{ fontFamily: FONTS.headline, fontStyle: "italic", fontWeight: 700, fontSize: "2rem", color: "var(--ma-text)", marginBottom: "24px", letterSpacing: "-0.01em" }}>
+          Quantitative Methods
+        </h2>
+        <DataTable
+          headers={['Method', 'When to use', 'Outputs', 'Chart']}
+          rows={quant.map(q => [q.method, q.when, q.output, q.chart])}
+        />
+
+        <h2 style={{ fontFamily: FONTS.headline, fontStyle: "italic", fontWeight: 700, fontSize: "2rem", color: "var(--ma-text)", marginBottom: "24px", letterSpacing: "-0.01em" }}>
+          Qualitative Methods
+        </h2>
+        <DataTable
+          headers={['Method', 'When to use', 'Outputs']}
+          rows={qual.map(q => [q.method, q.when, q.output])}
+        />
       </section>
       <CTABand />
     </div>

@@ -5,7 +5,7 @@ import { ContentSection } from "@/components/firstdraft/ContentSection";
 export default function CitationsPage() {
   return (
     <div>
-      <PageHero title={<>12 Citation Styles.<br /><em className="not-italic text-aqua">All formats supported.</em></>} subtitle="Harvard, APA 7, Vancouver, IEEE, MLA, Chicago, OSCOLA and more." />
+      <PageHero title={<>12 Citation Styles.<br /><em style={{ fontStyle: "italic", color: "var(--ma-accent)" }}>All formats supported.</em></>} subtitle="Harvard, APA 7, Vancouver, IEEE, MLA, Chicago, OSCOLA and more." />
       <section className="py-[100px] px-6 md:px-20 max-w-[1200px] mx-auto">
         <ContentSection title="Harvard (UK)">Author-date system. Smith (2021) in-text. Full reference: Smith, J. (2021) Title. City: Publisher. Default for most UK universities.</ContentSection>
         <ContentSection title="APA 7th Edition">American Psychological Association 7th edition. (Smith, 2021) in-text. DOI required for all journal articles. Default for Psychology, Education, and Social Sciences.</ContentSection>
