@@ -1691,7 +1691,7 @@ export default function WriterPage() {
   };
 
   return (
-    <div className="h-screen flex flex-col bg-background overflow-hidden">
+    <div className="h-[100dvh] flex flex-col bg-background overflow-hidden">
       {/* Top Nav */}
       <nav className="relative h-11 border-b border-border flex items-center px-2 sm:px-4 gap-1.5 sm:gap-2.5 flex-shrink-0 bg-background">
         {/* Centered humaniser pill — only visible while pipeline is running. */}
@@ -1929,26 +1929,28 @@ export default function WriterPage() {
 
         {/* Editor */}
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-          {/* Chapter strip */}
-          <div className="h-8 sm:h-9 border-b border-border flex items-stretch overflow-x-auto flex-shrink-0 bg-background scrollbar-hide px-0.5 sm:px-0">
+          {/* Chapter strip — compact numbered dots */}
+          <div className="h-10 border-b border-border flex items-center px-3 gap-2 overflow-x-auto flex-shrink-0 bg-background scrollbar-hide">
             {project.chapters.sort((a, b) => a.order_index - b.order_index).map((ch, i) => {
               const locked = isChapterLocked(ch);
+              const isActive = activeChapterIndex === ch.order_index;
               return (
-              <button key={ch.id} onClick={() => { if (!locked) setActiveChapterIndex(ch.order_index); else toast.error("Complete the previous chapter first."); }}
-                className={cn(
-                  "flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 text-[11px] sm:text-xs whitespace-nowrap border-b-2 border-r border-border transition-all flex-shrink-0",
-                  locked && "opacity-50 cursor-not-allowed",
-                  activeChapterIndex === ch.order_index
-                    ? "border-b-primary text-primary font-bold bg-background"
-                    : "border-b-transparent text-muted-foreground hover:bg-secondary hover:text-foreground"
-                )}>
-                <span className={cn("w-4 h-4 rounded-full text-[9px] font-extrabold flex items-center justify-center flex-shrink-0",
-                  ch.status === "completed" ? "bg-green text-white" : locked ? "bg-secondary text-muted-foreground" : activeChapterIndex === ch.order_index ? "bg-primary text-white" : "bg-secondary text-muted-foreground"
-                )}>
-                  {ch.status === "completed" ? "✓" : locked ? <Lock size={8} /> : ch.type === "abstract" ? "A" : i + 1}
-                </span>
-                {ch.title.replace(/Ch \d+ · /, "")}
-              </button>
+                <button
+                  key={ch.id}
+                  onClick={() => { if (!locked) setActiveChapterIndex(ch.order_index); else toast.error("Complete the previous chapter first."); }}
+                  title={ch.title}
+                  className={cn(
+                    "w-8 h-8 rounded-full text-[12px] font-extrabold flex-shrink-0 flex items-center justify-center transition-all",
+                    locked && "opacity-40 cursor-not-allowed",
+                    isActive
+                      ? "bg-foreground text-background"
+                      : ch.status === "completed"
+                        ? "bg-green/15 text-green hover:bg-green/25"
+                        : "bg-secondary text-muted-foreground hover:bg-secondary/70 hover:text-foreground"
+                  )}
+                >
+                  {ch.status === "completed" ? "✓" : ch.type === "abstract" ? "A" : i + 1}
+                </button>
               );
             })}
           </div>
@@ -2172,9 +2174,8 @@ export default function WriterPage() {
                 <textarea
                   value={personalise.notes}
                   onChange={(e) => setPersonalise(p => ({ ...p, notes: e.target.value }))}
-                  placeholder={`${emptyState.title}\n\n${emptyState.desc}\n\nOr just tap ✨ Draft below and the AI will start writing.`}
-                  autoFocus
-                  className="flex-1 w-full resize-none bg-transparent outline-none text-[15px] text-foreground px-5 sm:px-12 py-6 placeholder:text-muted-foreground/35 leading-relaxed"
+                  placeholder="Click Draft below to start writing. Or add your own notes here first."
+                  className="flex-1 w-full resize-none bg-transparent outline-none text-[15px] text-foreground px-5 sm:px-12 py-6 placeholder:text-muted-foreground/30 leading-relaxed"
                 />
               </div>
             )}
@@ -2188,18 +2189,18 @@ export default function WriterPage() {
 
             {/* ── EMPTY STATE: big Draft CTA ── */}
             {!currentChapter?.content && !isGenerating && !currentLocked && (
-              <div className="flex items-center justify-between gap-3 px-4 py-3">
+              <div className="flex items-center gap-2 px-3 py-2.5">
                 <button
                   onClick={() => setShowPersonalise(true)}
-                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border text-xs font-bold text-muted-foreground hover:border-primary hover:text-primary transition-all flex-shrink-0"
+                  className="inline-flex items-center gap-1.5 px-3 py-2.5 rounded-xl border border-border text-xs font-bold text-muted-foreground hover:border-foreground/40 hover:text-foreground transition-all flex-shrink-0"
                 >
                   <Settings size={13} /> Settings
                 </button>
                 <button
                   onClick={() => setShowOutlineModal(true)}
-                  className="flex-1 inline-flex items-center justify-center gap-2 py-2.5 rounded-full bg-primary text-white text-sm font-bold hover:bg-primary/90 transition-all"
+                  className="flex-1 inline-flex items-center justify-center gap-2 py-2.5 rounded-xl bg-foreground text-background text-sm font-bold hover:opacity-90 transition-all"
                 >
-                  <Sparkles size={15} /> Draft with AI →
+                  <Sparkles size={15} /> Draft →
                 </button>
               </div>
             )}
