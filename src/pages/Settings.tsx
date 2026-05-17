@@ -202,7 +202,14 @@ export default function SettingsPage() {
       const res = await supabase.functions.invoke("create-paystack-checkout", {
         body: { tier, callback_url: callbackUrl },
       });
-      if (res.error) throw new Error(res.error.message);
+      if (res.error) {
+        let serverMsg = "";
+        try {
+          const body = await (res.error as any).context?.json?.();
+          serverMsg = body?.error ?? "";
+        } catch { /* body not JSON */ }
+        throw new Error(serverMsg || "Checkout failed. Please try again.");
+      }
       const { authorization_url } = res.data;
       if (authorization_url) window.location.href = authorization_url;
     } catch (err: any) { toast.error(err.message); }

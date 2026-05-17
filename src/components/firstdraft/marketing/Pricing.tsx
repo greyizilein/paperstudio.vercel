@@ -117,7 +117,16 @@ export const MarketingPricing = () => {
       const res = await supabase.functions.invoke("create-paystack-checkout", {
         body: { tier, callback_url: callbackUrl },
       });
-      if (res.error) throw new Error(res.error.message);
+      if (res.error) {
+        // supabase-js wraps all non-2xx responses with a generic message;
+        // the actual server error is in error.context which is the raw Response.
+        let serverMsg = "";
+        try {
+          const body = await (res.error as any).context?.json?.();
+          serverMsg = body?.error ?? "";
+        } catch { /* body not JSON */ }
+        throw new Error(serverMsg || "Checkout failed. Please try again.");
+      }
       const url = (res.data as any)?.authorization_url;
       if (url) {
         window.location.href = url;
