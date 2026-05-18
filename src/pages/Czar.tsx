@@ -512,9 +512,7 @@ export default function Czar() {
               setShowUpgrade(true);
             } else {
               setMessages((prev) => {
-                const next = prev.map((m) => m.id === asstTempId
-                  ? { ...m, streaming: false, ...(data.content ? { content: data.content } : {}) }
-                  : m);
+                const next = prev.map((m) => m.id === asstTempId ? { ...m, streaming: false } : m);
                 // AGENT auto-download: when the run finishes, fire the
                 // download immediately with sensible defaults (cover +
                 // references + appendix + images all on). User never has
