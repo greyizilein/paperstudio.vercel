@@ -1803,16 +1803,6 @@ ${thesisArea}`);
           <HumanisingPill active={humanising} />
         </div>
         <button
-          onClick={() => setShowProjectsDrawer(s => !s)}
-          aria-label="Projects"
-          title="My projects"
-          className="flex items-center justify-center w-7 h-7 rounded-md bg-foreground text-background hover:opacity-90 transition-opacity flex-shrink-0"
-        >
-          <CzarIcon size={16} />
-        </button>
-        <div className="w-px h-4 bg-border mx-0.5 sm:mx-1 hidden sm:block" />
-        {/* Back to home */}
-        <button
           onClick={() => navigate("/")}
           aria-label="Back to home"
           title="Home"
