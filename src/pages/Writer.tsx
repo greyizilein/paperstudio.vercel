@@ -1501,17 +1501,19 @@ ${thesisArea}`);
     setIsHumanising(true);
     setHumanisedText(null);
     setHumaniseStages([
-      { stage: 0, label: "Register Analysis", status: "pending" },
-      { stage: 1, label: "Scaffold & Structure", status: "pending" },
-      { stage: 2, label: "Sentence Interior", status: "pending" },
-      { stage: 3, label: "Perplexity + Burstiness", status: "pending" },
-      { stage: 4, label: "Citation & Texture", status: "pending" },
-      { stage: 5, label: "Rhythm & Fingerprint Sweep", status: "pending" },
-      { stage: 6, label: "Verification & Final Output", status: "pending" },
+      { stage: 1, label: "Comprehensive Humanisation", status: "pending" },
+      { stage: 2, label: "Verification & Final Output", status: "pending" },
     ]);
 
     const abort = new AbortController();
     humaniseAbortRef.current = abort;
+
+    // Hard 90s timeout — well within Supabase's 150s function limit
+    const hardTimeout = setTimeout(() => {
+      abort.abort();
+      toast.error("Humaniser timed out. Please try again.");
+      setIsHumanising(false);
+    }, 90_000);
 
     try {
       const headers = await authedHeaders();
@@ -1526,6 +1528,7 @@ ${thesisArea}`);
         const txt = await resp.text().catch(() => "");
         toast.error(`Humaniser failed (${resp.status}): ${txt.slice(0, 120)}`);
         setIsHumanising(false);
+        clearTimeout(hardTimeout);
         return;
       }
 
@@ -1533,6 +1536,7 @@ ${thesisArea}`);
       const decoder = new TextDecoder();
       let buf = "";
       let currentEvent = "message";
+      let gotDone = false;
 
       while (true) {
         const { done, value } = await reader.read();
@@ -1560,21 +1564,30 @@ ${thesisArea}`);
               const s = parsed.stage as number;
               setHumaniseStages(prev => prev.map(st => st.stage === s ? { ...st, status: "skipped" } : st));
             } else if (currentEvent === "done") {
+              gotDone = true;
               const result = parsed?.humanised || "";
               if (result && result.trim().length > 50) {
                 setHumanisedText(result);
-                setHumaniseStages(prev => prev.map(st => ({ ...st, status: st.status === "pending" ? "skipped" : st.status === "done" ? "done" : st.status })));
+                setHumaniseStages(prev => prev.map(st => st.status === "pending" ? { ...st, status: "skipped" } : st));
               } else {
-                toast.error("Humaniser returned empty result. Please try again.");
+                toast.error("Humaniser returned an empty result. Please try again.");
               }
             }
           } catch { /* skip malformed */ }
         }
       }
+
+      if (!gotDone && !abort.signal.aborted) {
+        toast.error("Humaniser ended unexpectedly. Please try again.");
+      }
     } catch (e: any) {
-      if (e?.name === "AbortError" || abort.signal.aborted) return;
-      toast.error(e?.message || "Humaniser failed");
+      if (e?.name === "AbortError" || abort.signal.aborted) {
+        // Cancelled by user or hard timeout — already handled
+      } else {
+        toast.error(e?.message || "Humaniser failed");
+      }
     } finally {
+      clearTimeout(hardTimeout);
       setIsHumanising(false);
     }
   };
