@@ -404,7 +404,11 @@ export default function Admin() {
         body: { to, subject: emailSubject, body: emailBody },
       });
       if (error) throw error;
-      toast.success("Email sent");
+      if (data?.note) {
+        toast.warning("Email logged but NOT sent — RESEND_API_KEY not configured in Supabase Edge Function secrets.");
+      } else {
+        toast.success("Email sent");
+      }
       setEmailSubject(""); setEmailBody("");
       loadEmailLog();
     } catch (e: any) { toast.error(e.message || "Send failed"); }
