@@ -29,6 +29,7 @@ import {
   getSentenceRhythm,
   getBridgeSentences,
   getStatisticsDirective,
+  getHumanWritingMandate,
 } from "./writerIdentity.ts";
 import { getQualityExemplars } from "./qualityExemplars.ts";
 import { teeAndPersistChapterStream } from "../_shared/chapter-stream-persist.ts";
@@ -450,6 +451,8 @@ ${getContrastEngine()}
 ${getSentenceRhythm()}
 
 ${getBridgeSentences()}
+
+${getHumanWritingMandate()}
 
 ${getQualityExemplars(chapter.type)}
 

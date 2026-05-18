@@ -18,8 +18,6 @@ import { ImageAckModal, ImageProgressModal, hasAckedImageNotice, ackImageNotice 
 import { CzarAttachModal, type AttachSelection } from "@/components/czar/CzarAttachModal";
 import { CzarAgentRunCard } from "@/components/czar/CzarAgentRunCard";
 import { CzarPreviewPanel, type PreviewActivityItem } from "@/components/czar/CzarPreviewPanel";
-import { HumanisingPill } from "@/components/shared/HumanisingPill";
-
 import type { CzarToolCallState } from "@/components/czar/CzarToolCard";
 import { toolEventToState } from "@/components/czar/CzarToolCard";
 
@@ -41,8 +39,6 @@ export interface CzarMessage {
   correctionDocId?: string;
   /** Original filename of the corrected document. */
   correctionFilename?: string;
-  /** Humaniser pipeline progress (post-stream polish). */
-  humanise?: { state: "start" | "stage_start" | "stage_done" | "stage_skip" | "done" | "skipped"; stage?: number; label?: string };
 }
 
 const DEFAULT_SETTINGS: Record<string, any> = {
@@ -486,33 +482,6 @@ export default function Czar() {
             if (isAdmin) return;
             toast({ title: "Opening checkout…", description: `${ev.product === "czar" ? "CZAR" : "PaperStudio"} · ${ev.tier}` });
             setTimeout(() => { window.location.href = ev.authorization_url; }, 400);
-          },
-          onHumanise: (ev) => {
-            setMessages((prev) => prev.map((m) =>
-              m.id === asstTempId
-                ? { ...m, humanise: { state: ev.state as any, stage: ev.stage, label: ev.label } }
-                : m,
-            ));
-            // When the pipeline finishes, fetch the polished content from DB
-            // (czar-chat persists the humanised text right before sending `done`).
-            if (ev.state === "done" && resolvedConvId) {
-              (async () => {
-                try {
-                  const { data } = await supabase
-                    .from("czar_messages")
-                    .select("content")
-                    .eq("conversation_id", resolvedConvId)
-                    .order("created_at", { ascending: false })
-                    .limit(1)
-                    .maybeSingle();
-                  if (data?.content) {
-                    setMessages((prev) => prev.map((m) =>
-                      m.id === asstTempId ? { ...m, content: data.content as string } : m,
-                    ));
-                  }
-                } catch { /* ignore — keep streamed text as fallback */ }
-              })();
-            }
           },
           onError: (msg, code) => {
             const friendly = code === 429 ? "Rate limited. Try again in a moment." : code === 402 ? "AI credits exhausted. Top up in workspace settings." : msg;
@@ -1038,14 +1007,6 @@ export default function Czar() {
 
         {/* Minimal floating header */}
         <div className="relative flex items-center justify-between px-5 py-4 shrink-0">
-          {/* Centered humaniser pill — visible only while pipeline is running. */}
-          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none z-10">
-            <HumanisingPill
-              active={messages.some(
-                (m) => m.humanise && m.humanise.state !== "done" && m.humanise.state !== "skipped"
-              )}
-            />
-          </div>
           {/* Left: avatar (mobile opens drawer; desktop toggles collapse) */}
           <button
             onClick={() => {

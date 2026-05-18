@@ -19,7 +19,6 @@ const TOGGLE_RULES: Record<string, string> = {
   include_keywords: "Add a 'Keywords' block of 5–7 comma-separated terms beneath the abstract or intro.",
   include_word_count_per_section: "At the end of each section heading, append the target word count in brackets, e.g. '## Introduction [400 words]'.",
   show_outline_first: "Before writing the body, present the outline as a bulleted list and write '--- BEGIN DRAFT ---' before the first paragraph.",
-  humanise_after_writing: "(Handled client-side: Humaniser pass will run after generation.)",
   redact_personal_data: "(Handled at ingestion: PII has been redacted from any uploaded files.)",
 };
 

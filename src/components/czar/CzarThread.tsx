@@ -542,7 +542,6 @@ export function CzarThread({
             if (deliverable) {
               return (
                 <div key={m.id} className="czar-msg-in">
-                  {/* Humaniser progress shown via top-strip pill (see Czar.tsx). */}
                   {m.toolCalls && m.toolCalls.length > 0 && (
                     <div className="px-2 sm:px-3 lg:px-4 mb-2">
                       {m.toolCalls.map((c) => <CzarToolCard key={c.id} call={c} />)}
@@ -589,7 +588,6 @@ export function CzarThread({
                     <CzarIcon size={12} streaming={m.streaming} />
                     <span className="text-[10.5px] uppercase tracking-[0.12em] font-medium">CZAR</span>
                   </div>
-                  {/* Humaniser progress shown via top-strip pill (see Czar.tsx). */}
                   {m.toolCalls && m.toolCalls.length > 0 && (
                     <div className="mb-2">
                       {m.toolCalls.map((c) => <CzarToolCard key={c.id} call={c} />)}
