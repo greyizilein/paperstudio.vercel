@@ -4,7 +4,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import {
   Check, Copy, Download, Settings, X, Plus, Trash2,
   Loader2, Sparkles, StopCircle, Wand2, BarChart2, Upload, Lock, MoreVertical, Image as ImageIcon, Cpu,
-  FolderOpen, ChevronRight, ArrowLeft, PenLine, GitMerge, Columns2, GripVertical, Share2, MessageCircle
+  FolderOpen, ChevronRight, ArrowLeft, PenLine, FileEdit, Columns2, GripVertical, Share2, MessageCircle
 } from "lucide-react";
 import { CzarIcon } from "@/components/icons/CzarIcon";
 import { HumanisingPill } from "@/components/shared/HumanisingPill";
@@ -1988,7 +1988,7 @@ ${thesisArea}`);
                     { icon: Copy, label: copied ? "Copied" : "Copy", onClick: () => { handleCopy(); setMobileMenuOpen(false); } },
                     { icon: Download, label: "Chapter", onClick: () => { setShowExportChModal(true); setMobileMenuOpen(false); } },
                     { icon: Download, label: "All", onClick: () => { setShowExportModal(true); setMobileMenuOpen(false); } },
-                    { icon: GitMerge, label: "Corrections", onClick: () => { setShowSupervisorModal(true); setMobileMenuOpen(false); } },
+                    { icon: FileEdit, label: "Corrections", onClick: () => { setShowSupervisorModal(true); setMobileMenuOpen(false); } },
                     { icon: GripVertical, label: "Reorder", onClick: () => { setShowReorderModal(true); setMobileMenuOpen(false); } },
                     { icon: Share2, label: "Share", onClick: () => { handleShare(); setMobileMenuOpen(false); } },
                     { icon: Sparkles, label: "Settings", onClick: () => { setShowPersonalise(true); setMobileMenuOpen(false); } },
@@ -2226,7 +2226,7 @@ ${thesisArea}`);
                   correctionDiff ? "text-amber-500 bg-amber-500/10" : "text-muted-foreground hover:bg-secondary hover:text-foreground"
                 )}
               >
-                <GitMerge size={13} />
+                <FileEdit size={13} />
               </button>
             </div>
           </div>
