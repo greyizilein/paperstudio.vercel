@@ -171,7 +171,7 @@ export const MarketingHero = () => {
                 Start writing free
               </button>
             </Link>
-            <Link to="/how-it-works">
+            <Link to="/how-it-works#demo">
               <button
                 style={{
                   background: "transparent",
