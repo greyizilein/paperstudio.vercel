@@ -229,7 +229,7 @@ You may REFER to research objectives and questions in flowing prose (e.g., "the 
 
 import { TERMS_OF_QUALITY } from "../_shared/quality-terms.ts";
 
-const NO_META_RULE = `\n\n## NO META-COMMENTARY\nEnd on the last substantive sentence of the chapter (or the References list). Never append summaries of what you did, checklists, "[✓]" bullets, "Notes:" / "Audit:" trailers, or sentences beginning with "Produced…", "Rendered…", "Aligned…", "Delivered…", "I have…", "This response/chapter…". The reader sees the work, not a debrief.`;
+const NO_META_RULE = `\n\n## NO META-COMMENTARY OR WORD-COUNT ANNOTATIONS\nEnd on the last substantive sentence of the chapter (or the References list). NEVER append:\n- Word count tallies: NEVER write "(Word count: X)" or "Word count: X" or any similar annotation anywhere in the document — not after sections, not at the end, not anywhere. Word count tracking is INTERNAL ONLY.\n- Section rewrites or second drafts: NEVER write a section, then write it again shorter. Produce ONE version of each section. If a section runs long, tighten it by mentally compressing as you generate — not by appending a revised copy.\n- Summaries of what you did, checklists, "[✓]" bullets, "Notes:" / "Audit:" trailers, or sentences beginning with "Produced…", "Rendered…", "Aligned…", "Delivered…", "I have…", "This response/chapter…".\nThe reader sees the work, not a debrief.`;
 
 function buildSystemPrompt(project: any, chapter: any, draftConfig: any, chapterPlan?: any): string {
   const writingMode = project.writing_mode || "default";
@@ -394,9 +394,25 @@ ${writerIdentity}`;
 - Voice: ${voicePerson}
 - Transition style: ${transitionStyle}`;
 
-  const bannedPhrasesSection = isNaturalMode ? bannedSection : `## Banned Phrases — NEVER use these:
+  const bannedPhrasesSection = isNaturalMode ? bannedSection : `## ⛔ BANNED PHRASES — AI FINGERPRINTS — NEVER USE THESE
+Using any of the following is a CRITICAL FAILURE that invalidates the output:
 ${bannedSection}
-- Never open a paragraph with "Furthermore" or "Moreover".
+
+### BANNED PARAGRAPH OPENERS (these mark AI writing immediately):
+- ⛔ "Furthermore," — NEVER. Use a specific transition that names what you're adding.
+- ⛔ "Moreover," — NEVER.
+- ⛔ "Additionally," / "In addition," — NEVER.
+- ⛔ "It is worth noting that" / "It is important to note that" — NEVER.
+- ⛔ "This demonstrates" / "This highlights" / "This underscores" — NEVER as openers.
+- ⛔ "In today's rapidly changing world" / "In the modern era" / "In recent years, there has been a growing" — NEVER.
+- ⛔ Any broad scene-setting generalisation as a first sentence (e.g. "X has been fundamentally reshaped by Y...") — NEVER. Open with a specific claim, tension, or named evidence.
+
+### BANNED PARAGRAPH CLOSERS:
+- ⛔ "...remains essential/crucial/fundamental to X" — NEVER.
+- ⛔ "...is therefore of great importance" — NEVER.
+- ⛔ "...highlights the importance of Z" — NEVER.
+- ⛔ Any sentence that restates the paragraph's opening claim — NEVER.
+
 - Never use "In conclusion" as a paragraph opener (only as a formal section heading).
 - Never begin three consecutive sentences with "The".
 - Never restate the previous paragraph's conclusion as the opener for a new paragraph.
@@ -770,8 +786,8 @@ Write the chapter in Markdown format. Use ## for main headings, ### for sub-head
 - Body target: EXACTLY ${draftConfig.target_words} words. Hard floor: ${Math.floor(draftConfig.target_words * 0.97)}. Hard ceiling: ${Math.ceil(draftConfig.target_words * 1.03)}.
 - The References section is OUTSIDE this count.
 - Per-heading allocations listed above are BINDING (±10%). When a section reaches its upper bound, you MUST move on — even if you have more to say.
-- **Section-by-section trim (mandatory).** After completing each section, count the words you just wrote. If the section is over its ±10% window OR if your cumulative ledger has drifted above the threshold below, you MUST tighten THAT section in place — remove repetition, compress sentences, drop weak qualifiers, merge adjacent points — until it lands within ±10% of its allocation AND the cumulative ledger is back under the threshold, BEFORE writing the next section. Do not carry overflow forward. Do not promise to "trim later." Trim now, then continue.
-- Running ledger you MUST track internally as you write:
+- **Section-by-section budget discipline.** Track word spend mentally as you write each section. If you sense a section is running over its ±10% window, compress the remaining sentences of THAT section (shorter phrasing, fewer qualifiers, merged points) before moving to the next heading. NEVER output a second version of a section. NEVER print word counts. One pass — one version — internally calibrated.
+- Running ledger you MUST track INTERNALLY (never printed) as you write:
   · After section 1 of N: spent ≤ ${Math.ceil(draftConfig.target_words / Math.max(1, draftConfig.headings?.length || 5) * 1.05)} words
   · After section k of N: spent ≤ k × (target / N) × 1.10 words
   · Final section: lands within ±3% of ${draftConfig.target_words}
@@ -1046,14 +1062,17 @@ WORD COUNT — STRICT: ${draftConfig.target_words} body words (floor ${Math.floo
 REMEMBER (the system prompt is the contract; this is just a checklist):
 1. Every paragraph follows the four-move structure: Claim → Evidence chain → Counterpoint/hinge → Interpretive landing.
 2. Every paragraph contains at least one rhetorical hinge (however / yet / what was once… / this complicates / the divergence is instructive).
-3. Sentence rhythm varies — no three consecutive sentences of similar length.
+3. Sentence rhythm varies — no three consecutive sentences of similar length. At least one sentence under 12 words and one over 28 words per paragraph.
 4. Sections bridge to each other: the closing sentence of section N gestures toward section N+1.
 5. Numbers serve argument, never the other way around.
 6. Literature Review chapters: NO research objectives, questions, hypotheses, or methodology descriptions.
 7. Methodology chapters: NO tables (unless explicitly requested), NO collected data.
 8. Research objectives/questions/hypotheses appear ONLY in Chapter 1, as a numbered list (1, 2, 3 or H1, H2, H3), one per line.
 9. Follow ${project.citation_style} format exactly. Every in-text citation matches an entry in the References section.
-10. Exactly ONE ## References section at the very end. All cited authors and journals must be real and verifiable.`;
+10. Exactly ONE ## References section at the very end. All cited authors and journals must be real and verifiable.
+11. ⛔ NEVER use: "Furthermore,", "Moreover,", "Additionally,", "It is important to note", "This demonstrates", "This highlights", "In today's world", "In the modern era", or any banned phrase from the system prompt. These are AI fingerprints that fail the output.
+12. ⛔ NEVER open with a broad scene-setting claim. Start mid-argument or with specific evidence.
+13. ⛔ NEVER print word counts. NEVER write "(Word count: X)" anywhere. NEVER write a section twice.`;
 
     const isClaude = resolvedModel === CLAUDE_MODEL || resolvedModel.startsWith("claude");
     const isQwen = resolvedModel.startsWith("qwen");
