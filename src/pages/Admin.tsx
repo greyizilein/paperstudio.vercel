@@ -4,7 +4,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { DashboardSidebar } from "@/components/dashboard/DashboardSidebar";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from "recharts";
-import { Loader2, DollarSign, Activity, Users, Zap, Plus, Copy, Save, Search, Mail, RefreshCw, Banknote, Bell, TrendingUp, LogIn, Menu, X, LogOut, Settings, HelpCircle, ShieldCheck, Trash2 } from "lucide-react";
+import { Loader2, DollarSign, Activity, Users, Zap, Plus, Copy, Save, Search, Mail, RefreshCw, Banknote, Bell, TrendingUp, LogIn, Menu, X, LogOut, Settings, HelpCircle, ShieldCheck, Trash2, UserPlus, Wallet } from "lucide-react";
 import { toast } from "sonner";
 
 const ADMIN_EMAIL = "grey.izilein@gmail.com";
@@ -45,15 +45,25 @@ interface PromoCode {
   expires_at: string | null; active: boolean; created_at: string;
 }
 interface Refund {
-  id: string; user_email: string | null; amount_usd: number | null; reason: string | null; created_at: string;
+  id: string; user_id: string | null; user_email: string | null;
+  amount_usd: number | null; reason: string | null; status: string; notes: string | null; created_at: string;
 }
-interface PayoutRecord {
-  id: string; referred_email: string | null; payment_tier: string | null;
-  payment_amount: number | null; status: string; created_at: string;
-  bank_name: string | null; account_number: string | null; phone_number: string | null;
+interface ReferralPayout {
+  id: string; user_id: string; amount_usd: number; amount_ngn: number;
+  bank_name: string | null; account_number: string | null; status: string;
+  failure_reason: string | null; completed_at: string | null; created_at: string;
+}
+interface ReferralWallet {
+  user_id: string; balance_usd: number; pending_usd: number;
+  lifetime_earned_usd: number; total_referrals: number;
+}
+interface ReferralEarning {
+  id: string; referrer_id: string | null; referee_id: string | null;
+  payment_amount_usd: number | null; commission_usd: number | null; status: string; created_at: string;
 }
 interface EmailLog {
-  id: string; to_email: string | null; to_tier: string | null; subject: string | null; sent_at: string;
+  id: string; to_email: string | null; to_tier: string | null;
+  subject: string | null; body: string | null; sent_count: number | null; created_at: string;
 }
 
 interface ImageJobRow {
@@ -123,9 +133,21 @@ export default function Admin() {
   const [refunds, setRefunds] = useState<Refund[]>([]);
   const [refundLoading, setRefundLoading] = useState(false);
 
-  // Payouts
-  const [payoutUses, setPayoutUses] = useState<PayoutRecord[]>([]);
-  const [payoutFilter, setPayoutFilter] = useState<"all" | "pending" | "paid">("all");
+  // Payouts — real tables
+  const [payoutUses, setPayoutUses] = useState<ReferralPayout[]>([]);
+  const [payoutFilter, setPayoutFilter] = useState<"all" | "pending" | "success" | "failed">("all");
+  const [referralWallets, setReferralWallets] = useState<ReferralWallet[]>([]);
+  const [referralEarnings, setReferralEarnings] = useState<ReferralEarning[]>([]);
+  const [payoutSubTab, setPayoutSubTab] = useState<"requests" | "wallets" | "earnings">("requests");
+
+  // CZAR subscriptions
+  const [czarSubscriptions, setCzarSubscriptions] = useState<any[]>([]);
+
+  // Add user
+  const [showAddUser, setShowAddUser] = useState(false);
+  const [newUserEmail, setNewUserEmail] = useState("");
+  const [newUserTier, setNewUserTier] = useState("free");
+  const [addUserLoading, setAddUserLoading] = useState(false);
 
   // Email
   const [emailTo, setEmailTo] = useState("all");
@@ -186,12 +208,14 @@ export default function Admin() {
   };
 
   const loadUsers = async () => {
-    const [profRes, subRes] = await Promise.all([
-      supabase.from("profiles").select("user_id, display_name, university, referral_code, bank_name, created_at, email").order("created_at", { ascending: false }),
+    const [profRes, subRes, czarRes] = await Promise.all([
+      supabase.from("profiles").select("user_id, display_name, university, referral_code, bank_name, account_number, phone_number, created_at, email").order("created_at", { ascending: false }),
       supabase.from("subscriptions").select("*").order("created_at", { ascending: false }),
+      supabase.from("czar_subscriptions").select("user_id, tier, status, word_limit, words_used"),
     ]);
     if (profRes.data) setProfiles(profRes.data as unknown as UserProfile[]);
     if (subRes.data) setSubscriptions(subRes.data as unknown as SubRecord[]);
+    if (czarRes.data) setCzarSubscriptions(czarRes.data);
   };
 
   const loadSettings = async () => {
@@ -213,26 +237,43 @@ export default function Admin() {
   };
 
   const loadComplaints = async () => {
-    // TODO: Create complaints table first
+    const { data } = await supabase.from("complaints")
+      .select("id, user_id, user_email, subject, body, status, admin_notes, admin_reply, created_at, resolved_at")
+      .order("created_at", { ascending: false });
+    if (data) setComplaints(data as unknown as Complaint[]);
   };
 
   const loadPromoCodes = async () => {
-    // TODO: Create promo_codes table first
+    const { data } = await supabase.from("promo_codes").select("*").order("created_at", { ascending: false });
+    if (data) setPromoCodes(data as unknown as PromoCode[]);
   };
 
   const loadRefunds = async () => {
-    // TODO: Create refunds table first
+    const { data } = await supabase.from("refunds").select("*").order("created_at", { ascending: false });
+    if (data) setRefunds(data as unknown as Refund[]);
   };
 
   const loadPayouts = async () => {
-    const { data } = await supabase.from("referral_uses")
-      .select("id, referred_email, payment_tier, payment_amount, status, created_at")
-      .order("created_at", { ascending: false });
-    if (data) setPayoutUses(data as unknown as PayoutRecord[]);
+    const [payoutsRes, walletsRes, earningsRes] = await Promise.all([
+      supabase.from("referral_payouts")
+        .select("id, user_id, amount_usd, amount_ngn, bank_name, account_number, status, failure_reason, completed_at, created_at")
+        .order("created_at", { ascending: false }),
+      supabase.from("referral_wallets")
+        .select("user_id, balance_usd, pending_usd, lifetime_earned_usd, total_referrals"),
+      supabase.from("referral_earnings")
+        .select("id, referrer_id, referee_id, payment_amount_usd, commission_usd, status, created_at")
+        .order("created_at", { ascending: false }).limit(200),
+    ]);
+    if (payoutsRes.data) setPayoutUses(payoutsRes.data as unknown as ReferralPayout[]);
+    if (walletsRes.data) setReferralWallets(walletsRes.data as unknown as ReferralWallet[]);
+    if (earningsRes.data) setReferralEarnings(earningsRes.data as unknown as ReferralEarning[]);
   };
 
   const loadEmailLog = async () => {
-    // TODO: Create admin_emails table first
+    const { data } = await supabase.from("admin_emails")
+      .select("id, to_email, to_tier, subject, body, sent_count, created_at")
+      .order("created_at", { ascending: false }).limit(200);
+    if (data) setEmailLog(data as unknown as EmailLog[]);
   };
 
   const createReferralCode = async () => {
@@ -254,28 +295,49 @@ export default function Admin() {
 
   const saveComplaintUpdate = async () => {
     if (!selectedComplaint) return;
-    // TODO: Create complaints table first
-    toast.info("Complaints table not yet created");
+    const { error } = await supabase.from("complaints").update({
+      status: complaintStatus,
+      admin_notes: adminNotes || null,
+      admin_reply: adminReply || null,
+      resolved_at: complaintStatus === "resolved" ? new Date().toISOString() : null,
+    } as any).eq("id", selectedComplaint.id);
+    if (error) { toast.error(error.message); return; }
+    toast.success("Complaint updated");
     setSelectedComplaint(null);
+    loadComplaints();
   };
 
   const createPromoCode = async () => {
     if (!newPromo.code || !newPromo.discount_value) { toast.error("Code and discount value required"); return; }
-    // TODO: Create promo_codes table first
-    toast.info("Promo codes table not yet created");
+    setPromoLoading(true);
+    const { error } = await supabase.from("promo_codes").insert({
+      code: newPromo.code.trim().toUpperCase(),
+      discount_type: newPromo.discount_type,
+      discount_value: parseFloat(newPromo.discount_value),
+      applies_to_tier: newPromo.applies_to_tier || null,
+      max_uses: newPromo.max_uses ? parseInt(newPromo.max_uses) : null,
+      expires_at: newPromo.expires_at || null,
+      active: true,
+    } as any);
+    if (error) toast.error(error.message);
+    else { toast.success("Promo code created"); setNewPromo({ code: "", discount_type: "percent", discount_value: "", applies_to_tier: "", max_uses: "", expires_at: "" }); loadPromoCodes(); }
+    setPromoLoading(false);
   };
 
-  const togglePromoActive = async (_p: PromoCode) => {
-    // TODO: Create promo_codes table first
-    toast.info("Promo codes table not yet created");
+  const togglePromoActive = async (p: PromoCode) => {
+    await supabase.from("promo_codes").update({ active: !p.active } as any).eq("id", p.id);
+    loadPromoCodes();
   };
 
   const searchRefundUser = async () => {
     if (!refundSearch.trim()) return;
-    const { data: profData } = await supabase.from("profiles").select("*").ilike("user_id", `%`).limit(100);
-    // Match by email from subscriptions joined data — try to find by referral_code or display_name for now
-    const prof = profiles.find(p => (p.display_name || "").toLowerCase().includes(refundSearch.toLowerCase()) || p.user_id.includes(refundSearch));
-    if (!prof) { toast.error("User not found — search by name or user ID"); return; }
+    const q = refundSearch.toLowerCase().trim();
+    const prof = profiles.find(p =>
+      (p.display_name || "").toLowerCase().includes(q) ||
+      (p.email || "").toLowerCase().includes(q) ||
+      p.user_id.toLowerCase().includes(q)
+    );
+    if (!prof) { toast.error("User not found — search by name, email or user ID"); return; }
     const sub = subscriptions.find(s => s.user_id === prof.user_id);
     if (!sub) { toast.error("No subscription found for this user"); return; }
     setRefundUser({ profile: prof, sub });
@@ -299,15 +361,38 @@ export default function Admin() {
 
   const logRefund = async () => {
     if (!refundUser || !refundAmount) return;
-    // TODO: Create refunds table first
-    toast.info("Refunds table not yet created");
-    setRefundAmount(""); setRefundReason("");
+    setRefundLoading(true);
+    const { error } = await supabase.from("refunds").insert({
+      user_id: refundUser.profile.user_id,
+      user_email: refundUser.profile.email,
+      amount_usd: parseFloat(refundAmount),
+      reason: refundReason || "Manual refund",
+      status: "pending",
+    } as any);
+    if (error) toast.error(error.message);
+    else { toast.success("Refund logged"); setRefundAmount(""); setRefundReason(""); loadRefunds(); }
+    setRefundLoading(false);
   };
 
   const markPayoutPaid = async (id: string) => {
-    await supabase.from("referral_uses").update({ status: "paid" } as any).eq("id", id);
+    await supabase.from("referral_payouts").update({ status: "success", completed_at: new Date().toISOString() } as any).eq("id", id);
     toast.success("Marked as paid");
     loadPayouts();
+  };
+
+  const addUser = async () => {
+    if (!newUserEmail.trim()) { toast.error("Email required"); return; }
+    setAddUserLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("create-user", {
+        body: { email: newUserEmail.trim(), tier: newUserTier },
+      });
+      if (error) throw error;
+      toast.success(`Invite sent to ${newUserEmail}`);
+      setShowAddUser(false); setNewUserEmail(""); setNewUserTier("free");
+      loadUsers();
+    } catch (e: any) { toast.error(e.message || "Failed to create user"); }
+    setAddUserLoading(false);
   };
 
   const sendEmail = async () => {
@@ -445,7 +530,9 @@ export default function Admin() {
   const totalMRR = revenueByTier.reduce((s, r) => s + r.revenue, 0);
 
   const filteredComplaints = complaints.filter(c => complaintFilter === "all" || c.status === complaintFilter);
-  const filteredPayouts = payoutUses.filter(p => payoutFilter === "all" || p.status === (payoutFilter === "paid" ? "paid" : "registered"));
+  const filteredPayouts = payoutUses.filter(p =>
+    payoutFilter === "all" || p.status === payoutFilter
+  );
 
   const TABS: { key: Tab; label: string }[] = [
     { key: "analytics", label: "AI Analytics" },
@@ -574,27 +661,64 @@ export default function Admin() {
         {/* Users Tab */}
         {tab === "users" && (
           <div className="space-y-4">
-            <div className="flex items-center gap-2 max-w-sm">
-              <Search size={14} className="text-muted-foreground" />
-              <input value={userSearch} onChange={e => setUserSearch(e.target.value)} placeholder="Search by name or ID…" className="flex-1 px-3 py-2 border border-border rounded-lg text-sm bg-background outline-none" />
+            <div className="flex items-center gap-3 flex-wrap">
+              <div className="flex items-center gap-2 flex-1 min-w-[200px] max-w-sm">
+                <Search size={14} className="text-muted-foreground" />
+                <input value={userSearch} onChange={e => setUserSearch(e.target.value)} placeholder="Search by name, email or ID…" className="flex-1 px-3 py-2 border border-border rounded-lg text-sm bg-background outline-none" />
+              </div>
+              <button onClick={() => setShowAddUser(true)} className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-primary text-white text-sm font-bold hover:bg-primary/90">
+                <UserPlus size={14} /> Add User
+              </button>
             </div>
+            {showAddUser && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/40 p-4">
+                <div className="bg-card border border-border rounded-2xl p-6 w-full max-w-sm shadow-xl">
+                  <h3 className="text-sm font-bold text-foreground mb-4">Invite New User</h3>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="text-xs font-bold text-foreground mb-1 block">Email Address</label>
+                      <input value={newUserEmail} onChange={e => setNewUserEmail(e.target.value)} placeholder="user@example.com" className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-background outline-none focus:border-primary" />
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-foreground mb-1 block">Starting Tier</label>
+                      <select value={newUserTier} onChange={e => setNewUserTier(e.target.value)} className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-background outline-none">
+                        <option value="free">Free</option>
+                        <option value="undergraduate">Undergraduate</option>
+                        <option value="masters">Masters</option>
+                        <option value="phd">PhD</option>
+                      </select>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground">An invite email will be sent. The user sets their own password.</p>
+                    <div className="flex gap-2 pt-1">
+                      <button onClick={addUser} disabled={addUserLoading} className="flex-1 py-2 rounded-lg bg-primary text-white text-sm font-bold hover:bg-primary/90 disabled:opacity-50 flex items-center justify-center gap-1.5">
+                        {addUserLoading ? <Loader2 size={13} className="animate-spin" /> : <Mail size={13} />} Send Invite
+                      </button>
+                      <button onClick={() => { setShowAddUser(false); setNewUserEmail(""); setNewUserTier("free"); }} className="flex-1 py-2 rounded-lg bg-secondary text-foreground text-sm font-bold">Cancel</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
             <div className="bg-card border border-border rounded-xl overflow-hidden">
               <div className="overflow-x-auto max-h-[500px] overflow-y-auto">
                 <table className="w-full text-xs min-w-[700px]">
                   <thead className="sticky top-0 bg-card"><tr className="border-b border-border text-muted-foreground">
-                    <th className="text-left py-2 px-3">Name</th><th className="text-left py-2 px-3">Email</th><th className="text-left py-2 px-3">University</th><th className="text-left py-2 px-3">Tier</th><th className="text-left py-2 px-3">Status</th><th className="text-right py-2 px-3">Words</th><th className="text-left py-2 px-3">Referral</th><th className="text-left py-2 px-3">Joined</th><th className="py-2 px-3"></th>
+                    <th className="text-left py-2 px-3">Name</th><th className="text-left py-2 px-3">Email</th><th className="text-left py-2 px-3">Tier</th><th className="text-left py-2 px-3">CZAR</th><th className="text-left py-2 px-3">Status</th><th className="text-right py-2 px-3">Words</th><th className="text-left py-2 px-3">Bank</th><th className="text-left py-2 px-3">Joined</th><th className="py-2 px-3"></th>
                   </tr></thead>
                   <tbody>{filteredProfiles.map(p => {
                     const sub = subscriptions.find(s => s.user_id === p.user_id);
+                    const czar = czarSubscriptions.find((c: any) => c.user_id === p.user_id);
                     return (
                       <tr key={p.user_id} className="border-b border-border/30 hover:bg-secondary/30">
-                        <td className="py-2 px-3 text-foreground font-semibold">{p.display_name || "—"}</td>
+                        <td className="py-2 px-3 text-foreground font-semibold whitespace-nowrap">{p.display_name || "—"}</td>
                         <td className="py-2 px-3 text-muted-foreground text-[11px]">{p.email || "—"}</td>
-                        <td className="py-2 px-3 text-muted-foreground">{p.university || "—"}</td>
-                        <td className="py-2 px-3 text-muted-foreground capitalize">{sub?.tier || "—"}</td>
+                        <td className="py-2 px-3 text-muted-foreground capitalize">{sub?.tier || "free"}</td>
+                        <td className="py-2 px-3">
+                          {czar ? <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-primary/10 text-primary capitalize">{czar.tier}</span> : <span className="text-muted-foreground text-[11px]">—</span>}
+                        </td>
                         <td className="py-2 px-3"><span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${sub?.status === "active" ? "bg-green/10 text-green" : "bg-secondary text-muted-foreground"}`}>{sub?.status || "—"}</span></td>
-                        <td className="py-2 px-3 text-right font-mono text-foreground">{sub ? `${sub.words_used.toLocaleString()}/${sub.word_limit.toLocaleString()}` : "—"}</td>
-                        <td className="py-2 px-3 font-mono text-muted-foreground">{p.referral_code || "—"}</td>
+                        <td className="py-2 px-3 text-right font-mono text-foreground text-[11px]">{sub ? `${sub.words_used.toLocaleString()}/${sub.word_limit.toLocaleString()}` : "—"}</td>
+                        <td className="py-2 px-3 text-muted-foreground text-[11px]">{(p as any).bank_name ? `${(p as any).bank_name} ···${((p as any).account_number || "").slice(-4)}` : "—"}</td>
                         <td className="py-2 px-3 text-muted-foreground whitespace-nowrap">{new Date(p.created_at).toLocaleDateString()}</td>
                         <td className="py-2 px-3">
                           {p.email !== ADMIN_EMAIL && (
@@ -831,25 +955,28 @@ export default function Admin() {
                 </button>
               </div>
             </div>
-            {emailLog.length > 0 && (
-              <div className="bg-card border border-border rounded-xl p-4">
-                <h2 className="text-sm font-semibold text-foreground mb-3">Sent Emails</h2>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-xs min-w-[400px]">
-                    <thead><tr className="border-b border-border text-muted-foreground">
-                      <th className="text-left py-2 pr-3">To</th><th className="text-left py-2 pr-3">Subject</th><th className="text-right py-2">Sent</th>
+            <div className="bg-card border border-border rounded-xl p-4">
+              <h2 className="text-sm font-semibold text-foreground mb-3">Sent Email Log {emailLog.length > 0 && <span className="text-muted-foreground font-normal">({emailLog.length})</span>}</h2>
+              {emailLog.length === 0 ? (
+                <p className="text-muted-foreground text-xs py-4 text-center">No emails sent yet</p>
+              ) : (
+                <div className="overflow-x-auto max-h-[350px] overflow-y-auto">
+                  <table className="w-full text-xs min-w-[500px]">
+                    <thead className="sticky top-0 bg-card"><tr className="border-b border-border text-muted-foreground">
+                      <th className="text-left py-2 pr-3">To</th><th className="text-left py-2 pr-3">Subject</th><th className="text-center py-2 pr-3">Recipients</th><th className="text-right py-2">Date</th>
                     </tr></thead>
                     <tbody>{emailLog.map(e => (
                       <tr key={e.id} className="border-b border-border/30">
-                        <td className="py-1.5 pr-3 text-foreground">{e.to_email || e.to_tier || "—"}</td>
-                        <td className="py-1.5 pr-3 text-muted-foreground">{e.subject}</td>
-                        <td className="py-1.5 text-right text-muted-foreground whitespace-nowrap">{new Date(e.sent_at).toLocaleDateString()}</td>
+                        <td className="py-1.5 pr-3 text-foreground">{e.to_email || (e.to_tier ? `Tier: ${e.to_tier}` : "All users")}</td>
+                        <td className="py-1.5 pr-3 text-muted-foreground">{e.subject || "—"}</td>
+                        <td className="py-1.5 pr-3 text-center text-foreground font-mono">{e.sent_count ?? "—"}</td>
+                        <td className="py-1.5 text-right text-muted-foreground whitespace-nowrap">{new Date(e.created_at).toLocaleString()}</td>
                       </tr>
                     ))}</tbody>
                   </table>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         )}
 
@@ -1023,35 +1150,116 @@ export default function Admin() {
         {/* Payouts Tab */}
         {tab === "payouts" && (
           <div className="space-y-4">
-            <div className="flex gap-2">
-              {(["all", "pending", "paid"] as const).map(f => (
-                <button key={f} onClick={() => setPayoutFilter(f)} className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all capitalize ${payoutFilter === f ? "bg-primary text-white" : "bg-secondary text-muted-foreground hover:text-foreground"}`}>{f}</button>
+            {/* Summary */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <SummaryCard icon={Wallet} label="Total Requests" value={payoutUses.length.toString()} />
+              <SummaryCard icon={Activity} label="Pending" value={payoutUses.filter(p => p.status === "pending").length.toString()} />
+              <SummaryCard icon={TrendingUp} label="Paid Out" value={payoutUses.filter(p => p.status === "success").length.toString()} />
+              <SummaryCard icon={DollarSign} label="Wallets" value={referralWallets.length.toString()} />
+            </div>
+            {/* Sub-tabs */}
+            <div className="flex gap-1 p-0.5 rounded-lg bg-secondary w-fit">
+              {([["requests", "Payout Requests"], ["wallets", "Wallet Balances"], ["earnings", "Commission Earnings"]] as const).map(([key, label]) => (
+                <button key={key} onClick={() => setPayoutSubTab(key)} className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all whitespace-nowrap ${payoutSubTab === key ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>{label}</button>
               ))}
             </div>
-            <div className="bg-card border border-border rounded-xl overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full text-xs min-w-[700px]">
-                  <thead><tr className="border-b border-border text-muted-foreground bg-secondary/50">
-                    <th className="text-left py-2 px-3">Email</th><th className="text-left py-2 px-3">Tier</th><th className="text-right py-2 px-3">Amount</th><th className="text-left py-2 px-3">Bank</th><th className="text-left py-2 px-3">Account</th><th className="text-left py-2 px-3">Phone</th><th className="text-center py-2 px-3">Status</th><th className="text-right py-2 px-3">Action</th>
-                  </tr></thead>
-                  <tbody>{filteredPayouts.map(p => (
-                    <tr key={p.id} className="border-b border-border/30">
-                      <td className="py-2 px-3 text-foreground">{p.referred_email || "—"}</td>
-                      <td className="py-2 px-3 text-muted-foreground capitalize">{p.payment_tier || "—"}</td>
-                      <td className="py-2 px-3 text-right font-mono text-foreground">{p.payment_amount ? `₦${Number(p.payment_amount).toLocaleString()}` : "—"}</td>
-                      <td className="py-2 px-3 text-muted-foreground">{p.bank_name || "—"}</td>
-                      <td className="py-2 px-3 font-mono text-muted-foreground">{p.account_number || "—"}</td>
-                      <td className="py-2 px-3 text-muted-foreground">{p.phone_number || "—"}</td>
-                      <td className="py-2 px-3 text-center"><span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${p.status === "paid" ? "bg-green/10 text-green" : "bg-secondary text-muted-foreground"}`}>{p.status}</span></td>
-                      <td className="py-2 px-3 text-right">
-                        {p.status !== "paid" && <button onClick={() => markPayoutPaid(p.id)} className="text-xs font-bold text-primary hover:underline">Mark Paid</button>}
-                      </td>
-                    </tr>
-                  ))}</tbody>
-                </table>
+
+            {/* Payout Requests */}
+            {payoutSubTab === "requests" && (
+              <>
+                <div className="flex gap-2 flex-wrap">
+                  {(["all", "pending", "success", "failed"] as const).map(f => (
+                    <button key={f} onClick={() => setPayoutFilter(f)} className={`px-3 py-1.5 rounded-lg text-xs font-bold capitalize ${payoutFilter === f ? "bg-primary text-white" : "bg-secondary text-muted-foreground hover:text-foreground"}`}>{f}</button>
+                  ))}
+                </div>
+                <div className="bg-card border border-border rounded-xl overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs min-w-[700px]">
+                      <thead><tr className="border-b border-border text-muted-foreground bg-secondary/50">
+                        <th className="text-left py-2 px-3">User ID</th><th className="text-right py-2 px-3">USD</th><th className="text-right py-2 px-3">NGN</th><th className="text-left py-2 px-3">Bank</th><th className="text-left py-2 px-3">Account</th><th className="text-center py-2 px-3">Status</th><th className="text-left py-2 px-3">Date</th><th className="text-right py-2 px-3">Action</th>
+                      </tr></thead>
+                      <tbody>{filteredPayouts.length === 0 ? (
+                        <tr><td colSpan={8} className="py-8 text-center text-muted-foreground">No payout requests yet</td></tr>
+                      ) : filteredPayouts.map(p => {
+                        const prof = profiles.find(pr => pr.user_id === p.user_id);
+                        return (
+                          <tr key={p.id} className="border-b border-border/30">
+                            <td className="py-2 px-3 text-foreground text-[11px]">{prof?.email || p.user_id.slice(0, 10) + "…"}</td>
+                            <td className="py-2 px-3 text-right font-mono text-foreground">${Number(p.amount_usd).toFixed(2)}</td>
+                            <td className="py-2 px-3 text-right font-mono text-muted-foreground">₦{Number(p.amount_ngn).toLocaleString()}</td>
+                            <td className="py-2 px-3 text-muted-foreground">{p.bank_name || "—"}</td>
+                            <td className="py-2 px-3 font-mono text-muted-foreground">{p.account_number || "—"}</td>
+                            <td className="py-2 px-3 text-center"><span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${p.status === "success" ? "bg-green/10 text-green" : p.status === "failed" ? "bg-destructive/10 text-destructive" : "bg-secondary text-muted-foreground"}`}>{p.status}</span></td>
+                            <td className="py-2 px-3 text-muted-foreground whitespace-nowrap">{new Date(p.created_at).toLocaleDateString()}</td>
+                            <td className="py-2 px-3 text-right">
+                              {p.status === "pending" && <button onClick={() => markPayoutPaid(p.id)} className="text-xs font-bold text-primary hover:underline">Mark Paid</button>}
+                              {p.failure_reason && <span className="text-[10px] text-destructive ml-1" title={p.failure_reason}>⚠</span>}
+                            </td>
+                          </tr>
+                        );
+                      })}</tbody>
+                    </table>
+                  </div>
+                  <div className="px-3 py-2 border-t border-border text-[11px] text-muted-foreground">{filteredPayouts.length} records</div>
+                </div>
+              </>
+            )}
+
+            {/* Wallet Balances */}
+            {payoutSubTab === "wallets" && (
+              <div className="bg-card border border-border rounded-xl overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs min-w-[600px]">
+                    <thead><tr className="border-b border-border text-muted-foreground bg-secondary/50">
+                      <th className="text-left py-2 px-3">User</th><th className="text-right py-2 px-3">Balance</th><th className="text-right py-2 px-3">Pending</th><th className="text-right py-2 px-3">Lifetime</th><th className="text-right py-2 px-3">Referrals</th>
+                    </tr></thead>
+                    <tbody>{referralWallets.length === 0 ? (
+                      <tr><td colSpan={5} className="py-8 text-center text-muted-foreground">No wallet data yet</td></tr>
+                    ) : referralWallets.map(w => {
+                      const prof = profiles.find(p => p.user_id === w.user_id);
+                      return (
+                        <tr key={w.user_id} className="border-b border-border/30">
+                          <td className="py-2 px-3 text-foreground">{prof?.email || w.user_id.slice(0, 10) + "…"}</td>
+                          <td className="py-2 px-3 text-right font-mono font-bold text-foreground">${Number(w.balance_usd).toFixed(2)}</td>
+                          <td className="py-2 px-3 text-right font-mono text-amber-600">${Number(w.pending_usd).toFixed(2)}</td>
+                          <td className="py-2 px-3 text-right font-mono text-muted-foreground">${Number(w.lifetime_earned_usd).toFixed(2)}</td>
+                          <td className="py-2 px-3 text-right text-foreground">{w.total_referrals}</td>
+                        </tr>
+                      );
+                    })}</tbody>
+                  </table>
+                </div>
               </div>
-              <div className="px-3 py-2 border-t border-border text-[11px] text-muted-foreground">{filteredPayouts.length} records</div>
-            </div>
+            )}
+
+            {/* Commission Earnings */}
+            {payoutSubTab === "earnings" && (
+              <div className="bg-card border border-border rounded-xl overflow-hidden">
+                <div className="overflow-x-auto max-h-[500px] overflow-y-auto">
+                  <table className="w-full text-xs min-w-[600px]">
+                    <thead className="sticky top-0 bg-card"><tr className="border-b border-border text-muted-foreground">
+                      <th className="text-left py-2 px-3">Date</th><th className="text-left py-2 px-3">Referrer</th><th className="text-left py-2 px-3">Referee</th><th className="text-right py-2 px-3">Payment</th><th className="text-right py-2 px-3">Commission</th><th className="text-center py-2 px-3">Status</th>
+                    </tr></thead>
+                    <tbody>{referralEarnings.length === 0 ? (
+                      <tr><td colSpan={6} className="py-8 text-center text-muted-foreground">No commission earnings yet</td></tr>
+                    ) : referralEarnings.map(e => {
+                      const referrer = profiles.find(p => p.user_id === e.referrer_id);
+                      const referee = profiles.find(p => p.user_id === e.referee_id);
+                      return (
+                        <tr key={e.id} className="border-b border-border/30">
+                          <td className="py-2 px-3 text-muted-foreground whitespace-nowrap">{new Date(e.created_at).toLocaleDateString()}</td>
+                          <td className="py-2 px-3 text-foreground">{referrer?.email || (e.referrer_id || "—").slice(0, 8) + "…"}</td>
+                          <td className="py-2 px-3 text-muted-foreground">{referee?.email || (e.referee_id || "—").slice(0, 8) + "…"}</td>
+                          <td className="py-2 px-3 text-right font-mono text-foreground">${Number(e.payment_amount_usd || 0).toFixed(2)}</td>
+                          <td className="py-2 px-3 text-right font-mono font-bold text-green">${Number(e.commission_usd || 0).toFixed(2)}</td>
+                          <td className="py-2 px-3 text-center"><span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${e.status === "credited" ? "bg-green/10 text-green" : "bg-secondary text-muted-foreground"}`}>{e.status}</span></td>
+                        </tr>
+                      );
+                    })}</tbody>
+                  </table>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
