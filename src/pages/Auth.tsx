@@ -38,7 +38,7 @@ export default function Auth() {
         const target = tier ? `${redirect}${redirect.includes("?") ? "&" : "?"}tier=${tier}` : redirect;
         navigate(target, { replace: true });
       } else {
-        navigate("/dashboard", { replace: true });
+        navigate("/", { replace: true });
       }
     }
   }, [user, authLoading, navigate, searchParams]);
@@ -76,20 +76,20 @@ export default function Auth() {
           body: { email, name, referralCode: storedRef || null },
         }).catch(() => {});
         if (data.session) {
-          navigate("/dashboard", { replace: true });
+          navigate("/", { replace: true });
         } else {
           const { error: signInErr } = await supabase.auth.signInWithPassword({ email, password });
           if (signInErr) {
             setMessage("Account created. You can now sign in.");
             setMode("login");
           } else {
-            navigate("/dashboard", { replace: true });
+            navigate("/", { replace: true });
           }
         }
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
-        navigate("/dashboard", { replace: true });
+        navigate("/", { replace: true });
       }
     } catch (err: any) {
       const msg = (err.message || "").toLowerCase();
