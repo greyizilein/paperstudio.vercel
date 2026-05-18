@@ -1,38 +1,132 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
-import { Copy, Wallet, Loader2, Users, TrendingUp, MessageCircle } from "lucide-react";
+import { Copy, Wallet, Loader2, Users, TrendingUp, MessageCircle, CheckCircle2, Clock } from "lucide-react";
 
-interface Wallet { balance_usd: number; lifetime_earned_usd: number; total_referrals: number; }
-interface Earning { id: string; commission_usd: number; payment_amount_usd: number; created_at: string; payment_reference: string | null; }
+interface WalletData { balance_usd: number; lifetime_earned_usd: number; total_referrals: number; }
+interface Earning { id: string; commission_usd: number; payment_amount_usd: number; created_at: string; }
 interface Payout { id: string; amount_usd: number; amount_ngn: number; status: string; created_at: string; failure_reason: string | null; }
+interface ReferredUser {
+  id: string;
+  display_name: string | null;
+  subscribed: boolean;
+  tier: string | null;
+  signed_up_at: string;
+}
 
 export function ReferralPanel({ referralCode }: { referralCode: string }) {
   const { user } = useAuth();
-  const [wallet, setWallet] = useState<Wallet>({ balance_usd: 0, lifetime_earned_usd: 0, total_referrals: 0 });
+  const [wallet, setWallet] = useState<WalletData>({ balance_usd: 0, lifetime_earned_usd: 0, total_referrals: 0 });
   const [earnings, setEarnings] = useState<Earning[]>([]);
   const [payouts, setPayouts] = useState<Payout[]>([]);
+  const [referredUsers, setReferredUsers] = useState<ReferredUser[]>([]);
   const [withdrawing, setWithdrawing] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const link = referralCode ? `${window.location.origin}/ref/${referralCode}` : "";
 
-  const load = async () => {
-    if (!user) return;
+  const load = useCallback(async () => {
+    if (!user || !referralCode) return;
     setLoading(true);
+
+    // Load wallet, earnings, payouts in parallel
     const [w, e, p] = await Promise.all([
       supabase.from("referral_wallets").select("balance_usd, lifetime_earned_usd, total_referrals").eq("user_id", user.id).maybeSingle(),
-      supabase.from("referral_earnings").select("*").eq("referrer_id", user.id).order("created_at", { ascending: false }).limit(10),
-      supabase.from("referral_payouts").select("*").eq("user_id", user.id).order("created_at", { ascending: false }).limit(10),
+      supabase.from("referral_earnings").select("id, commission_usd, payment_amount_usd, created_at").eq("referrer_id", user.id).order("created_at", { ascending: false }).limit(10),
+      supabase.from("referral_payouts").select("id, amount_usd, amount_ngn, status, created_at, failure_reason").eq("user_id", user.id).order("created_at", { ascending: false }).limit(10),
     ]);
-    if (w.data) setWallet(w.data as any);
-    setEarnings((e.data as any) || []);
-    setPayouts((p.data as any) || []);
-    setLoading(false);
-  };
+    if (w.data) setWallet(w.data as WalletData);
+    setEarnings((e.data as Earning[]) || []);
+    setPayouts((p.data as Payout[]) || []);
 
-  useEffect(() => { load(); }, [user]);
+    // Load referred users: code → uses → profiles + subscriptions
+    const { data: codeRow } = await supabase
+      .from("referral_codes").select("id").eq("code", referralCode).maybeSingle();
+
+    if (codeRow?.id) {
+      const { data: uses } = await supabase
+        .from("referral_uses")
+        .select("id, referred_user_id, created_at")
+        .eq("referral_code_id", codeRow.id)
+        .order("created_at", { ascending: false });
+
+      if (uses && uses.length > 0) {
+        const userIds = uses.map((u: any) => u.referred_user_id).filter(Boolean);
+
+        // Fetch profiles (display_name) and subscriptions in parallel
+        const [profsRes, subsRes] = await Promise.all([
+          supabase.from("profiles").select("user_id, display_name").in("user_id", userIds),
+          supabase.from("subscriptions").select("user_id, tier, status").in("user_id", userIds),
+        ]);
+
+        const profsMap: Record<string, string | null> = {};
+        (profsRes.data || []).forEach((pr: any) => { profsMap[pr.user_id] = pr.display_name; });
+
+        const subsMap: Record<string, { tier: string; status: string }> = {};
+        (subsRes.data || []).forEach((s: any) => { subsMap[s.user_id] = { tier: s.tier, status: s.status }; });
+
+        const built: ReferredUser[] = uses.map((u: any) => {
+          const sub = u.referred_user_id ? subsMap[u.referred_user_id] : null;
+          return {
+            id: u.id,
+            display_name: u.referred_user_id ? (profsMap[u.referred_user_id] ?? null) : null,
+            subscribed: !!sub && sub.status === "active" && sub.tier !== "free",
+            tier: sub?.tier ?? null,
+            signed_up_at: u.created_at,
+          };
+        });
+        setReferredUsers(built);
+      } else {
+        setReferredUsers([]);
+      }
+    }
+
+    setLoading(false);
+  }, [user, referralCode]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  // Real-time: re-fetch when a new referral_uses row is inserted
+  useEffect(() => {
+    if (!referralCode) return;
+
+    const channel = supabase.channel(`referral-uses:${referralCode}`)
+      .on("postgres_changes", {
+        event: "INSERT",
+        schema: "public",
+        table: "referral_uses",
+      }, () => {
+        load();
+      })
+      .on("postgres_changes", {
+        event: "UPDATE",
+        schema: "public",
+        table: "referral_uses",
+      }, () => {
+        load();
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [referralCode, load]);
+
+  // Also watch subscriptions table so "Signed up → Subscribed" flips live
+  useEffect(() => {
+    const channel = supabase.channel(`referral-subs:${user?.id}`)
+      .on("postgres_changes", {
+        event: "UPDATE",
+        schema: "public",
+        table: "subscriptions",
+      }, () => {
+        load();
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [user?.id, load]);
 
   const copy = () => {
     navigator.clipboard.writeText(link);
@@ -104,9 +198,43 @@ export function ReferralPanel({ referralCode }: { referralCode: string }) {
         <p className="text-[10px] text-muted-foreground">Min $5. Goes to the bank account in Settings via Paystack.</p>
       </div>
 
+      {/* Referred users — live */}
+      <div>
+        <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2">
+          Who signed up {referredUsers.length > 0 && <span className="font-normal normal-case">({referredUsers.length})</span>}
+        </div>
+        {referredUsers.length === 0 ? (
+          <p className="text-[11px] text-muted-foreground italic py-2">No one has used your link yet — share it!</p>
+        ) : (
+          <div className="space-y-1.5 max-h-48 overflow-auto">
+            {referredUsers.map((ru) => (
+              <div key={ru.id} className="flex items-center justify-between text-xs py-1.5 px-2 rounded-lg bg-muted/30 border border-border/50">
+                <div className="flex items-center gap-2">
+                  <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${ru.subscribed ? "bg-emerald-500" : "bg-amber-400"}`} />
+                  <span className="font-medium text-foreground">{ru.display_name || "Anonymous user"}</span>
+                </div>
+                <div className="flex items-center gap-1.5 flex-shrink-0">
+                  {ru.subscribed ? (
+                    <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-600">
+                      <CheckCircle2 className="w-3 h-3" /> Subscribed
+                      {ru.tier && ru.tier !== "free" && <span className="capitalize">({ru.tier})</span>}
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-1 text-[10px] text-amber-600">
+                      <Clock className="w-3 h-3" /> Signed up
+                    </span>
+                  )}
+                  <span className="text-[10px] text-muted-foreground hidden sm:inline">{new Date(ru.signed_up_at).toLocaleDateString()}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
       {earnings.length > 0 && (
         <div>
-          <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1">Recent earnings</div>
+          <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1">Commission earned</div>
           <div className="space-y-1 max-h-40 overflow-auto">
             {earnings.map((e) => (
               <div key={e.id} className="flex items-center justify-between text-xs py-1 border-b border-border/50">
