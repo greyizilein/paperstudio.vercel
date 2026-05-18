@@ -336,6 +336,8 @@ export default function WriterPage() {
   const [textSelection, setTextSelection] = useState<{ text: string; rect: DOMRect } | null>(null);
   const [inlineEditLoading, setInlineEditLoading] = useState(false);
   const [inlineEditAction, setInlineEditAction] = useState<string | null>(null);
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
+  const saveResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Chapter guide panel
   const [showGuide, setShowGuide] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
@@ -1007,7 +1009,17 @@ ${thesisArea}`);
   const handleUpdate = async (updated: Project) => {
     setProject(updated);
     if (user) {
-      try { await updateProject(user.id, updated); } catch (err: any) { toast.error(err.message); }
+      setSaveStatus("saving");
+      if (saveResetRef.current) clearTimeout(saveResetRef.current);
+      try {
+        await updateProject(user.id, updated);
+        setSaveStatus("saved");
+      } catch (err: any) {
+        toast.error(err.message);
+        setSaveStatus("idle");
+        return;
+      }
+      saveResetRef.current = setTimeout(() => setSaveStatus("idle"), 2000);
     }
   };
 
@@ -1813,6 +1825,19 @@ ${thesisArea}`);
         <div className="text-[12px] sm:text-[13px] text-muted-foreground overflow-hidden text-ellipsis whitespace-nowrap flex-1 min-w-0 hidden sm:block">
           <strong className="text-foreground font-bold">{project.title.slice(0, 40)}</strong>
           <span className="hidden lg:inline">&nbsp;·&nbsp;{project.degree}&nbsp;·&nbsp;{project.citation_style}</span>
+        </div>
+        {/* Save status indicator */}
+        <div className="flex-shrink-0 hidden sm:flex items-center h-5 overflow-hidden">
+          {saveStatus === "saving" && (
+            <span className="flex items-center gap-1 text-[11px] text-muted-foreground animate-pulse">
+              <Loader2 size={11} className="animate-spin" />Saving…
+            </span>
+          )}
+          {saveStatus === "saved" && (
+            <span className="flex items-center gap-1 text-[11px] text-emerald-500">
+              <Check size={11} strokeWidth={2.5} />Saved
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-0.5 sm:gap-1 ml-auto flex-shrink-0">
           {/* Overflow menu — all sizes */}
