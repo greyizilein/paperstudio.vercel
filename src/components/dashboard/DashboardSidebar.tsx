@@ -14,6 +14,7 @@ interface DashboardSidebarProps {
   tier?: string;
   onSignOut: () => void;
   userEmail?: string;
+  avatarUrl?: string;
 }
 
 const navItems = [
@@ -27,7 +28,7 @@ const navItems = [
   { icon: HelpCircle, label: "Help & Support", path: "/help" },
 ];
 
-export function DashboardSidebar({ userName, userInitials, tier = "Masters", onSignOut, userEmail }: DashboardSidebarProps) {
+export function DashboardSidebar({ userName, userInitials, tier = "Masters", onSignOut, userEmail, avatarUrl }: DashboardSidebarProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const isAdmin = userEmail === ADMIN_EMAIL;
@@ -43,6 +44,7 @@ export function DashboardSidebar({ userName, userInitials, tier = "Masters", onS
         tier={tier}
         userEmail={userEmail}
         onSignOut={onSignOut}
+        avatarUrl={avatarUrl}
       />
     );
   }
@@ -58,7 +60,19 @@ export function DashboardSidebar({ userName, userInitials, tier = "Masters", onS
 
       {/* User */}
       <div className="px-5 pb-4 flex items-center gap-2.5">
-        <PsAvatar initials={userInitials} sizeClass="w-8 h-8 text-[11px]" />
+        <div className="relative flex-shrink-0">
+          <PsAvatar initials={userInitials} sizeClass="w-8 h-8 text-[11px]" avatarUrl={avatarUrl} />
+          {isAdmin && (
+            <button
+              onClick={() => {}}
+              title="Admin panel"
+              className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-amber-500 flex items-center justify-center shadow-sm"
+              tabIndex={-1}
+            >
+              <ShieldCheck size={9} strokeWidth={2.5} className="text-white" />
+            </button>
+          )}
+        </div>
 
         <div className="min-w-0">
           <div className="text-[12px] font-bold truncate">{userName}</div>

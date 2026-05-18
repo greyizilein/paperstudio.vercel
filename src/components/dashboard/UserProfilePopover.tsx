@@ -1,7 +1,9 @@
 import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { LogOut, Settings, CreditCard } from "lucide-react";
+import { LogOut, Settings, CreditCard, ShieldCheck } from "lucide-react";
 import { PsAvatar } from "@/components/ps/PsAvatar";
+
+const ADMIN_EMAIL = "grey.izilein@gmail.com";
 
 interface UserProfilePopoverProps {
   userInitials: string;
@@ -12,16 +14,18 @@ interface UserProfilePopoverProps {
   wordLimit: number;
   onSignOut: () => void;
   size?: "sm" | "md";
+  avatarUrl?: string;
 }
 
 export function UserProfilePopover({
-  userInitials, userName, email, tier, wordsUsed, wordLimit, onSignOut, size = "md",
+  userInitials, userName, email, tier, wordsUsed, wordLimit, onSignOut, size = "md", avatarUrl,
 }: UserProfilePopoverProps) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const pct = wordLimit > 0 ? Math.min(Math.round((wordsUsed / wordLimit) * 100), 100) : 0;
   const remaining = Math.max(wordLimit - wordsUsed, 0);
+  const isAdmin = !!email && email.toLowerCase() === ADMIN_EMAIL;
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -34,12 +38,22 @@ export function UserProfilePopover({
   const avatarSize = size === "sm" ? "w-7 h-7 text-[10px]" : "w-8 h-8 text-[11px]";
 
   return (
-    <div className="relative" ref={ref}>
+    <div className="relative flex items-center gap-1" ref={ref}>
+      {isAdmin && (
+        <button
+          onClick={() => navigate("/admin")}
+          title="Admin panel"
+          className="w-6 h-6 flex items-center justify-center rounded-full bg-amber-500/15 text-amber-600 hover:bg-amber-500/25 transition-colors"
+        >
+          <ShieldCheck size={13} strokeWidth={2} />
+        </button>
+      )}
       <PsAvatar
         initials={userInitials}
         sizeClass={avatarSize}
         onClick={() => setOpen(!open)}
         className="hover:ring-2 hover:ring-primary/30 transition-all"
+        avatarUrl={avatarUrl}
       />
 
       {open && (
@@ -47,7 +61,7 @@ export function UserProfilePopover({
           {/* User info */}
           <div className="px-4 py-3 border-b border-border">
             <div className="flex items-center gap-2.5">
-              <PsAvatar initials={userInitials} sizeClass="w-9 h-9 text-[12px]" />
+              <PsAvatar initials={userInitials} sizeClass="w-9 h-9 text-[12px]" avatarUrl={avatarUrl} />
               <div className="min-w-0 flex-1">
                 <div className="text-[13px] font-bold text-foreground truncate">{userName}</div>
                 {email && <div className="text-[11px] text-muted-foreground truncate">{email}</div>}
@@ -93,6 +107,17 @@ export function UserProfilePopover({
             >
               <Settings size={14} className="text-muted-foreground" /> Settings
             </button>
+            {isAdmin && (
+              <>
+                <div className="h-px bg-border mx-3 my-0.5" />
+                <button
+                  onClick={() => { setOpen(false); navigate("/admin"); }}
+                  className="w-full flex items-center gap-2.5 px-4 py-2 text-[12px] font-semibold text-amber-600 hover:bg-amber-500/10 transition-colors cursor-pointer"
+                >
+                  <ShieldCheck size={14} /> Admin Panel
+                </button>
+              </>
+            )}
             <div className="h-px bg-border mx-3 my-0.5" />
             <button
               onClick={() => { setOpen(false); onSignOut(); }}

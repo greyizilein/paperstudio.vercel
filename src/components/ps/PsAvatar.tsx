@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { usePsTheme } from "@/contexts/PsThemeContext";
 import { getPsTheme } from "@/lib/psThemes";
 import { User } from "lucide-react";
@@ -9,6 +10,8 @@ interface PsAvatarProps {
   /** Optional click handler — turns the avatar into a button. */
   onClick?: () => void;
   className?: string;
+  /** User photo URL (Google OAuth avatar_url or Gravatar). Falls back to initials on error. */
+  avatarUrl?: string;
 }
 
 /**
@@ -19,11 +22,34 @@ interface PsAvatarProps {
  * - nordic-slate   → initials-circle (plain initials in primary circle)
  * - graphite-mono  → mono-square     (monospace initials, square corners)
  */
-export function PsAvatar({ initials, sizeClass = "w-8 h-8 text-[11px]", onClick, className = "" }: PsAvatarProps) {
+export function PsAvatar({ initials, sizeClass = "w-8 h-8 text-[11px]", onClick, className = "", avatarUrl }: PsAvatarProps) {
   const { themeId } = usePsTheme();
   const style = getPsTheme(themeId).avatar;
+  const [imgError, setImgError] = useState(false);
   const Comp = onClick ? "button" : "div";
+  const showImg = !!avatarUrl && !imgError;
   const interactive = onClick ? "cursor-pointer hover:opacity-90 transition-opacity" : "";
+
+  // If a real photo URL is available, render it inside the same circular frame used by the active style.
+  if (showImg) {
+    const ringClass =
+      style === "gold-ring" ? "ring-2 ring-accent/60" :
+      style === "mono-square" ? "rounded-[3px]" : "rounded-full";
+    return (
+      <Comp
+        onClick={onClick}
+        className={`${sizeClass} ${ringClass} overflow-hidden flex-shrink-0 ${interactive} ${className}`}
+        aria-label="Account"
+      >
+        <img
+          src={avatarUrl}
+          alt={initials}
+          className="w-full h-full object-cover"
+          onError={() => setImgError(true)}
+        />
+      </Comp>
+    );
+  }
 
   if (style === "contact-outline") {
     // Notion-style: outlined contact silhouette, soft circle background.

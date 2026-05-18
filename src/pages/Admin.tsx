@@ -467,7 +467,7 @@ export default function Admin() {
 
   return (
     <div className="flex min-h-screen bg-background">
-      <DashboardSidebar userName={userName} userInitials={userInitials} tier="Admin" onSignOut={signOut} userEmail={user.email} />
+      <DashboardSidebar userName={userName} userInitials={userInitials} tier="Admin" onSignOut={signOut} userEmail={user.email} avatarUrl={user.user_metadata?.avatar_url} />
 
       {/* Mobile drawer */}
       {mobileMenuOpen && (
