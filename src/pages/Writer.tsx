@@ -2013,6 +2013,7 @@ ${thesisArea}`);
             wordLimit={subscription.word_limit}
             onSignOut={async () => { const { supabase: sb } = await import("@/integrations/supabase/client"); await sb.auth.signOut(); navigate("/auth"); }}
             size="sm"
+            avatarUrl={user?.user_metadata?.avatar_url}
           />
         </div>
       </nav>

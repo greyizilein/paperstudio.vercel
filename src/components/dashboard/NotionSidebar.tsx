@@ -17,6 +17,7 @@ interface Props {
   userEmail?: string;
   onSignOut: () => void;
   onNewProject?: () => void;
+  avatarUrl?: string;
 }
 
 interface RecentProject { id: string; title: string }
@@ -41,7 +42,7 @@ interface RecentProject { id: string; title: string }
  *   └─────────────────────────────┘
  */
 export function NotionSidebar({
-  userName, userInitials, tier = "Free", userEmail, onSignOut, onNewProject,
+  userName, userInitials, tier = "Free", userEmail, onSignOut, onNewProject, avatarUrl,
 }: Props) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -102,8 +103,24 @@ export function NotionSidebar({
           onClick={() => navigate("/dashboard")}
           className="w-full flex items-center gap-2 px-1.5 py-1 rounded-[4px] hover:bg-sidebar-accent/60 transition-colors cursor-pointer text-left"
         >
-          <PsAvatar initials={userInitials} sizeClass="w-[18px] h-[18px] text-[9px]" />
+          <div className="relative flex-shrink-0">
+            <PsAvatar initials={userInitials} sizeClass="w-[18px] h-[18px] text-[9px]" avatarUrl={avatarUrl} />
+            {isAdmin && (
+              <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-amber-500 flex items-center justify-center pointer-events-none">
+                <ShieldCheck size={6} strokeWidth={3} className="text-white" />
+              </span>
+            )}
+          </div>
           <span className="flex-1 text-[13px] font-semibold truncate">{userName}</span>
+          {isAdmin && (
+            <span
+              onClick={(e) => { e.stopPropagation(); navigate("/admin"); }}
+              className="px-1 py-0.5 rounded text-[8px] font-bold bg-amber-500/15 text-amber-600 hover:bg-amber-500/25 transition-colors cursor-pointer"
+              title="Admin panel"
+            >
+              ADMIN
+            </span>
+          )}
           <ChevronRight size={12} className="opacity-40" />
         </button>
       </div>
