@@ -30,6 +30,7 @@ import {
   CHAPTER_GUIDES,
 } from "@/lib/constants";
 import { ContextualToolbar } from "@/components/writer/ContextualToolbar";
+import { OnboardingTour } from "@/components/writer/OnboardingTour";
 import { ChartRenderer } from "@/components/firstdraft/ChartRenderer";
 import { FinalExport } from "@/components/FinalExport";
 import { ChapterOutlineModal, type OutlineHeading } from "@/components/ChapterOutlineModal";
@@ -338,6 +339,7 @@ export default function WriterPage() {
   const [inlineEditAction, setInlineEditAction] = useState<string | null>(null);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
   const saveResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [showTour, setShowTour] = useState(false);
   // Chapter guide panel
   const [showGuide, setShowGuide] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
@@ -355,6 +357,14 @@ export default function WriterPage() {
 
   // Reset edit mode and clear text selection when switching chapters
   useEffect(() => { setIsEditMode(false); setTextSelection(null); }, [activeChapterIndex]);
+
+  // Show onboarding tour for first-time studio visitors
+  useEffect(() => {
+    if (!user) return;
+    try {
+      if (!localStorage.getItem(`ps:studio-toured:${user.id}`)) setShowTour(true);
+    } catch { /* quota / private mode */ }
+  }, [user?.id]);
 
   // Restore personalise from chapter draft_config when switching chapters
   useEffect(() => {
@@ -1005,6 +1015,13 @@ ${thesisArea}`);
 
   const currentWC = isGenerating ? countBodyWords(streamingContent) : (currentChapter?.word_count_actual || 0);
   const wcPct = targetWC > 0 ? Math.min(Math.round((currentWC / targetWC) * 100), 100) : 0;
+
+  const handleTourDone = () => {
+    if (user) {
+      try { localStorage.setItem(`ps:studio-toured:${user.id}`, "1"); } catch {}
+    }
+    setShowTour(false);
+  };
 
   const handleUpdate = async (updated: Project) => {
     setProject(updated);
@@ -3336,6 +3353,9 @@ ${thesisArea}`);
         onExit={() => setShowImageProgress(false)}
         onDownloadAnyway={() => { setShowImageProgress(false); setShowFinalExport(true); }}
       />
+
+      {/* First-visit studio tour */}
+      {showTour && <OnboardingTour onDone={handleTourDone} />}
     </div>
   );
 }
