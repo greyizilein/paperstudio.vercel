@@ -1358,9 +1358,10 @@ Deno.serve(async (req) => {
         }
 
         // ── INLINE HUMANISER ──────────────────────────────────────────
-        // Always-on single Gemini Flash call on substantive writing output.
+        // Fire-and-forget background Gemini Flash call on substantive writing.
         // Excluded: clarify/plan cards, slides, short replies (<150 words).
-        // Silent — no SSE events. Result delivered in the `done` event as `content`.
+        // Sends done immediately — no visible pause or rewrite from user POV.
+        // The humanised version lands in DB silently after done is sent.
         {
           const preWc = wordCount(fullText);
           const hasMarker = /\[CZAR_(CLARIFY|PLAN|IMAGE_SPEC)\]/.test(fullText || "");
@@ -1371,16 +1372,16 @@ Deno.serve(async (req) => {
             playbookPick !== "slides";
 
           if (shouldHumanise) {
-            console.log(`[czar-chat] inline humaniser starting (${preWc} words)`);
-            try {
-              const polished = await inlineHumaniseSection(fullText, GOOGLE_AI_API_KEY, humaniserAbort.signal);
-              if (polished && polished.trim().length > 80) {
-                fullText = polished;
-                console.log(`[czar-chat] inline humaniser done: ${preWc} → ${wordCount(fullText)} words`);
+            const rawText = fullText;
+            const msgId = assistantId;
+            // Intentionally not awaited — runs after done is sent
+            inlineHumaniseSection(rawText, GOOGLE_AI_API_KEY).then((polished) => {
+              if (polished && polished !== rawText && polished.trim().length > 80) {
+                svc.from("czar_messages").update({ content: polished }).eq("id", msgId)
+                  .then(() => console.log(`[czar-chat] humaniser silently updated ${msgId}`))
+                  .catch((e: Error) => console.warn("[czar-chat] humaniser DB update failed:", e.message));
               }
-            } catch (e: any) {
-              console.warn("[czar-chat] inline humaniser error — keeping raw draft:", e?.message || e);
-            }
+            }).catch((e: Error) => console.warn("[czar-chat] humaniser failed:", e.message));
           }
         }
 
@@ -1395,9 +1396,7 @@ Deno.serve(async (req) => {
           catch (e) { console.error("[czar-chat] word increment failed:", (e as Error).message); }
         }
 
-        // Tell the client we're done. Include the humanised content so the
-        // client can silently update the displayed message without a flash.
-        write("done", { conversation_id: conversationId, assistant_id: assistantId, words: wc, content: fullText });
+        write("done", { conversation_id: conversationId, assistant_id: assistantId, words: wc });
 
         // Follow-ups: only for substantive replies, fired after `done` so they
         // never delay the user seeing their answer settle.

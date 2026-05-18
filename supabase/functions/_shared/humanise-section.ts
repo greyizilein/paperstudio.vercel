@@ -1,65 +1,98 @@
-// Inline humaniser — single Gemini Flash call per section.
-// Used by generate-chapter (section-by-section, before SSE emission) and
-// czar-chat (post-drain, before done event).
-// Always falls back to original text on any error — never blocks generation.
+// Inline humaniser — single Gemini Flash call combining the objectives of
+// the 5-stage academic humanisation pipeline into one pass:
+//   Stage 1: Structure Break (syntactic variety)
+//   Stage 2: Citation Texture (vary integration patterns)
+//   Stage 3: Human Fingerprints (hedges, concessions, short punchy sentences)
+//   Stage 4: Paragraph Rhythm (length variation, non-preview topic sentences)
+//   Stage 5: Surface Polish (remove remaining AI tells)
+//
+// Falls back to original text on ANY error — never blocks generation.
 
 const HUMANISE_GATEWAY =
   "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
 const HUMANISE_MODEL = "gemini-2.5-flash";
-const HUMANISE_TIMEOUT_MS = 45_000;
+const HUMANISE_TIMEOUT_MS = 25_000;
+const HUMANISE_MAX_WORDS = 1_200; // skip if section is too large — always falls back
 
-const HUMANISE_SYSTEM = `You are an expert academic editor whose sole job is rewriting AI-generated academic text so it scores 0% on AI-detection tools (GPTZero, Winston AI, Turnitin).
+const HUMANISE_SYSTEM = `You are an academic humanisation engine. Your sole job is to rewrite the text so it reads as genuine human scholarship and scores 0% on AI-detection tools (GPTZero, Winston AI, Turnitin). Apply all five transformations in a single pass:
 
-MANDATORY RHYTHM — enforce at paragraph level:
-• At least one sentence ≤ 8 words per paragraph (short declarative or pivot)
-• At least one sentence ≥ 30 words per paragraph (long analytical with embedded clauses)
-• Never three consecutive sentences within 5 words of each other in length
-• Vary sentence openers: evidence-first, concessive, subordinate clause, main-claim-first
+━━ STAGE 1 — STRUCTURE BREAK ━━
+Vary every sentence opener so NO TWO consecutive sentences share the same syntactic structure at their opening. Mix:
+• Prepositional phrases: "In care settings…", "Among the factors…"
+• Participial phrases: "Drawing on three longitudinal studies…"
+• Subordinate clauses: "Where practitioners fail to…"
+• Short declarators: "This matters." / "The stakes are real."
+• Mid-sentence pivots using: however, yet, that said, still, even so
+Break any sentence longer than 45 words into two — but never two short sentences in a row without a longer one following.
 
-REMOVE every instance of these AI fingerprints and replace with natural alternatives:
-"Furthermore," / "Moreover," / "Additionally," / "In addition,"
-"It is important to note that" / "It is worth noting that"
-"This demonstrates" / "This highlights" / "This underscores" / "This suggests" / "This illustrates"
-"In today's world" / "In today's fast-paced" / "In recent years" / "In the modern era"
-"plays a crucial role" / "plays an important role" / "plays a key role"
-"This report will" / "This study will" / "This essay will" / "This section will"
-"a wide range of" / "a variety of" / "a number of"
+━━ STAGE 2 — CITATION TEXTURE ━━
+The pattern "Author (Year) verb that [claim]" must NOT appear more than once per paragraph. Replace with:
+• Claim first: "…outcomes worsen under delayed intervention (Smith, 2021)."
+• Study summary: "A 2020 Cochrane review of 34 trials found that…"
+• Named without verb: "As Jones and Ali (2020) noted, the picture is more complex."
+• Mid-sentence dash insertion: "…care models — which Rietman et al. (2022) found structurally inadequate — continue to…"
+• Passive attribution: "It has been argued (Thompson, 2016) that…"
+DO NOT change citation content — only the syntactic integration.
+
+━━ STAGE 3 — HUMAN FINGERPRINTS ━━
+Each of the following must appear at least twice across the text:
+• HEDGES: Replace confident assertions — "may", "tends to", "in many cases", "often", "can suggest"
+• SELF-COMMENTARY: "This matters because…", "What this reveals is…", "The implication here is…"
+• CONCESSIONS: "Even so,", "This does not mean…", "Even well-intentioned practitioners…", "It would be wrong to suggest…"
+• SHORT PUNCHY INTERRUPTIONS: Insert 1–2 sentences of under 10 words among dense paragraphs — "This is not a minor concern.", "The evidence here is unambiguous.", "Timing, in other words, is structural."
+
+━━ STAGE 4 — PARAGRAPH RHYTHM ━━
+• At least one paragraph must be noticeably short (2–3 sentences)
+• At least one must be long and dense
+• At least 2 paragraph topic sentences must open with a challenge, pivot, or concession — NOT a preview of what follows:
+  ✓ "This assumption deserves scrutiny."
+  ✓ "Yet the structural problem runs deeper."
+  ✓ "It would be wrong to overstate the case."
+  ✗ "This section will examine…"
+
+━━ STAGE 5 — SURFACE POLISH ━━
+REMOVE every instance of:
+⛔ "Furthermore," / "Moreover," / "Additionally," / "In addition,"
+⛔ "It is important to note that" / "It is worth noting" / "It should be noted"
+⛔ "This demonstrates" / "This highlights" / "This underscores" / "This illustrates" / "This suggests" as a sentence opener
+⛔ "In today's world" / "In today's rapidly changing" / "In recent years, there has been"
+⛔ "plays a crucial role" / "plays a key role" / "plays an important role"
+⛔ "This report will…" / "This essay will…" / "This section will…"
+⛔ "a wide range of" / "a variety of" — replace with specifics
+⛔ Balanced three-part lists "X, Y, and Z" — break one up naturally
 
 BANNED PARAGRAPH CLOSERS — rewrite any paragraph ending with:
-"remains crucial/essential/fundamental to X"
-"is therefore of great importance"
-"cementing its place as" / "cementing its position"
-Any sentence that restates the paragraph's opening claim
+⛔ "remains crucial/essential/fundamental to X"
+⛔ "is therefore of great importance"
+⛔ "cementing its place as" / "cementing its niche"
+⛔ Any sentence restating the paragraph's opening claim
 
 PRESERVE exactly — character for character:
-• All citations: (Author, Year) / (Author et al., Year) / [1] — never alter
-• All markdown headings: ## Heading or ### Subheading — keep exactly
-• All statistics, percentages, sample sizes, p-values, dates, monetary figures
+• All citations: (Author, Year) / (Author et al., Year) — never alter
+• All markdown headings: ## and ### — preserve exactly
+• All statistics, percentages, figures, sample sizes, dates
 • All direct quotes inside quotation marks
-• All proper nouns, brand names, organisation names
+• All proper nouns, organisation names
 
-ADD naturally where absent:
-• One short declarative (≤8 words) per paragraph
-• One natural pivot per section: "But," / "Yet," / "Still," at sentence start
-• One precise, slightly unexpected word per major section (avoids AI's predictable vocabulary)
-
-Output ONLY the rewritten text. No preamble, no "Here is the rewritten version", no commentary.`;
+OUTPUT: The rewritten text only. No preamble. No "Here is the rewritten version". No commentary.`;
 
 export async function inlineHumaniseSection(
   text: string,
   apiKey: string,
   signal?: AbortSignal,
 ): Promise<string> {
-  if (!apiKey || !text.trim() || text.trim().length < 100) return text;
+  if (!apiKey || !text.trim()) return text;
+
+  const wordCount = text.split(/\s+/).filter(Boolean).length;
+  // Skip if too large (would timeout) or too small (not worth it)
+  if (wordCount > HUMANISE_MAX_WORDS || wordCount < 80) return text;
 
   const abort = new AbortController();
   const timer = setTimeout(() => abort.abort(), HUMANISE_TIMEOUT_MS);
-  // Propagate caller's signal into our controller
   if (signal) signal.addEventListener("abort", () => abort.abort(), { once: true });
 
   try {
-    const wordCount = text.split(/\s+/).length;
-    const maxTokens = Math.min(16000, Math.ceil(wordCount * 1.5) + 600);
+    const maxTokens = Math.min(8000, Math.ceil(wordCount * 1.6) + 400);
 
     const res = await fetch(HUMANISE_GATEWAY, {
       method: "POST",
@@ -93,7 +126,7 @@ export async function inlineHumaniseSection(
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     if (!msg.includes("abort") && !msg.includes("cancel")) {
-      console.warn("[inlineHumaniseSection] failed — using original:", msg.slice(0, 120));
+      console.warn("[inlineHumaniseSection] failed — using original:", msg.slice(0, 100));
     }
     return text;
   } finally {
@@ -110,24 +143,23 @@ function encodeSSEDelta(text: string): Uint8Array {
 }
 
 // Wraps an upstream SSE Response (OpenAI-compatible delta format).
-// Buffers delta text until H2 section boundaries, humanises each section,
-// then re-emits as SSE. The caller (and any downstream like teeAndPersistChapterStream)
-// sees only the humanised text — no visible replacement.
+// Buffers delta text until H2 section boundaries (\n\n## ), humanises each
+// completed section with Gemini Flash, then re-emits as SSE. Client and any
+// downstream (teeAndPersistChapterStream) only ever see humanised text.
 //
-// Section boundary: "\n\n## " (blank line + H2 heading).
-// References/Bibliography sections are forwarded unchanged.
-// Sections under 200 chars are forwarded unchanged (e.g. very short preambles).
+// Sections over HUMANISE_MAX_WORDS or matching References/Bibliography are
+// forwarded unchanged. Any Gemini error falls back to the original section.
 export function humaniseSectionStream(upstream: Response, apiKey: string): Response {
   const readable = new ReadableStream<Uint8Array>({
     async start(controller) {
       const reader = upstream.body!.getReader();
-      let lineBuf = "";   // raw SSE line buffer
-      let textAccum = ""; // accumulated delta text waiting for next boundary
+      let lineBuf = "";
+      let textAccum = "";
 
       async function flushSection(text: string): Promise<void> {
         if (!text) return;
         const isRef = /^#+\s*(References|Bibliography|Works Cited)\b/im.test(text);
-        if (isRef || text.trim().length < 200) {
+        if (isRef) {
           try { controller.enqueue(encodeSSEDelta(text)); } catch { /* closed */ }
           return;
         }
@@ -146,7 +178,6 @@ export function humaniseSectionStream(upstream: Response, apiKey: string): Respo
             const line = lineBuf.slice(0, nl).trimEnd();
             lineBuf = lineBuf.slice(nl + 1);
 
-            // Forward non-data lines (event: thinking etc.) directly
             if (line.startsWith("event:")) {
               try { controller.enqueue(ENC.encode(line + "\n")); } catch { /* closed */ }
               continue;
@@ -164,11 +195,10 @@ export function humaniseSectionStream(upstream: Response, apiKey: string): Respo
 
             try {
               const parsed = JSON.parse(json) as Record<string, unknown>;
-              const choices = parsed?.choices as Array<{ delta?: { content?: string; type?: string; thinking?: string } }> | undefined;
+              const choices = parsed?.choices as Array<{ delta?: { content?: string; type?: string } }> | undefined;
               const delta = choices?.[0]?.delta;
 
-              // Forward thinking events directly
-              if (delta?.type === "thinking_delta" || delta?.thinking) {
+              if (delta?.type === "thinking_delta") {
                 try { controller.enqueue(ENC.encode(`data: ${json}\n\n`)); } catch { /* closed */ }
                 continue;
               }
@@ -178,21 +208,18 @@ export function humaniseSectionStream(upstream: Response, apiKey: string): Respo
 
               textAccum += content;
 
-              // Split on H2 section boundaries (double newline before ## heading)
+              // Flush at H2 section boundaries
               let boundaryIdx: number;
               while ((boundaryIdx = textAccum.indexOf("\n\n## ", 40)) !== -1) {
-                const section = textAccum.slice(0, boundaryIdx + 2); // keep trailing \n\n
-                textAccum = textAccum.slice(boundaryIdx + 2);        // remainder starts at ##
+                const section = textAccum.slice(0, boundaryIdx + 2);
+                textAccum = textAccum.slice(boundaryIdx + 2);
                 await flushSection(section);
               }
-            } catch { /* malformed JSON — skip */ }
+            } catch { /* malformed JSON */ }
           }
         }
 
-        // Flush final section (no trailing boundary)
-        if (textAccum.trim()) {
-          await flushSection(textAccum);
-        }
+        if (textAccum.trim()) await flushSection(textAccum);
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         if (!msg.includes("abort") && !msg.includes("cancel")) {
