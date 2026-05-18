@@ -16,16 +16,9 @@ interface StreamGenerateOptions {
   onDelta: (text: string) => void;
   onDone: (polishedContent?: string) => void;
   onError: (error: string) => void;
-  /** Fires when the humaniser pipeline starts and finishes. UI uses this to
-   *  show a "HUMANISING" pill — no stage details are exposed. */
-  onHumanise?: (state: "start" | "done") => void;
   signal?: AbortSignal;
   /** When true, the upstream stream is resumable: tab close / disconnect won't kill it. */
   enableResume?: boolean;
-  /** OPT-IN. When true, run the v3 Academic Humaniser after polish.
-   *  Default false — humaniser never runs unless the user switches it on
-   *  in the Personalise panel. */
-  humaniserEnabled?: boolean;
 }
 
 // CRITICAL: Always use the user's session JWT, NOT the publishable anon key.
@@ -270,31 +263,6 @@ export async function streamGenerateChapter(options: StreamGenerateOptions) {
       let polished = fullContent;
       if (!options.continuation && fullContent.length > 200) {
         polished = await polishChapter(fullContent, signal);
-      }
-
-      // Humaniser pipeline (v3 Academic Humaniser) — OPT-IN ONLY.
-      // Runs after polish on first-pass generation if the user enabled the
-      // "Humanise after writing" toggle in the Personalise panel. Uses the
-      // SAME model the chapter was written with. Aborts cleanly when the
-      // user presses Stop (signal propagates into the SSE fetch).
-      if (
-        options.humaniserEnabled &&
-        !options.continuation &&
-        polished.length > 800 &&
-        !signal?.aborted
-      ) {
-        const body = extractBodyContent(polished);
-        if (countWords(body) >= 200) {
-          options.onHumanise?.("start");
-          try {
-            const humanised = await humaniseChapter(polished, options.modelId, signal);
-            if (humanised && humanised !== polished && !signal?.aborted) {
-              polished = humanised;
-            }
-          } finally {
-            options.onHumanise?.("done");
-          }
-        }
       }
 
       onDone(polished !== fullContent ? polished : undefined);

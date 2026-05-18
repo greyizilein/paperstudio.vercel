@@ -7,7 +7,7 @@ import {
   FolderOpen, ChevronRight, ArrowLeft, PenLine, FileEdit, Columns2, GripVertical, Share2, MessageCircle
 } from "lucide-react";
 import { CzarIcon } from "@/components/icons/CzarIcon";
-import { HumanisingPill } from "@/components/shared/HumanisingPill";
+
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { cn } from "@/lib/utils";
@@ -129,8 +129,6 @@ interface PersonaliseState {
   // lit review specific authors
   specificAuthors: string[];
   customAuthor: string;
-  // humaniser opt-in (v3 Academic Humaniser runs only when true)
-  humaniserEnabled: boolean;
 }
 
 const defaultPersonalise: PersonaliseState = {
@@ -206,7 +204,6 @@ const defaultPersonalise: PersonaliseState = {
   sectionsToInclude: [],
   specificAuthors: [],
   customAuthor: "",
-  humaniserEnabled: false,
 };
 
 // Chapter-specific sections
@@ -260,7 +257,6 @@ export default function WriterPage() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [genStatus, setGenStatus] = useState("");
   const [streamingContent, setStreamingContent] = useState("");
-  const [humanising, setHumanising] = useState(false);
   // Quality review removed
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -1267,8 +1263,6 @@ ${thesisArea}`);
         modelId: selectedModelId,
         continuation: { existingContent: bodyOnly, remainingWords },
         signal: abortController.signal,
-        humaniserEnabled: personalise.humaniserEnabled === true,
-        onHumanise: (s) => setHumanising(s === "start"),
         onDelta: (text) => {
           fullContent += text;
           setStreamingContent(fullContent);
@@ -1397,8 +1391,6 @@ ${thesisArea}`);
         draftConfig: { ...enhancedConfig, previousChaptersContext: getPreviousChaptersContext() },
         modelId: selectedModelId,
         signal: abortController.signal,
-        humaniserEnabled: personalise.humaniserEnabled === true,
-        onHumanise: (s) => setHumanising(s === "start"),
         onDelta: (text) => {
           fullContent += text;
           setStreamingContent(fullContent);
@@ -1945,10 +1937,6 @@ ${thesisArea}`);
     <div className="h-[100dvh] flex flex-col bg-background overflow-hidden">
       {/* Top Nav */}
       <nav className="relative h-11 border-b border-border flex items-center px-2 sm:px-4 gap-1.5 sm:gap-2.5 flex-shrink-0 bg-background">
-        {/* Centered humaniser pill — only visible while pipeline is running. */}
-        <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none z-10">
-          <HumanisingPill active={humanising} />
-        </div>
         <button
           onClick={() => navigate("/")}
           aria-label="Back to home"
@@ -2776,35 +2764,6 @@ ${thesisArea}`);
                 </div>
               )}
             </div>
-          </PanelSection>
-
-          {/* ═══ HUMANISER (opt-in) ═══ */}
-          <PanelSection label="Humaniser">
-            <button
-              type="button"
-              onClick={() => setPersonalise(p => ({ ...p, humaniserEnabled: !p.humaniserEnabled }))}
-              className={cn(
-                "w-full text-left px-2.5 py-2 rounded-lg border transition-all flex items-start gap-2",
-                personalise.humaniserEnabled
-                  ? "border-primary bg-primary/5"
-                  : "border-border hover:border-primary/50 bg-background"
-              )}
-            >
-              <div className="mt-0.5 flex-shrink-0">
-                {personalise.humaniserEnabled ? <Check size={13} className="text-primary" /> : <Sparkles size={13} className="text-muted-foreground" />}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  <span className="text-[12.5px] font-bold text-foreground">Humanise after writing</span>
-                  {personalise.humaniserEnabled && (
-                    <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">On</span>
-                  )}
-                </div>
-                <div className="text-[11px] text-muted-foreground leading-snug mt-0.5">
-                  Off by default. When on, the v3 Academic Humaniser runs after the chapter is drafted to neutralise AI fingerprints. Adds a few minutes per chapter and does not affect your word count.
-                </div>
-              </div>
-            </button>
           </PanelSection>
 
           {/* Writing style section removed — baked into mode/craft model defaults */}
