@@ -89,12 +89,22 @@ export function OnboardingTour({ onDone }: Props) {
           </AnimatePresence>
 
           <div className="flex items-center justify-between mt-5">
-            <button
-              onClick={onDone}
-              className="text-xs text-white/35 hover:text-white/60 transition-colors"
-            >
-              Skip
-            </button>
+            {/* Left: back arrow or skip */}
+            {idx > 0 ? (
+              <button
+                onClick={() => setIdx(i => i - 1)}
+                className="text-xs font-semibold text-white/50 hover:text-white/80 transition-colors px-3 py-1.5 rounded-full hover:bg-white/10 flex items-center gap-1"
+              >
+                ← Back
+              </button>
+            ) : (
+              <button
+                onClick={onDone}
+                className="text-xs text-white/35 hover:text-white/60 transition-colors px-1"
+              >
+                Skip
+              </button>
+            )}
 
             {/* Dots */}
             <div className="flex items-center gap-1.5">
