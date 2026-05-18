@@ -32,7 +32,7 @@ export function OnboardingCarousel() {
   const slide = SLIDES[index];
 
   return (
-    <div className="flex flex-col h-full justify-between select-none">
+    <div className="flex flex-col flex-1 justify-between select-none">
       {/* Illustration */}
       <div className="flex-1 flex items-center justify-center px-6 pt-8 pb-4">
         <AnimatePresence mode="wait">
