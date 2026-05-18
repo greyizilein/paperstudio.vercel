@@ -1501,19 +1501,18 @@ ${thesisArea}`);
     setIsHumanising(true);
     setHumanisedText(null);
     setHumaniseStages([
-      { stage: 1, label: "Comprehensive Humanisation", status: "pending" },
-      { stage: 2, label: "Verification & Final Output", status: "pending" },
+      { stage: 1, label: "Rewriting word choices", status: "pending" },
     ]);
 
     const abort = new AbortController();
     humaniseAbortRef.current = abort;
 
-    // Hard 90s timeout — well within Supabase's 150s function limit
+    // Hard 20s timeout — word-swap + Datamuse should finish in < 5s
     const hardTimeout = setTimeout(() => {
       abort.abort();
       toast.error("Humaniser timed out. Please try again.");
       setIsHumanising(false);
-    }, 90_000);
+    }, 20_000);
 
     try {
       const headers = await authedHeaders();
