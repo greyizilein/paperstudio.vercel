@@ -2027,7 +2027,9 @@ ${thesisArea}`);
                   <button
                     key={ch.id}
                     onClick={() => { if (!locked) setActiveChapterIndex(ch.order_index); else toast.error("Complete the previous chapter first."); }}
-                    title={ch.title}
+                    title={ch.word_count_actual
+                      ? `${ch.title}\n${ch.word_count_actual.toLocaleString()} / ${(ch.word_count_target || 0).toLocaleString()}w`
+                      : ch.title}
                     className={cn(
                       "w-8 h-8 rounded-full text-[12px] font-extrabold flex-shrink-0 flex items-center justify-center transition-all",
                       locked && "opacity-40 cursor-not-allowed",
@@ -2317,14 +2319,6 @@ ${thesisArea}`);
                     <div className="h-full bg-primary rounded-sm transition-all duration-500" style={{ width: `${wcPct}%` }} />
                   </div>
                   <span className="text-[11px] font-mono text-muted-foreground">{wcPct}%</span>
-                </div>
-                <div className="flex items-start gap-2 px-4 py-2">
-                  <textarea
-                    value={personalise.notes}
-                    onChange={(e) => setPersonalise(p => ({ ...p, notes: e.target.value }))}
-                    placeholder="Notes for next draft (optional)…"
-                    className="flex-1 border-none outline-none text-[13px] text-foreground resize-none h-7 leading-snug py-1 bg-transparent placeholder:text-muted-foreground focus:h-[52px] transition-all"
-                  />
                 </div>
                 {currentChapter?.status === "completed" && (
                   <div className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-4 py-1.5 border-t border-border flex-wrap">
