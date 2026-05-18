@@ -17,6 +17,8 @@ jobs:
       - uses: supabase/setup-cli@v1
         with:
           version: latest
+        env:
+          FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
       - name: Deploy all edge functions
         run: |
