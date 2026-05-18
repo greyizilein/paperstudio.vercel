@@ -1507,12 +1507,12 @@ ${thesisArea}`);
     const abort = new AbortController();
     humaniseAbortRef.current = abort;
 
-    // Hard 20s timeout — word-swap + Datamuse should finish in < 5s
+    // Hard 30s timeout — Gemini Flash swap identification should finish in <10s
     const hardTimeout = setTimeout(() => {
       abort.abort();
       toast.error("Humaniser timed out. Please try again.");
       setIsHumanising(false);
-    }, 20_000);
+    }, 30_000);
 
     try {
       const headers = await authedHeaders();

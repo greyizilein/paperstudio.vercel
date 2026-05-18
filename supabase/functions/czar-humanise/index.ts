@@ -1,16 +1,24 @@
-// czar-humanise v8 — Word-swap humaniser
+// czar-humanise v9 — LLM-driven word-swap humaniser
 //
-// AI detectors measure TOKEN-LEVEL PERPLEXITY: how statistically predictable
-// each word choice is. GPT/Claude/Gemini always pick the highest-probability
-// word. Replacing those with lower-probability synonyms defeats detection.
+// Problem: a curated word list only covers ~150 known AI words. Academic writing
+// has thousands of high-frequency word choices that trigger AI detectors. No
+// static table can cover them all.
 //
-// Architecture — no QWEN, no LLM calls:
-//   1. Regex pre-clean    (< 1ms) — remove banned transition phrases
-//   2. Tier 1 swap        (< 1ms) — 150+ curated AI word → human alternatives
-//   3. Datamuse API       (< 2s)  — dynamic synonyms for secondary AI words
-//   4. Number humanise    (< 1ms) — "approximately 64" → "about sixty-four"
+// Solution: use Gemini Flash to READ THIS SPECIFIC TEXT and identify which 30
+// words/phrases are the highest-probability (most AI-detectable) choices, then
+// return a JSON map of {original: replacement}. Apply those swaps + regex pre-clean.
 //
-// Total: < 3s. Expected AI detection score: 0–20%.
+// This is how SuperHumanizer works in <5s: not full rewriting, just targeted
+// word identification + substitution. The LLM outputs JSON only (fast),
+// substitution is instant string replacement.
+//
+// Architecture:
+//   1. Regex pre-clean       (<1ms)  — remove banned openers, multi-word AI phrases
+//   2. Gemini Flash JSON     (3-8s)  — identify 30 context-specific word swaps
+//   3. Apply swaps           (<1ms)  — whole-word replace, preserve citations
+//   4. Number humanise       (<1ms)  — "approximately 64" → "about sixty-four"
+//
+// Total: 4-10s. Expected AI score: 0-25%.
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -18,412 +26,196 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-// ─── TIER 1 SWAP TABLE ────────────────────────────────────────────────────────
-// Keys are lowercase exact word forms. Value = alternatives (pick randomly).
-// Multi-word phrases go in CLEANUPS, not here.
-const TIER1: Record<string, string[]> = {
-  // ── Verbs: highest-frequency AI picks ──
-  "demonstrate":    ["show", "prove", "reveal"],
-  "demonstrates":   ["shows", "proves", "reveals"],
-  "demonstrated":   ["showed", "proved", "revealed"],
-  "demonstrating":  ["showing", "proving", "revealing"],
-  "highlight":      ["flag", "note", "point to"],
-  "highlights":     ["flags", "notes", "points to"],
-  "highlighted":    ["flagged", "noted", "pointed to"],
-  "highlighting":   ["flagging", "noting", "pointing to"],
-  "underscore":     ["stress", "press", "foreground"],
-  "underscores":    ["stresses", "presses", "foregrounds"],
-  "underscored":    ["stressed", "pressed", "foregrounded"],
-  "utilise":        ["use"],
-  "utilises":       ["uses"],
-  "utilised":       ["used"],
-  "utilising":      ["using"],
-  "utilize":        ["use"],
-  "utilizes":       ["uses"],
-  "utilized":       ["used"],
-  "utilizing":      ["using"],
-  "facilitate":     ["help", "support", "enable"],
-  "facilitates":    ["helps", "supports", "enables"],
-  "facilitated":    ["helped", "supported", "enabled"],
-  "facilitating":   ["helping", "supporting", "enabling"],
-  "leverage":       ["use", "draw on"],
-  "leverages":      ["uses", "draws on"],
-  "leveraged":      ["used", "drew on"],
-  "leveraging":     ["using", "drawing on"],
-  "implement":      ["apply", "use", "put in place"],
-  "implements":     ["applies", "uses"],
-  "implemented":    ["applied", "used", "put in place"],
-  "implementing":   ["applying", "using"],
-  "illustrate":     ["show", "reveal"],
-  "illustrates":    ["shows", "reveals"],
-  "illustrated":    ["showed", "revealed"],
-  "illustrating":   ["showing", "revealing"],
-  "emphasise":      ["stress", "note"],
-  "emphasises":     ["stresses", "notes"],
-  "emphasised":     ["stressed", "noted"],
-  "emphasising":    ["stressing", "noting"],
-  "emphasize":      ["stress", "note"],
-  "emphasizes":     ["stresses", "notes"],
-  "emphasized":     ["stressed", "noted"],
-  "emphasizing":    ["stressing", "noting"],
-  "enable":         ["allow", "let", "make possible"],
-  "enables":        ["allows", "lets", "makes possible"],
-  "enabled":        ["allowed", "let", "made possible"],
-  "enabling":       ["allowing", "letting"],
-  "achieve":        ["reach", "produce", "arrive at"],
-  "achieves":       ["reaches", "produces"],
-  "achieved":       ["reached", "produced"],
-  "achieving":      ["reaching", "producing"],
-  "represent":      ["constitute", "amount to", "stand as"],
-  "represents":     ["constitutes", "amounts to"],
-  "represented":    ["constituted", "amounted to"],
-  "indicate":       ["show", "suggest", "point to"],
-  "indicates":      ["shows", "suggests", "points to"],
-  "indicated":      ["showed", "suggested", "pointed to"],
-  "address":        ["tackle", "deal with"],
-  "addresses":      ["tackles", "deals with"],
-  "addressed":      ["tackled", "dealt with"],
-  "addressing":     ["tackling", "dealing with"],
-  "ensure":         ["make sure", "secure"],
-  "ensures":        ["makes sure", "secures"],
-  "ensured":        ["made sure", "secured"],
-  "contribute":     ["add to", "help with"],
-  "contributes":    ["adds to", "helps with"],
-  "contributed":    ["added to", "helped with"],
-  "contributing":   ["adding to", "helping with"],
-  "consider":       ["look at", "weigh"],
-  "considers":      ["looks at", "weighs"],
-  "considered":     ["looked at", "weighed"],
-  "explore":        ["look at", "study", "consider"],
-  "explores":       ["looks at", "studies"],
-  "explored":       ["looked at", "studied"],
-  "exploring":      ["looking at", "studying"],
-  "examine":        ["look at", "study"],
-  "examines":       ["looks at", "studies"],
-  "examined":       ["looked at", "studied"],
-  "examining":      ["looking at", "studying"],
-  "argue":          ["make the case", "hold", "contend"],
-  "argues":         ["makes the case", "holds", "contends"],
-  "argued":         ["put the case", "held", "contended"],
-  "arguing":        ["making the case", "holding", "contending"],
-  "suggest":        ["point to", "indicate"],
-  "suggests":       ["points to", "indicates"],
-  "suggested":      ["pointed to", "indicated"],
-  "corroborate":    ["support", "back up", "reinforce"],
-  "corroborates":   ["supports", "backs up", "reinforces"],
-  "corroborated":   ["supported", "backed up", "reinforced"],
-  "substantiate":   ["back up", "support", "lend weight to"],
-  "substantiates":  ["backs up", "supports"],
-  "substantiated":  ["backed up", "supported"],
-  "delineate":      ["define", "outline", "set out"],
-  "delineates":     ["defines", "outlines"],
-  "delineated":     ["defined", "outlined"],
-  "encompass":      ["cover", "include", "span"],
-  "encompasses":    ["covers", "includes", "spans"],
-  "encompassed":    ["covered", "included"],
-  "encompassing":   ["covering", "including"],
-  "underpin":       ["support", "ground"],
-  "underpins":      ["supports", "grounds"],
-  "underpinned":    ["supported", "grounded"],
-  "underpinning":   ["supporting", "grounding"],
-  "acknowledge":    ["accept", "admit", "note"],
-  "acknowledges":   ["accepts", "admits", "notes"],
-  "acknowledged":   ["accepted", "admitted", "noted"],
-
-  // ── Adjectives ──
-  "significant":    ["major", "substantial", "considerable"],
-  "significantly":  ["considerably", "substantially"],
-  "crucial":        ["key", "central", "important"],
-  "fundamental":    ["basic", "core", "central"],
-  "comprehensive":  ["full", "complete", "thorough"],
-  "robust":         ["strong", "solid", "sound"],
-  "innovative":     ["new", "novel"],
-  "optimal":        ["best", "ideal"],
-  "paramount":      ["most important", "key"],
-  "pivotal":        ["key", "central"],
-  "multifaceted":   ["complex", "varied"],
-  "nuanced":        ["complex", "subtle"],
-  "intricate":      ["complex", "detailed"],
-  "prevalent":      ["common", "widespread"],
-  "pertinent":      ["relevant", "applicable"],
-  "notable":        ["important", "worth noting"],
-  "remarkable":     ["striking", "unusual"],
-  "salient":        ["key", "important"],
-  "efficacious":    ["effective", "useful"],
-  "commensurate":   ["in line with", "proportionate"],
-  "predicated":     ["based", "dependent", "grounded"],
-  "holistic":       ["whole", "overall", "broad"],
-  "seminal":        ["key", "foundational", "landmark"],
-  "critical":       ["key", "important", "essential"],
-  "essential":      ["key", "necessary", "needed"],
-  "imperative":     ["necessary", "needed", "vital"],
-  "inherent":       ["built-in", "natural", "intrinsic"],
-  "ubiquitous":     ["common", "widespread", "everywhere"],
-  "unprecedented":  ["new", "unmatched", "without precedent"],
-  "multitude":      ["many", "large number"],
-  "plethora":       ["many", "abundance"],
-
-  // ── Nouns ──
-  "utilization":    ["use"],
-  "utilisation":    ["use"],
-  "implementation": ["use", "application", "adoption"],
-  "facilitation":   ["support", "help"],
-  "enhancement":    ["improvement"],
-  "optimisation":   ["improvement"],
-  "optimization":   ["improvement"],
-  "paradigm":       ["model", "approach"],
-  "synergy":        ["combined effect", "interaction"],
-  "trajectory":     ["path", "direction", "course"],
-  "proliferation":  ["spread", "growth"],
-  "ramification":   ["consequence", "implication"],
-  "notion":         ["idea", "view", "concept"],
-  "realm":          ["field", "area", "domain"],
-  "landscape":      ["field", "area", "picture"],
-  "tapestry":       ["mix", "blend", "picture"],
-  "interplay":      ["interaction", "relationship"],
-};
-
-// ─── SECONDARY WORDS FOR DATAMUSE LOOKUP ─────────────────────────────────────
-// Words that are AI-flagged but less common — query Datamuse for synonyms.
-const DATAMUSE_WORDS = [
-  "exacerbate", "ameliorate", "promulgate", "coalesce", "perpetuate",
-  "instantiate", "propagate", "circumvent", "mitigate", "culminate",
-  "encapsulate", "epitomise", "epitomize", "manifest", "embody",
-  "inherently", "invariably", "systematically", "predominantly",
-];
+const GOOGLE_AI_KEY = Deno.env.get("GOOGLE_AI_API_KEY") || "";
+const GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
+const GEMINI_MODEL = "gemini-2.5-flash";
 
 // ─── REGEX PRE-CLEAN ──────────────────────────────────────────────────────────
-// Applied before word swaps. Handles multi-word AI patterns.
-// Order matters — more specific patterns first.
-const CLEANUPS: Array<[RegExp, string]> = [
-  // Transition openers at sentence/paragraph start — delete them
-  [/(^|\.\s+)(Furthermore|Moreover|Additionally|In addition),\s+/gm,
-    (_m, pre) => pre === "" || pre === "\n" ? "" : `${pre}`],
-  // Mid-sentence furthermore etc.
-  [/[;,]\s*(furthermore|moreover|additionally|in addition),?\s+/gi, ". "],
-  // "It is important/worth noting that" — delete phrase, keep rest
+// Handles multi-word AI patterns that a simple word swap can't catch.
+// Applied BEFORE Gemini so the model sees cleaner text.
+type Replacement = string | ((match: string, ...args: any[]) => string);
+const CLEANUPS: Array<[RegExp, Replacement]> = [
+  // Transition openers — delete them outright
+  [/^(Furthermore|Moreover|Additionally|In addition),\s+/gim, ""],
+  [/\.\s+(Furthermore|Moreover|Additionally|In addition),\s+/g, ". "],
+  [/;\s*(furthermore|moreover|additionally|in addition),?\s+/gi, ". "],
+  // "It is important/worth noting that" — strip phrase
   [/It is (?:important|worth) (?:noting|to note) that\s+/gi, ""],
-  [/it is (?:important|worth) (?:noting|to note) that\s+/gi, ""],
-  // "This demonstrates/highlights/underscores/illustrates/suggests" as opener
+  // "This demonstrates/highlights/underscores..." openers
   [/\bThis demonstrates\b/g, "This shows"],
   [/\bThis highlights\b/g, "This points to"],
   [/\bThis underscores\b/g, "This stresses"],
   [/\bThis illustrates\b/g, "This shows"],
-  [/\bThis suggests\b/g, "This points to"],
-  // "plays a X role" → "is central"
-  [/\bplays a (?:crucial|key|significant|central|major|important|vital|fundamental) role in\b/gi,
-    "is central to"],
-  [/\bplays a (?:crucial|key|significant|central|major|important|vital|fundamental) role\b/gi,
-    "is central"],
+  [/\bThis suggests\b/g, "This indicates"],
+  // "plays a X role"
+  [/\bplays a (?:crucial|key|significant|central|major|important|vital|fundamental) role in\b/gi, "is central to"],
+  [/\bplays a (?:crucial|key|significant|central|major|important|vital|fundamental) role\b/gi, "is central"],
   // "remains X to" closers
-  [/\b(remains|remain) (?:essential|crucial|fundamental|vital|important) to\b/gi,
-    "matters for"],
-  // "a wide/broad range of" / "a variety of"
+  [/\b(?:remains|remain) (?:essential|crucial|fundamental|vital|important) to\b/gi, "matters for"],
+  // Filler quantifiers
   [/\ba wide range of\b/gi, "many"],
   [/\ba broad range of\b/gi, "many"],
   [/\ba variety of\b/gi, "various"],
   [/\ba wide array of\b/gi, "many"],
-  // "In today's world" / "In recent years" scene-setters
+  // Scene-setters
   [/In today'?s (?:rapidly changing |modern |)?world[,.]?\s*/gi, ""],
   [/In (?:recent years|the modern era|contemporary society|the digital age),?\s+/gi, ""],
-  // "delve into"
+  // Delve
   [/\bdelve into\b/gi, "look into"],
   [/\bdelves into\b/gi, "looks into"],
   [/\bdelved into\b/gi, "looked into"],
 ];
 
-// ─── NUMBER HUMANISER ─────────────────────────────────────────────────────────
-const NUMBER_WORDS: Record<number, string> = {
-  1:"one",2:"two",3:"three",4:"four",5:"five",6:"six",7:"seven",8:"eight",
-  9:"nine",10:"ten",11:"eleven",12:"twelve",13:"thirteen",14:"fourteen",
-  15:"fifteen",16:"sixteen",17:"seventeen",18:"eighteen",19:"nineteen",
-  20:"twenty",30:"thirty",40:"forty",50:"fifty",60:"sixty",70:"seventy",
-  80:"eighty",90:"ninety",100:"one hundred",
-};
+function applyCleanups(text: string): string {
+  let t = text;
+  for (const [pattern, replacement] of CLEANUPS) {
+    t = t.replace(pattern as RegExp, replacement as any);
+  }
+  return t.replace(/  +/g, " ").replace(/^ /gm, "");
+}
 
+// ─── NUMBER HUMANISER ─────────────────────────────────────────────────────────
+const NUM_WORDS: Record<number, string> = {
+  2:"two",3:"three",4:"four",5:"five",6:"six",7:"seven",8:"eight",9:"nine",
+  10:"ten",11:"eleven",12:"twelve",13:"thirteen",14:"fourteen",15:"fifteen",
+  16:"sixteen",17:"seventeen",18:"eighteen",19:"nineteen",20:"twenty",
+  30:"thirty",40:"forty",50:"fifty",60:"sixty",70:"seventy",80:"eighty",90:"ninety",
+};
 function numToWords(n: number): string {
-  if (NUMBER_WORDS[n]) return NUMBER_WORDS[n];
-  if (n < 100) {
-    const tens = Math.floor(n / 10) * 10;
-    return `${NUMBER_WORDS[tens]}-${NUMBER_WORDS[n % 10]}`;
+  if (NUM_WORDS[n]) return NUM_WORDS[n];
+  if (n > 0 && n < 100) {
+    const t = Math.floor(n / 10) * 10;
+    return NUM_WORDS[t] ? `${NUM_WORDS[t]}-${NUM_WORDS[n % 10]}` : String(n);
   }
   return String(n);
 }
-
 function humaniseNumbers(text: string): string {
   return text.replace(
-    /\b(approximately|around|roughly|about)\s+(\d{1,3})\b/gi,
-    (_m, _pre, num) => {
-      const n = parseInt(num);
-      if (n > 100) return `about ${num}`;
-      return `about ${numToWords(n)}`;
-    }
+    /\b(approximately|around|roughly)\s+(\d{1,3})\b/gi,
+    (_m, _pre, num) => `about ${numToWords(parseInt(num))}`,
   );
 }
 
-// ─── UTILITIES ────────────────────────────────────────────────────────────────
-function pickRandom<T>(arr: T[]): T {
-  return arr[Math.floor(Math.random() * arr.length)];
+// ─── MASK / UNMASK PROTECTED REGIONS ──────────────────────────────────────────
+interface MaskResult { text: string; slots: string[] }
+
+function maskProtected(text: string): MaskResult {
+  const slots: string[] = [];
+  let t = text;
+  // Code blocks
+  t = t.replace(/```[\s\S]*?```/g, m => { slots.push(m); return `\x00${slots.length - 1}\x00`; });
+  t = t.replace(/`[^`]+`/g, m => { slots.push(m); return `\x00${slots.length - 1}\x00`; });
+  // Citations: (Author..., YYYY) patterns — protect exact text
+  t = t.replace(/\([^)]{2,120}\d{4}[^)]{0,30}\)/g, m => { slots.push(m); return `\x00${slots.length - 1}\x00`; });
+  // Direct quotes
+  t = t.replace(/"[^"]{4,400}"/g, m => { slots.push(m); return `\x00${slots.length - 1}\x00`; });
+  return { text: t, slots };
 }
 
+function unmaskProtected(text: string, slots: string[]): string {
+  return text.replace(/\x00(\d+)\x00/g, (_m, i) => slots[parseInt(i)] ?? "");
+}
+
+// ─── APPLY SWAP MAP ────────────────────────────────────────────────────────────
 function preserveCase(original: string, replacement: string): string {
-  if (original.length > 1 && original === original.toUpperCase()) {
-    return replacement.toUpperCase();
-  }
+  if (original.length > 1 && original === original.toUpperCase()) return replacement.toUpperCase();
   if (original[0] === original[0].toUpperCase() && original[0] !== original[0].toLowerCase()) {
     return replacement.charAt(0).toUpperCase() + replacement.slice(1);
   }
   return replacement;
 }
 
+function applySwapMap(text: string, swaps: Record<string, string>): string {
+  // Sort longest-first to avoid partial-word collisions
+  const entries = Object.entries(swaps).sort((a, b) => b[0].length - a[0].length);
+  let result = text;
+  for (const [from, to] of entries) {
+    if (!from || !to || from === to) continue;
+    const esc = from.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    // Whole-word match, case-insensitive
+    const re = new RegExp(`(?<![a-zA-Z'-])${esc}(?![a-zA-Z'-])`, "gi");
+    result = result.replace(re, m => preserveCase(m, to));
+  }
+  return result;
+}
+
+// ─── GEMINI FLASH JSON SWAP IDENTIFIER ────────────────────────────────────────
+const SWAP_SYSTEM = `You are a word-level AI-detection evasion engine for academic text.
+
+Your ONLY job: identify which word choices in the text are the most statistically predictable (high-perplexity) choices that AI detectors will flag, and provide better alternatives.
+
+Return a single valid JSON object (no markdown fences, no explanation, no preamble):
+{"original_word": "replacement_word", ...}
+
+Rules:
+1. Include 25-40 word or short-phrase replacements that maximally reduce AI score
+2. Focus on VERBS, ADJECTIVES, and TRANSITIONAL WORDS — these are what detectors measure
+3. Choose replacements with LOWER word frequency than the original (less common = less predictable)
+4. Every replacement must be contextually appropriate for formal academic writing
+5. Do NOT replace: proper nouns, numbers, statistics, citation fragments, abbreviations, discipline-specific technical terms (e.g. "Cronbach's alpha", "p-value", "SPSS")
+6. Do NOT produce contractions, slang, or informal language
+7. Where a phrase replacement is needed, map the exact phrase: {"plays a significant role": "is central"}
+
+Target the highest-frequency AI word choices such as:
+employ/employed/employing, yield/yielding/yielded, comprise/comprises/comprised,
+proceed/proceeded/proceeding, rigour/rigorous, operationalise/operationalisation,
+examine/examined, explore/explored, systematic/systematically, confirm/confirmed,
+assess/assessed, secure/secured, integrate/integrated, conduct/conducted,
+robust, comprehensive, significant, crucial, fundamental, optimal, paramount,
+Furthermore, Moreover, Additionally, Subsequently, thus/thereby, utilise, facilitate
+
+Return ONLY the JSON. Nothing else.`;
+
+async function getGeminiSwaps(text: string, signal: AbortSignal): Promise<Record<string, string>> {
+  if (!GOOGLE_AI_KEY) throw new Error("GOOGLE_AI_API_KEY not set");
+
+  const res = await fetch(GEMINI_URL, {
+    method: "POST",
+    signal,
+    headers: {
+      Authorization: `Bearer ${GOOGLE_AI_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: GEMINI_MODEL,
+      messages: [
+        { role: "system", content: SWAP_SYSTEM },
+        { role: "user", content: text },
+      ],
+      temperature: 0.3,
+      max_tokens: 2000,
+    }),
+  });
+
+  if (!res.ok) {
+    const txt = await res.text().catch(() => "");
+    throw new Error(`Gemini ${res.status}: ${txt.slice(0, 200)}`);
+  }
+
+  const data = await res.json();
+  const raw: string = data?.choices?.[0]?.message?.content || "{}";
+
+  // Parse JSON — strip markdown fences if present
+  const cleaned = raw.replace(/^```(?:json)?\n?/i, "").replace(/\n?```$/i, "").trim();
+  try {
+    const parsed = JSON.parse(cleaned);
+    if (typeof parsed === "object" && parsed !== null) return parsed as Record<string, string>;
+  } catch {
+    // Try extracting JSON object with regex
+    const match = cleaned.match(/\{[\s\S]+\}/);
+    if (match) {
+      try { return JSON.parse(match[0]); } catch { /* ignore */ }
+    }
+  }
+  return {};
+}
+
+// ─── WORD COUNT ───────────────────────────────────────────────────────────────
 function wordCount(s: string): number {
   return (s || "").trim().split(/\s+/).filter(Boolean).length;
 }
 
-// ─── MASK/UNMASK PROTECTED REGIONS ────────────────────────────────────────────
-// Protects citations, quotes, and code blocks from word swapping.
-interface MaskResult { text: string; slots: string[] }
-
-function mask(text: string): MaskResult {
-  const slots: string[] = [];
-  let t = text;
-  // Fenced code blocks
-  t = t.replace(/```[\s\S]*?```/g, (m) => { slots.push(m); return `\x00${slots.length - 1}\x00`; });
-  // Inline code
-  t = t.replace(/`[^`]+`/g, (m) => { slots.push(m); return `\x00${slots.length - 1}\x00`; });
-  // Citations: (Author et al., YYYY) or (Author, YYYY) — up to 80 chars
-  t = t.replace(/\([^)]{2,80}\d{4}[^)]{0,20}\)/g, (m) => { slots.push(m); return `\x00${slots.length - 1}\x00`; });
-  // Direct quotes (preserve exact wording)
-  t = t.replace(/"[^"]{4,300}"/g, (m) => { slots.push(m); return `\x00${slots.length - 1}\x00`; });
-  return { text: t, slots };
-}
-
-function unmask(text: string, slots: string[]): string {
-  return text.replace(/\x00(\d+)\x00/g, (_m, i) => slots[parseInt(i)] ?? "");
-}
-
-// ─── APPLY TIER 1 SWAPS ───────────────────────────────────────────────────────
-function applyTier1(text: string): string {
-  // Sort keys longest-first to avoid partial-word collisions
-  const keys = Object.keys(TIER1).sort((a, b) => b.length - a.length);
-  let result = text;
-  for (const key of keys) {
-    const alts = TIER1[key];
-    const esc = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    // \b works for most cases; use negative lookbehind/ahead for edge cases
-    const re = new RegExp(`(?<![a-zA-Z'-])${esc}(?![a-zA-Z'-])`, "gi");
-    result = result.replace(re, (m) => preserveCase(m, pickRandom(alts)));
-  }
-  return result;
-}
-
-// ─── APPLY REGEX CLEANUPS ─────────────────────────────────────────────────────
-function applyCleanups(text: string): string {
-  let t = text;
-  for (const [pattern, replacement] of CLEANUPS) {
-    if (typeof replacement === "string") {
-      t = t.replace(pattern, replacement);
-    } else {
-      t = t.replace(pattern, replacement as any);
-    }
-  }
-  // Clean up any double-spaces or leading spaces on lines created by deletions
-  t = t.replace(/  +/g, " ");
-  t = t.replace(/^ /gm, "");
-  return t;
-}
-
-// ─── DATAMUSE API ─────────────────────────────────────────────────────────────
-// For secondary AI words: find synonyms with lower frequency than original.
-// Frequency from Datamuse is in the "f:N" tag — lower N = less common = better.
-
-interface DatamuseWord { word: string; score?: number; tags?: string[] }
-
-function extractFreq(entry: DatamuseWord): number {
-  const tag = (entry.tags || []).find(t => t.startsWith("f:"));
-  return tag ? parseFloat(tag.slice(2)) : 0;
-}
-
-async function datamuse(word: string, signal: AbortSignal): Promise<string | null> {
-  try {
-    const url = `https://api.datamuse.com/words?rel_syn=${encodeURIComponent(word)}&md=f&max=15`;
-    const resp = await fetch(url, { signal });
-    if (!resp.ok) return null;
-    const data: DatamuseWord[] = await resp.json();
-
-    // Get frequency of original word
-    const origUrl = `https://api.datamuse.com/words?sp=${encodeURIComponent(word)}&md=f&max=1`;
-    const origResp = await fetch(origUrl, { signal });
-    const origData: DatamuseWord[] = origResp.ok ? await origResp.json() : [];
-    const origFreq = origData[0] ? extractFreq(origData[0]) : 999999;
-
-    // Find synonyms with lower frequency (less common = less AI-detectable)
-    // and filter to academic-appropriate: letters only, length > 3
-    const INFORMAL = new Set(["folk","gent","kid","buddy","guy","cool","nice","great",
-      "good","bad","thing","stuff","bit","lot","way","make"]);
-    const candidates = data
-      .filter(d => /^[a-z]+$/.test(d.word) && d.word.length > 3 && !INFORMAL.has(d.word))
-      .filter(d => extractFreq(d) < origFreq)
-      .sort((a, b) => extractFreq(b) - extractFreq(a)); // prefer moderately common, not obscure
-
-    return candidates[0]?.word ?? null;
-  } catch {
-    return null;
-  }
-}
-
-async function applyDatamuse(text: string, signal: AbortSignal): Promise<string> {
-  // Only query for words that actually appear in the text
-  const present = DATAMUSE_WORDS.filter(w => {
-    const re = new RegExp(`\\b${w}\\b`, "i");
-    return re.test(text);
-  });
-  if (present.length === 0) return text;
-
-  // Run all Datamuse queries in parallel (< 2s with 3s per-query timeout)
-  const results = await Promise.all(
-    present.map(async (word) => {
-      const wordSignal = AbortSignal.any
-        ? AbortSignal.any([signal, AbortSignal.timeout(3000)])
-        : signal;
-      const synonym = await datamuse(word, wordSignal);
-      return { word, synonym };
-    })
-  );
-
-  let t = text;
-  for (const { word, synonym } of results) {
-    if (!synonym) continue;
-    const esc = word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const re = new RegExp(`(?<![a-zA-Z'-])${esc}(?![a-zA-Z'-])`, "gi");
-    t = t.replace(re, (m) => preserveCase(m, synonym));
-  }
-  return t;
-}
-
-// ─── MAIN HUMANISE FUNCTION ───────────────────────────────────────────────────
-async function humaniseText(text: string, signal: AbortSignal): Promise<string> {
-  const { text: masked, slots } = mask(text);
-
-  // 1. Regex pre-clean (transitions, banned phrases)
-  let result = applyCleanups(masked);
-
-  // 2. Tier 1 word swaps (curated table)
-  result = applyTier1(result);
-
-  // 3. Datamuse synonyms for secondary AI words
-  result = await applyDatamuse(result, signal);
-
-  // 4. Number humanisation
-  result = humaniseNumbers(result);
-
-  // Unmask protected regions
-  result = unmask(result, slots);
-
-  return result;
-}
-
-// ─── HANDLER ──────────────────────────────────────────────────────────────────
+// ─── MAIN HANDLER ─────────────────────────────────────────────────────────────
 interface Body { text: string; model?: string | null }
 
 Deno.serve(async (req) => {
@@ -460,39 +252,56 @@ Deno.serve(async (req) => {
         catch { /* closed */ }
       };
 
-      console.log(`[czar-humanise v8] start: ${original_words} words, word-swap engine`);
-      send("pipeline_start", { stages: 1, provider: "word-swap", original_words, version: "v8" });
-      send("stage_start", { stage: 1, label: "Rewriting word choices" });
+      console.log(`[czar-humanise v9] start: ${original_words} words, gemini-swap engine`);
+      send("pipeline_start", { stages: 1, provider: "gemini-swap", original_words, version: "v9" });
+      send("stage_start", { stage: 1, label: "Identifying word swaps" });
 
       try {
-        const humanised = await humaniseText(text, upstreamSignal);
-        const final_words = wordCount(humanised);
-        send("stage_done", { stage: 1, label: "Rewriting word choices", words: final_words });
+        const { text: masked, slots } = maskProtected(text);
+
+        // 1. Regex pre-clean
+        let result = applyCleanups(masked);
+
+        // 2. Gemini identifies context-specific swaps for THIS text
+        const swaps = await getGeminiSwaps(result, upstreamSignal);
+        console.log(`[czar-humanise v9] swaps identified: ${Object.keys(swaps).length}`);
+
+        // 3. Apply the swap map
+        result = applySwapMap(result, swaps);
+
+        // 4. Number humanisation
+        result = humaniseNumbers(result);
+
+        // Restore protected regions
+        result = unmaskProtected(result, slots);
+
+        const final_words = wordCount(result);
+        send("stage_done", { stage: 1, label: "Word swaps applied", words: final_words });
         send("done", {
-          humanised,
+          humanised: result,
           stages_completed: 1,
           original_words,
           final_words,
-          provider: "word-swap+datamuse",
-          version: "v8",
+          swaps_applied: Object.keys(swaps).length,
+          provider: "gemini-swap",
+          version: "v9",
         });
       } catch (e: any) {
         const msg = e?.message || String(e);
         if (!msg.includes("abort") && !msg.includes("cancel")) {
-          console.error("[czar-humanise v8] error:", msg);
+          console.error("[czar-humanise v9] error:", msg);
         }
-        // Fall back: return original text as "humanised" so client can still apply
         send("done", {
           humanised: text,
           stages_completed: 0,
           original_words,
           final_words: original_words,
-          provider: "word-swap+datamuse",
-          version: "v8",
+          provider: "gemini-swap",
+          version: "v9",
           error: msg.slice(0, 200),
         });
       } finally {
-        try { controller.close(); } catch { /* already closed */ }
+        try { controller.close(); } catch { /* closed */ }
       }
     },
   });
