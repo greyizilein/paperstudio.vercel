@@ -4,7 +4,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import {
   Check, Copy, Download, Settings, X, Plus, Trash2,
   Loader2, Sparkles, StopCircle, Wand2, BarChart2, Upload, Lock, MoreVertical, Image as ImageIcon, Cpu,
-  FolderOpen, ChevronRight, ArrowLeft, PenLine, GitMerge, Columns2, GripVertical
+  FolderOpen, ChevronRight, ArrowLeft, PenLine, GitMerge, Columns2, GripVertical, Share2, MessageCircle
 } from "lucide-react";
 import { CzarIcon } from "@/components/icons/CzarIcon";
 import { HumanisingPill } from "@/components/shared/HumanisingPill";
@@ -345,6 +345,12 @@ export default function WriterPage() {
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
   const saveResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [showTour, setShowTour] = useState(false);
+  // Supervisor share link
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [shareUrl, setShareUrl] = useState<string | null>(null);
+  const [shareLoading, setShareLoading] = useState(false);
+  const [shareCopied, setShareCopied] = useState(false);
+  const [supervisorCommentCounts, setSupervisorCommentCounts] = useState<Record<string, number>>({});
   // Chapter guide panel
   const [showGuide, setShowGuide] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
@@ -856,6 +862,26 @@ export default function WriterPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project?.id]);
 
+  // Load supervisor comment counts for this project's share link(s)
+  useEffect(() => {
+    if (!project?.id) return;
+    (async () => {
+      const { data: links } = await supabase
+        .from("share_links")
+        .select("id")
+        .eq("project_id", project.id);
+      if (!links || links.length === 0) return;
+      const { data: coms } = await supabase
+        .from("supervisor_comments")
+        .select("chapter_id")
+        .in("share_link_id", links.map(l => l.id));
+      if (!coms) return;
+      const counts: Record<string, number> = {};
+      coms.forEach(c => { counts[c.chapter_id] = (counts[c.chapter_id] || 0) + 1; });
+      setSupervisorCommentCounts(counts);
+    })();
+  }, [project?.id]);
+
   // Clean up tailer on unmount
   useEffect(() => {
     return () => stopTailing();
@@ -1047,6 +1073,37 @@ ${thesisArea}`);
     const reindexed = newOrder.map((ch, i) => ({ ...ch, order_index: i }));
     handleUpdate({ ...project, chapters: reindexed });
     setShowReorderModal(false);
+  };
+
+  const handleShare = async () => {
+    if (!project || !user) return;
+    setShareLoading(true);
+    try {
+      const { data: existing } = await supabase
+        .from("share_links")
+        .select("token")
+        .eq("project_id", project.id)
+        .maybeSingle();
+
+      let token: string;
+      if (existing) {
+        token = existing.token;
+      } else {
+        token = crypto.randomUUID().replace(/-/g, "").slice(0, 24);
+        const { error } = await supabase
+          .from("share_links")
+          .insert({ project_id: project.id, token, created_by: user.id });
+        if (error) throw error;
+      }
+
+      const url = `${window.location.origin}/share/${token}`;
+      setShareUrl(url);
+      setShowShareModal(true);
+    } catch (err: any) {
+      toast.error(err.message || "Failed to generate share link.");
+    } finally {
+      setShareLoading(false);
+    }
   };
 
   const handleUpdate = async (updated: Project) => {
@@ -1917,6 +1974,7 @@ ${thesisArea}`);
                     { icon: Download, label: "All", onClick: () => { setShowExportModal(true); setMobileMenuOpen(false); } },
                     { icon: GitMerge, label: "Corrections", onClick: () => { setShowSupervisorModal(true); setMobileMenuOpen(false); } },
                     { icon: GripVertical, label: "Reorder", onClick: () => { setShowReorderModal(true); setMobileMenuOpen(false); } },
+                    { icon: Share2, label: "Share", onClick: () => { handleShare(); setMobileMenuOpen(false); } },
                     { icon: Sparkles, label: "Settings", onClick: () => { setShowPersonalise(true); setMobileMenuOpen(false); } },
                     { icon: FolderOpen, label: "Projects", onClick: () => { setShowProjectsDrawer(true); setMobileMenuOpen(false); } },
                     { icon: Plus, label: "New", onClick: () => { navigate("/new-project"); setMobileMenuOpen(false); } },
@@ -2122,7 +2180,7 @@ ${thesisArea}`);
                         ? `${ch.title}\n${ch.word_count_actual.toLocaleString()} / ${(ch.word_count_target || 0).toLocaleString()}w`
                         : ch.title}
                       className={cn(
-                        "w-8 h-8 rounded-full text-[12px] font-extrabold flex-shrink-0 flex items-center justify-center transition-all",
+                        "relative w-8 h-8 rounded-full text-[12px] font-extrabold flex-shrink-0 flex items-center justify-center transition-all",
                         locked && "opacity-40 cursor-not-allowed",
                         isActive
                           ? "bg-foreground text-background"
@@ -2132,6 +2190,11 @@ ${thesisArea}`);
                       )}
                     >
                       {ch.status === "completed" ? "✓" : ch.type === "abstract" ? "A" : chapterNum}
+                      {(supervisorCommentCounts[ch.id] ?? 0) > 0 && (
+                        <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-amber-500 text-[8px] font-bold text-white flex items-center justify-center pointer-events-none">
+                          {supervisorCommentCounts[ch.id] > 9 ? "9+" : supervisorCommentCounts[ch.id]}
+                        </span>
+                      )}
                     </button>
                   );
                 });
@@ -3501,6 +3564,47 @@ ${thesisArea}`);
 
       {/* First-visit studio tour */}
       {showTour && <OnboardingTour onDone={handleTourDone} />}
+
+      {/* Supervisor share link modal */}
+      {showShareModal && shareUrl && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-foreground/30 backdrop-blur-sm">
+          <div className="w-full max-w-sm bg-background border border-border rounded-2xl shadow-2xl p-5 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="text-[15px] font-bold text-foreground">Share with supervisor</h2>
+                <p className="text-[11px] text-muted-foreground mt-0.5">Anyone with this link can read and comment on your draft.</p>
+              </div>
+              <button onClick={() => setShowShareModal(false)} className="p-1.5 rounded-lg text-muted-foreground hover:bg-secondary transition-colors">
+                <X size={16} />
+              </button>
+            </div>
+            <div className="flex gap-2">
+              <input
+                readOnly
+                value={shareUrl}
+                className="flex-1 text-[12px] bg-secondary/50 border border-border rounded-lg px-3 py-2 text-foreground outline-none truncate"
+                onFocus={e => e.currentTarget.select()}
+              />
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(shareUrl);
+                  setShareCopied(true);
+                  setTimeout(() => setShareCopied(false), 2000);
+                }}
+                className="flex-shrink-0 px-4 py-2 rounded-xl bg-foreground text-background text-[12px] font-bold hover:opacity-80 transition-opacity"
+              >
+                {shareCopied ? "Copied!" : "Copy"}
+              </button>
+            </div>
+            {(supervisorCommentCounts && Object.values(supervisorCommentCounts).some(v => v > 0)) && (
+              <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-3 flex items-center gap-1">
+                <MessageCircle size={11} />
+                Your supervisor has left comments — see badges on chapter dots.
+              </p>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

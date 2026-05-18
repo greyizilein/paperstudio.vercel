@@ -19,6 +19,9 @@ import ResetPassword from "./pages/ResetPassword.tsx";
 import NotFound from "./pages/NotFound.tsx";
 import ReferralLanding from "./pages/ReferralLanding.tsx";
 
+// Public share view — lazy so it only loads when visiting a share link
+const ShareView = lazy(() => import("./pages/ShareView.tsx"));
+
 // Heavy authenticated app — lazy-loaded so the homepage bundle stays tiny
 const Dashboard = lazy(() => import("./pages/Dashboard.tsx"));
 const WriterPage = lazy(() => import("./pages/Writer.tsx"));
@@ -66,6 +69,7 @@ const App = () => (
                 <Route path="/ref/:code" element={<ReferralLanding />} />
                 <Route path="/reset-password" element={<ResetPassword />} />
                 <Route path="/payment/callback" element={<PaymentCallback />} />
+                <Route path="/share/:token" element={<ShareView />} />
                 {/* Protected routes */}
                 <Route element={<ProtectedRoute />}>
                   <Route path="/dashboard" element={<Dashboard />} />
