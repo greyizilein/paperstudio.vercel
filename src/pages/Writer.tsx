@@ -309,6 +309,12 @@ export default function WriterPage() {
   // Supervisor feedback + Data quality modals
   const [showSupervisorModal, setShowSupervisorModal] = useState(false);
   const [showDataQualityModal, setShowDataQualityModal] = useState(false);
+  // Humaniser panel
+  const [showHumanisePanel, setShowHumanisePanel] = useState(false);
+  const [humaniseStages, setHumaniseStages] = useState<{ stage: number; label: string; status: "pending" | "running" | "done" | "skipped" }[]>([]);
+  const [humanisedText, setHumanisedText] = useState<string | null>(null);
+  const [isHumanising, setIsHumanising] = useState(false);
+  const humaniseAbortRef = useRef<AbortController | null>(null);
   // Per-figure simulated progress (0–100)
   const [figureProgress, setFigureProgress] = useState<Record<string, number>>({});
   // Image acknowledgment + progress modals
@@ -1486,6 +1492,108 @@ ${thesisArea}`);
     setActiveChapterIndex(next);
   };
 
+  const handleStartHumanise = async () => {
+    if (!currentChapter?.content || isHumanising) return;
+    const content = currentChapter.content;
+    const wordCount = countBodyWords(content);
+    if (wordCount < 80) { toast.error("Chapter is too short to humanise (minimum 80 words)."); return; }
+
+    setIsHumanising(true);
+    setHumanisedText(null);
+    setHumaniseStages([
+      { stage: 0, label: "Register Analysis", status: "pending" },
+      { stage: 1, label: "Scaffold & Structure", status: "pending" },
+      { stage: 2, label: "Sentence Interior", status: "pending" },
+      { stage: 3, label: "Perplexity + Burstiness", status: "pending" },
+      { stage: 4, label: "Citation & Texture", status: "pending" },
+      { stage: 5, label: "Rhythm & Fingerprint Sweep", status: "pending" },
+      { stage: 6, label: "Verification & Final Output", status: "pending" },
+    ]);
+
+    const abort = new AbortController();
+    humaniseAbortRef.current = abort;
+
+    try {
+      const headers = await authedHeaders();
+      const modelId = currentChapter.draft_config?.model_id || selectedModelId;
+      const resp = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/czar-humanise`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ text: content, model: modelId }),
+        signal: abort.signal,
+      });
+      if (!resp.ok || !resp.body) {
+        const txt = await resp.text().catch(() => "");
+        toast.error(`Humaniser failed (${resp.status}): ${txt.slice(0, 120)}`);
+        setIsHumanising(false);
+        return;
+      }
+
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = "";
+      let currentEvent = "message";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        let nl: number;
+        while ((nl = buf.indexOf("\n")) !== -1) {
+          let line = buf.slice(0, nl);
+          buf = buf.slice(nl + 1);
+          if (line.endsWith("\r")) line = line.slice(0, -1);
+          if (!line) { currentEvent = "message"; continue; }
+          if (line.startsWith("event:")) { currentEvent = line.slice(6).trim(); continue; }
+          if (!line.startsWith("data:")) continue;
+          const payload = line.slice(5).trim();
+          if (!payload) continue;
+          try {
+            const parsed = JSON.parse(payload);
+            if (currentEvent === "stage_start") {
+              const s = parsed.stage as number;
+              setHumaniseStages(prev => prev.map(st => st.stage === s ? { ...st, status: "running" } : st));
+            } else if (currentEvent === "stage_done") {
+              const s = parsed.stage as number;
+              setHumaniseStages(prev => prev.map(st => st.stage === s ? { ...st, status: "done" } : st));
+            } else if (currentEvent === "stage_skip") {
+              const s = parsed.stage as number;
+              setHumaniseStages(prev => prev.map(st => st.stage === s ? { ...st, status: "skipped" } : st));
+            } else if (currentEvent === "done") {
+              const result = parsed?.humanised || "";
+              if (result && result.trim().length > 50) {
+                setHumanisedText(result);
+                setHumaniseStages(prev => prev.map(st => ({ ...st, status: st.status === "pending" ? "skipped" : st.status === "done" ? "done" : st.status })));
+              } else {
+                toast.error("Humaniser returned empty result. Please try again.");
+              }
+            }
+          } catch { /* skip malformed */ }
+        }
+      }
+    } catch (e: any) {
+      if (e?.name === "AbortError" || abort.signal.aborted) return;
+      toast.error(e?.message || "Humaniser failed");
+    } finally {
+      setIsHumanising(false);
+    }
+  };
+
+  const handleApplyHumanised = async () => {
+    if (!humanisedText || !currentChapter || !project || !user) return;
+    const wc = countBodyWords(humanisedText);
+    const chapterWords = currentChapter.word_count_actual || 0;
+    handleUpdate({ ...project, chapters: project.chapters.map(c => c.id === currentChapter.id ? { ...c, content: humanisedText, word_count_actual: wc } : c) });
+    if (!isTestUser) {
+      incrementWordsUsed(user.id, Math.max(0, chapterWords)).catch(() => {});
+      setSubscription(s => ({ ...s, words_used: s.words_used + Math.max(0, chapterWords) }));
+    }
+    setShowHumanisePanel(false);
+    setHumanisedText(null);
+    setHumaniseStages([]);
+    toast.success("Chapter humanised and applied.");
+  };
+
   const handleSupervisorRevisionApplied = async (revisedContent: string, _count: number) => {
     if (!currentChapter) return;
     const diff = computeParaDiff(currentChapter.content || "", revisedContent);
@@ -2205,8 +2313,21 @@ ${thesisArea}`);
                 });
               })()}
             </div>
-            {/* Correction slot button — always pinned right */}
+            {/* Correction slot + Humanise buttons — always pinned right */}
             <div className="flex-shrink-0 flex items-center border-l border-border px-2 gap-1">
+              <button
+                onClick={() => {
+                  if (!currentChapter?.content) { toast.error("Complete this chapter first."); return; }
+                  setShowHumanisePanel(true);
+                  setHumanisedText(null);
+                  setHumaniseStages([]);
+                  setIsHumanising(false);
+                }}
+                title="Humanise this chapter"
+                className="w-7 h-7 rounded-md flex items-center justify-center transition-all text-muted-foreground hover:bg-secondary hover:text-foreground"
+              >
+                <Wand2 size={13} />
+              </button>
               <button
                 onClick={() => currentChapter?.status === "completed" ? setShowSupervisorModal(true) : toast.error("Complete this chapter first.")}
                 title="Apply supervisor corrections"
@@ -3533,6 +3654,111 @@ ${thesisArea}`);
         onExit={() => setShowImageProgress(false)}
         onDownloadAnyway={() => { setShowImageProgress(false); setShowFinalExport(true); }}
       />
+
+      {/* Humanise panel */}
+      {showHumanisePanel && currentChapter && (
+        <div className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center p-4 bg-foreground/30 backdrop-blur-sm">
+          <div className="w-full max-w-md bg-background border border-border rounded-2xl shadow-2xl p-5 animate-in fade-in slide-in-from-bottom-4 duration-200">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="text-[15px] font-bold text-foreground flex items-center gap-2">
+                  <Wand2 size={15} className="text-primary" />
+                  AI Humaniser
+                </h2>
+                <p className="text-[11px] text-muted-foreground mt-0.5">
+                  7-stage pipeline that rewrites this chapter to pass AI detection.
+                  Credits deducted from your word pack.
+                </p>
+              </div>
+              <button
+                onClick={() => { humaniseAbortRef.current?.abort(); setShowHumanisePanel(false); setIsHumanising(false); }}
+                className="p-1.5 rounded-lg text-muted-foreground hover:bg-secondary transition-colors"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Chapter info */}
+            <div className="mb-4 px-3 py-2.5 bg-secondary/50 rounded-lg text-[12px] text-muted-foreground flex justify-between">
+              <span className="font-medium text-foreground truncate max-w-[60%]">{currentChapter.title}</span>
+              <span>{(currentChapter.word_count_actual || countBodyWords(currentChapter.content || "")).toLocaleString()} words</span>
+            </div>
+
+            {/* Stage progress */}
+            {humaniseStages.length > 0 && (
+              <div className="mb-4 space-y-1.5">
+                {humaniseStages.map(s => (
+                  <div key={s.stage} className="flex items-center gap-2.5 text-[12px]">
+                    <span className={cn(
+                      "w-4 h-4 rounded-full flex items-center justify-center flex-shrink-0 text-[9px] font-bold",
+                      s.status === "done" ? "bg-green-500/20 text-green-500" :
+                      s.status === "running" ? "bg-primary/20 text-primary animate-pulse" :
+                      s.status === "skipped" ? "bg-secondary text-muted-foreground" :
+                      "bg-secondary text-muted-foreground"
+                    )}>
+                      {s.status === "done" ? "✓" : s.status === "skipped" ? "−" : s.stage}
+                    </span>
+                    <span className={cn(
+                      s.status === "running" ? "text-foreground font-medium" :
+                      s.status === "done" ? "text-foreground" :
+                      "text-muted-foreground"
+                    )}>
+                      {s.label}
+                    </span>
+                    {s.status === "running" && <Loader2 size={11} className="animate-spin text-primary ml-auto" />}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Result ready */}
+            {humanisedText && (
+              <div className="mb-4 px-3 py-2.5 bg-green-500/10 border border-green-500/20 rounded-lg text-[12px] text-green-600 dark:text-green-400">
+                Humanisation complete — {countBodyWords(humanisedText).toLocaleString()} words ready to apply.
+              </div>
+            )}
+
+            {/* Actions */}
+            <div className="flex gap-2">
+              {!isHumanising && !humanisedText && (
+                <button
+                  onClick={handleStartHumanise}
+                  className="flex-1 h-9 rounded-lg bg-primary text-primary-foreground text-[13px] font-semibold hover:bg-primary/90 transition-colors flex items-center justify-center gap-2"
+                >
+                  <Wand2 size={13} />
+                  Humanise chapter
+                </button>
+              )}
+              {isHumanising && (
+                <button
+                  onClick={() => { humaniseAbortRef.current?.abort(); setIsHumanising(false); }}
+                  className="flex-1 h-9 rounded-lg bg-secondary text-foreground text-[13px] font-medium hover:bg-secondary/80 transition-colors flex items-center justify-center gap-2"
+                >
+                  <StopCircle size={13} />
+                  Cancel
+                </button>
+              )}
+              {humanisedText && (
+                <>
+                  <button
+                    onClick={() => { setHumanisedText(null); setHumaniseStages([]); }}
+                    className="h-9 px-4 rounded-lg bg-secondary text-foreground text-[13px] font-medium hover:bg-secondary/80 transition-colors"
+                  >
+                    Retry
+                  </button>
+                  <button
+                    onClick={handleApplyHumanised}
+                    className="flex-1 h-9 rounded-lg bg-primary text-primary-foreground text-[13px] font-semibold hover:bg-primary/90 transition-colors flex items-center justify-center gap-2"
+                  >
+                    <Check size={13} />
+                    Apply humanised version
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Supervisor corrections modal */}
       {currentChapter && (

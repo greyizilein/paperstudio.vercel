@@ -112,53 +112,89 @@ PROBABILISTIC:
 `;
 
 // ─── FEW-SHOT EXAMPLES ────────────────────────────────────────────────
+// Drawn from real 0%-AI-detected student academic writing across multiple fields.
+// These examples encode what makes human writing pass detection: rhythm variation,
+// direct argument-first openers, concessive moves, and accessible vocabulary.
 const FEW_SHOT_EXAMPLES = `
 ═══════════════════════════════════════════════
 EXAMPLES — correct humanisation (academic register preserved)
+Sourced from real 0%-AI-detected academic work across disciplines.
 ═══════════════════════════════════════════════
 
-EXAMPLE 1 — GPT chained participial broken:
-BEFORE: "most species achieve extended glides after a high-acceleration escape swim in which
-the caudal fin beats rapidly while the body remains partially submerged, allowing thrust to
-continue during the initial take-off phase (Videler, 1993)."
-AFTER: "In most species, extended gliding follows a high-acceleration escape swim — the caudal
-fin beating rapidly as the body remains partially submerged, maintaining thrust through the
-initial take-off phase (Videler, 1993). The two phases are not cleanly separable."
+EXAMPLE 1 — Chained participial broken, direct argument entry:
+BEFORE: "Political mismanagement has undermined Nigeria's development trajectory, demonstrating
+the critical importance of leadership quality in determining national outcomes, while also
+highlighting the role of institutional frameworks in enabling or constraining governance."
+AFTER: "Nigeria's development failures are, in large part, a product of leadership. Danaher
+et al. (2023) documented how misrule compounds across generations — each administration
+inheriting not only the debts of the last but its institutional dysfunctions. The structural
+problem runs deeper than any single government."
 
-EXAMPLE 2 — Gemini Flash broad opener broken:
-BEFORE: "Flying fish represent a remarkable evolutionary adaptation to pelagic predator-prey dynamics."
-AFTER: "The aerial locomotion of flying fish sits at an unusual intersection of predator-prey
-dynamics and biomechanical constraint — a combination that does not map cleanly onto standard
-accounts of either."
+EXAMPLE 2 — Broad evaluative opener replaced with specific entry:
+BEFORE: "Communication represents a fundamental and critical component of health and social care
+practice, playing a crucial role in determining patient outcomes and service quality."
+AFTER: "Poor communication in care settings has tangible harm: patients cannot understand the
+treatment plan, feel unheard, and in some cases face life-threatening consequences. Danaher
+et al. (2023) state that this is not incidental but structural — built into how services
+are designed and delivered."
 
-EXAMPLE 3 — Passive participial closer broken:
-BEFORE: "Their aerial locomotion represents controlled gliding, achieved through specialised
-morphological modifications."
-AFTER: "What is termed aerial locomotion in these species is, more precisely, controlled gliding
-— the product of morphological modifications substantial enough to alter the hydrodynamic
-profile of the fish even when submerged."
+EXAMPLE 3 — Three-part balanced list broken, short punchy sentence added:
+BEFORE: "Effective leaders demonstrate vision, integrity, and the capacity to mobilise
+institutional resources toward collective goals, ensuring that governance remains aligned
+with the needs of the population they serve."
+AFTER: "Vision matters, but it is not enough on its own. A leader who cannot translate
+intent into institutional action — who cannot move bureaucracies, negotiate opposition, and
+hold coalitions together — will leave those goals largely unrealised (Burns, 2003). The
+distance between aspiration and delivery is where leadership is actually tested."
 
-EXAMPLE 4 — Symmetric clause broken, formality preserved:
-BEFORE: "Effective communication builds trust, while poor communication creates barriers to care."
-AFTER: "Effective communication accumulates trust over successive interactions. Its absence does
-something more than create barriers — it signals to the service user that their expressed
-needs are secondary to the interaction's administrative purpose."
+EXAMPLE 4 — Symmetric clause broken, concessive opener used:
+BEFORE: "Religion provides moral guidance in society, while secularism offers a framework
+for governance that separates church from state, creating a balance between spiritual and
+civic concerns."
+AFTER: "It would be wrong to suggest that religion and governance operate in separate
+spheres. Ezeanya (2018) writes that 'to attempt to build a nation without God is like
+building a house without a foundation' — a claim that carries particular weight in societies
+where religious identity shapes political allegiance more directly than party affiliation."
 
-EXAMPLE 5 — Scaffold destroyed, register maintained:
-BEFORE: "Communication is the foundation upon which all health and social care practice is built.
-Without it, the delivery of safe, person-centred care becomes impossible. Thompson (2011)
-maintained that communication is not simply the transmission of information but a dynamic,
-relational process through which meaning is co-constructed between participants."
-AFTER: "Without communication, care delivery becomes guesswork at best. Thompson (2011) put
-the case plainly: this is not a process of transmission but a relational one, in which meaning
-is constructed between participants rather than passed from one to another — a distinction
-that carries real consequences for how practitioners approach each interaction."
+EXAMPLE 5 — Scaffold destroyed, argument-first structure:
+BEFORE: "Communication is the foundation upon which all therapeutic relationships are built.
+Without effective communication, practitioners cannot understand service users' needs or
+deliver person-centred care. Thompson (2011) argued that communication is a dynamic relational
+process rather than simple information transmission."
+AFTER: "Without communication, care delivery becomes guesswork. Thompson (2011) put the
+case plainly: this is not transmission but a relational process, in which meaning is
+constructed between practitioner and service user — a distinction that changes how
+every assessment, every intervention, must be approached. This matters because the
+alternative is a service that talks at people rather than with them."
+
+EXAMPLE 6 — Uniform sentence length fixed, burstiness introduced:
+BEFORE: "The halo effect is a cognitive bias that influences how individuals perceive others.
+It occurs when a positive impression in one domain influences overall evaluation. Research
+has consistently demonstrated this phenomenon across multiple contexts. It affects both
+personal relationships and professional assessments in significant ways."
+AFTER: "The halo effect distorts. Once a positive first impression forms, it colours
+every subsequent judgement — competence, honesty, physical attractiveness — in ways the
+observer rarely notices (Thorndike, 1920). This is not a minor concern for recruitment or
+clinical assessment: it is a structural problem in how humans process incomplete information,
+and it is remarkably resistant to awareness alone."
+
+EXAMPLE 7 — Meta-commentary opener replaced, evidence-first entry:
+BEFORE: "This section will examine the relationship between social media use and adolescent
+mental health, exploring various theoretical perspectives and empirical findings in the
+existing literature to develop a comprehensive understanding of this complex issue."
+AFTER: "Adolescent depression rates rose 52% between 2005 and 2017 in the United States —
+a period that maps almost exactly onto the expansion of social media use (Twenge et al.,
+2018). Whether the relationship is causal, correlational, or confounded by third variables
+remains contested, and the answer matters enormously for how clinicians and policymakers
+should respond."
 
 WHAT NOT TO DO — banned outputs:
-✗ "They commit." — dramatic fragment + contraction
-✗ "Not trivial." — dramatic fragment
-✗ "like a stone skipping across glass" — simile not in original
-✗ "Redundancy is the point." — journalistic fragment
+✗ "They commit." — dramatic fragment
+✗ "Not trivial." — standalone dramatic fragment
+✗ "like a stone skipping across glass" — figurative language not in original
+✗ "Redundancy is the point." — journalistic register
+✗ Starting a new paragraph with "Furthermore," or "Moreover,"
+✗ Closing a paragraph with "...remains essential to X" or "...is of great importance"
 `;
 
 // ─── MODEL FINGERPRINT PROFILES ───────────────────────────────────────
@@ -472,21 +508,28 @@ No two consecutive citations may use the same integration pattern:
 
   a) Study-first: "A systematic review by Jones et al. (2021) found that..."
   b) Mid-sentence: "...care models — which Rietman et al. (2022) found structurally inadequate — continue to..."
-  c) Passive attribution: "It has been established (Mouritsen, 2018) that..."
-  d) Named without active verb: "As Gagliardo (2013) observed, olfactory impairment..."
-  e) Evidence then source: "Homing from unfamiliar sites is impaired by anosmia (Gagliardo, 2013)."
-  f) Concessive: "Even Wiltschko and Wiltschko (2019), working primarily within a magnetic-cue framework, acknowledged..."
-  g) Temporal: "Since Emlen's (1975) foundational work on stellar cues..."
+  c) Passive attribution: "It has been established (Smith, 2018) that..."
+  d) Named without active verb: "As Jones (2013) observed, the picture is more complex."
+  e) Evidence then source: "Outcomes worsen under delayed intervention (Brown, 2021)."
+  f) Concessive: "Even Brown and Ali (2019), working primarily within a structural framework, acknowledged..."
+  g) Temporal: "Since Thompson's (2011) foundational work on relational practice..."
+  h) Human hedged claim: "It can be argued that..." / "It can be said that..." (use at most once)
 
 PART B — HUMAN TEXTURE (academic register only):
 
-1. CONTEXTUAL HEDGES specific to the subject matter.
-2. ASYMMETRIC CONCESSIONS.
-3. WRITER'S ASIDE in parentheses (academic only).
-4. SHORT COMPLETE SENTENCE after a long dense one — NO dramatic fragments.
-5. OVERSTUFFED QUALIFYING CLAUSE — one per paragraph (reads as thinking out loud).
+1. CONTEXTUAL HEDGES — "may", "tends to", "in many cases", "can suggest", "often appears"
+   specific to the subject matter. At least one per two paragraphs.
+2. ASYMMETRIC CONCESSIONS — "Even well-intentioned practitioners...", "This does not mean...",
+   "It would be wrong to suggest...", "Even so,". At least one per passage.
+3. SELF-COMMENTARY — "This matters because...", "What this reveals is...", "The implication here is..."
+   At least one per passage (frames the so-what without summarising).
+4. SHORT COMPLETE SENTENCE after a long dense one — 8 words or under. NO dramatic fragments.
+   Example: "This is not a minor concern." / "The evidence here is unambiguous." / "The distinction matters."
+5. OVERSTUFFED QUALIFYING CLAUSE — one per paragraph (reads as thinking out loud, genuine academic voice).
+6. DIRECT DECLARATIVE OPENER — at least one paragraph opens mid-argument with specific evidence,
+   NOT a broad contextualising claim.
 
-REGISTER CHECK: No contractions. No fragments. No figurative language. Academic throughout.
+REGISTER CHECK: No contractions. No standalone fragments. No figurative language. Academic throughout.
 
 Output the rewritten text only. No explanation.`;
 }

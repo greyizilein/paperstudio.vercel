@@ -21,7 +21,6 @@ const SUPABASE_SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const GOOGLE_AI_API_KEY = Deno.env.get("GOOGLE_AI_API_KEY")!;
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY")!;
 import { buildPptxBase64, type PptxSpec } from "../_shared/pptx-builder.ts";
-import { inlineHumaniseSection } from "../_shared/humanise-section.ts";
 const ADMIN_EMAIL = "grey.izilein@gmail.com";
 
 // ─────────────────────────────────────────────────────────────────────
@@ -1354,34 +1353,6 @@ Deno.serve(async (req) => {
               .replace(/\[CZAR_IMAGE_SPEC\][\s\S]*?(?:\[\/CZAR_IMAGE_SPEC\]|$)/gi, "")
               .replace(/\[CZAR_DELIVERY:\w+\]/gi, "")
               .trim();
-          }
-        }
-
-        // ── INLINE HUMANISER ──────────────────────────────────────────
-        // Fire-and-forget background Gemini Flash call on substantive writing.
-        // Excluded: clarify/plan cards, slides, short replies (<150 words).
-        // Sends done immediately — no visible pause or rewrite from user POV.
-        // The humanised version lands in DB silently after done is sent.
-        {
-          const preWc = wordCount(fullText);
-          const hasMarker = /\[CZAR_(CLARIFY|PLAN|IMAGE_SPEC)\]/.test(fullText || "");
-          const shouldHumanise =
-            !!fullText &&
-            preWc >= 150 &&
-            !hasMarker &&
-            playbookPick !== "slides";
-
-          if (shouldHumanise) {
-            const rawText = fullText;
-            const msgId = assistantId;
-            // Intentionally not awaited — runs after done is sent
-            inlineHumaniseSection(rawText, GOOGLE_AI_API_KEY).then((polished) => {
-              if (polished && polished !== rawText && polished.trim().length > 80) {
-                svc.from("czar_messages").update({ content: polished }).eq("id", msgId)
-                  .then(() => console.log(`[czar-chat] humaniser silently updated ${msgId}`))
-                  .catch((e: Error) => console.warn("[czar-chat] humaniser DB update failed:", e.message));
-              }
-            }).catch((e: Error) => console.warn("[czar-chat] humaniser failed:", e.message));
           }
         }
 
