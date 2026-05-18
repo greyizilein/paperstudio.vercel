@@ -4,7 +4,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import {
   Check, Copy, Download, Settings, X, Plus, Trash2,
   Loader2, Sparkles, StopCircle, Wand2, BarChart2, Upload, Lock, MoreVertical, Image as ImageIcon, Cpu,
-  FolderOpen, ChevronRight, ArrowLeft, PenLine
+  FolderOpen, ChevronRight, ArrowLeft, PenLine, GitMerge, Columns2, GripVertical, Share2, MessageCircle
 } from "lucide-react";
 import { CzarIcon } from "@/components/icons/CzarIcon";
 import { HumanisingPill } from "@/components/shared/HumanisingPill";
@@ -31,6 +31,7 @@ import {
 } from "@/lib/constants";
 import { ContextualToolbar } from "@/components/writer/ContextualToolbar";
 import { OnboardingTour } from "@/components/writer/OnboardingTour";
+import { ReorderChaptersModal } from "@/components/writer/ReorderChaptersModal";
 import { ChartRenderer } from "@/components/firstdraft/ChartRenderer";
 import { FinalExport } from "@/components/FinalExport";
 import { ChapterOutlineModal, type OutlineHeading } from "@/components/ChapterOutlineModal";
@@ -332,7 +333,11 @@ export default function WriterPage() {
   const [showProjectsDrawer, setShowProjectsDrawer] = useState(false);
   const [allProjects, setAllProjects] = useState<Project[]>([]);
   const [isEditMode, setIsEditMode] = useState(false);
+  const [splitPane, setSplitPane] = useState(false);
   const [editContent, setEditContent] = useState("");
+  const [correctionDiff, setCorrectionDiff] = useState<DiffParagraph[] | null>(null);
+  const [correctionRevised, setCorrectionRevised] = useState<string | null>(null);
+  const [showReorderModal, setShowReorderModal] = useState(false);
   // Inline text editing toolbar
   const [textSelection, setTextSelection] = useState<{ text: string; rect: DOMRect } | null>(null);
   const [inlineEditLoading, setInlineEditLoading] = useState(false);
@@ -340,6 +345,12 @@ export default function WriterPage() {
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
   const saveResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [showTour, setShowTour] = useState(false);
+  // Supervisor share link
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [shareUrl, setShareUrl] = useState<string | null>(null);
+  const [shareLoading, setShareLoading] = useState(false);
+  const [shareCopied, setShareCopied] = useState(false);
+  const [supervisorCommentCounts, setSupervisorCommentCounts] = useState<Record<string, number>>({});
   // Chapter guide panel
   const [showGuide, setShowGuide] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
@@ -356,7 +367,21 @@ export default function WriterPage() {
   const theoristsCacheRef = useRef<Record<string, string[]>>({});
 
   // Reset edit mode and clear text selection when switching chapters
-  useEffect(() => { setIsEditMode(false); setTextSelection(null); }, [activeChapterIndex]);
+  useEffect(() => {
+    setIsEditMode(false);
+    setSplitPane(false);
+    setTextSelection(null);
+    setCorrectionDiff(null);
+    setCorrectionRevised(null);
+  }, [activeChapterIndex]);
+
+  // Auto-disable split pane on narrow viewports
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 767px)");
+    const handler = (e: MediaQueryListEvent) => { if (e.matches) setSplitPane(false); };
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, []);
 
   // Show onboarding tour for first-time studio visitors
   useEffect(() => {
@@ -837,6 +862,26 @@ export default function WriterPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project?.id]);
 
+  // Load supervisor comment counts for this project's share link(s)
+  useEffect(() => {
+    if (!project?.id) return;
+    (async () => {
+      const { data: links } = await supabase
+        .from("share_links")
+        .select("id")
+        .eq("project_id", project.id);
+      if (!links || links.length === 0) return;
+      const { data: coms } = await supabase
+        .from("supervisor_comments")
+        .select("chapter_id")
+        .in("share_link_id", links.map(l => l.id));
+      if (!coms) return;
+      const counts: Record<string, number> = {};
+      coms.forEach(c => { counts[c.chapter_id] = (counts[c.chapter_id] || 0) + 1; });
+      setSupervisorCommentCounts(counts);
+    })();
+  }, [project?.id]);
+
   // Clean up tailer on unmount
   useEffect(() => {
     return () => stopTailing();
@@ -1021,6 +1066,44 @@ ${thesisArea}`);
       try { localStorage.setItem(`ps:studio-toured:${user.id}`, "1"); } catch {}
     }
     setShowTour(false);
+  };
+
+  const handleReorderSave = (newOrder: Chapter[]) => {
+    if (!project || !user) return;
+    const reindexed = newOrder.map((ch, i) => ({ ...ch, order_index: i }));
+    handleUpdate({ ...project, chapters: reindexed });
+    setShowReorderModal(false);
+  };
+
+  const handleShare = async () => {
+    if (!project || !user) return;
+    setShareLoading(true);
+    try {
+      const { data: existing } = await supabase
+        .from("share_links")
+        .select("token")
+        .eq("project_id", project.id)
+        .maybeSingle();
+
+      let token: string;
+      if (existing) {
+        token = existing.token;
+      } else {
+        token = crypto.randomUUID().replace(/-/g, "").slice(0, 24);
+        const { error } = await supabase
+          .from("share_links")
+          .insert({ project_id: project.id, token, created_by: user.id });
+        if (error) throw error;
+      }
+
+      const url = `${window.location.origin}/share/${token}`;
+      setShareUrl(url);
+      setShowShareModal(true);
+    } catch (err: any) {
+      toast.error(err.message || "Failed to generate share link.");
+    } finally {
+      setShareLoading(false);
+    }
   };
 
   const handleUpdate = async (updated: Project) => {
@@ -1389,30 +1472,49 @@ ${thesisArea}`);
     setActiveChapterIndex(next);
   };
 
-  const handleSupervisorRevisionApplied = async (revisedContent: string, count: number) => {
-    if (!currentChapter || !project || !user) return;
-    const wc = countBodyWords(revisedContent);
+  const handleSupervisorRevisionApplied = async (revisedContent: string, _count: number) => {
+    if (!currentChapter) return;
+    const diff = computeParaDiff(currentChapter.content || "", revisedContent);
+    setCorrectionRevised(revisedContent);
+    setCorrectionDiff(diff);
+    setShowSupervisorModal(false);
+  };
+
+  const handleAcceptCorrections = async () => {
+    if (!correctionRevised || !currentChapter || !project || !user) return;
+    const wc = countBodyWords(correctionRevised);
     const prevContent = currentChapter.content;
+    const changed = correctionDiff?.filter(p => p.type !== "unchanged").length ?? 0;
     const newRevisions = [
       ...(currentChapter.supervisor_revisions || []),
-      {
-        id: crypto.randomUUID(),
-        applied_at: new Date().toISOString(),
-        source: "docx" as const,
-        items_applied: count,
-        previous_content: prevContent,
-      },
+      { id: crypto.randomUUID(), applied_at: new Date().toISOString(), source: "docx" as const, items_applied: changed, previous_content: prevContent },
     ];
-    const updated = {
-      ...project,
-      chapters: project.chapters.map(c =>
-        c.id === currentChapter.id
-          ? { ...c, content: revisedContent, word_count_actual: wc, supervisor_revisions: newRevisions }
-          : c,
-      ),
+    handleUpdate({ ...project, chapters: project.chapters.map(c => c.id === currentChapter.id ? { ...c, content: correctionRevised, word_count_actual: wc, supervisor_revisions: newRevisions } : c) });
+    setCorrectionDiff(null);
+    setCorrectionRevised(null);
+    toast.success("Corrections accepted and saved.");
+  };
+
+  const handleDownloadWithHighlights = () => {
+    if (!correctionDiff || !currentChapter) return;
+    const colors: Record<DiffParagraph["type"], string> = {
+      unchanged: "transparent",
+      modified: "#fef08a",
+      added: "#bbf7d0",
+      deleted: "#fecaca",
     };
-    setProject(updated);
-    try { await updateProject(user.id, updated); } catch {}
+    const paras = correctionDiff.map(p => {
+      const bg = colors[p.type];
+      const del = p.type === "deleted" ? " style=\"text-decoration:line-through;opacity:0.6;\"" : "";
+      const wrap = bg !== "transparent"
+        ? `<p style="background:${bg};padding:6px 10px;margin:8px 0;border-radius:4px;"${del}>${p.text.replace(/\n/g, "<br>")}</p>`
+        : `<p>${p.text.replace(/\n/g, "<br>")}</p>`;
+      return wrap;
+    }).join("\n");
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${currentChapter.title} — Corrections</title></head><body style="font-family:Georgia,serif;max-width:720px;margin:40px auto;padding:20px;line-height:1.8;"><h1>${currentChapter.title}</h1><p style="font-size:12px;color:#666;">Legend: <span style="background:#fef08a;padding:2px 6px">Modified</span> <span style="background:#bbf7d0;padding:2px 6px">Added</span> <span style="background:#fecaca;padding:2px 6px">Deleted</span></p><hr style="margin:16px 0;">${paras}</body></html>`;
+    const blob = new Blob([html], { type: "text/html" });
+    downloadBlob(blob, `${professionalFilename(currentChapter.title)}_Corrections.html`);
+    toast.success("Highlighted corrections downloaded.");
   };
 
   // ── Professional filename derivation (Title_Case_Words.ext, no underscores collapsed) ──
@@ -1868,11 +1970,14 @@ ${thesisArea}`);
                 <div className="absolute right-0 top-full mt-2 w-[260px] bg-background border border-border rounded-2xl shadow-2xl z-[81] p-2 grid grid-cols-3 gap-2 animate-in fade-in zoom-in-95 duration-150">
                   {[
                     { icon: Copy, label: copied ? "Copied" : "Copy", onClick: () => { handleCopy(); setMobileMenuOpen(false); } },
-                    { icon: Download, label: "Export", onClick: () => { setShowExportChModal(true); setMobileMenuOpen(false); } },
-                    { icon: Download, label: "Final PDF", onClick: () => { setShowFinalExport(true); setMobileMenuOpen(false); } },
+                    { icon: Download, label: "Chapter", onClick: () => { setShowExportChModal(true); setMobileMenuOpen(false); } },
+                    { icon: Download, label: "All", onClick: () => { setShowExportModal(true); setMobileMenuOpen(false); } },
+                    { icon: GitMerge, label: "Corrections", onClick: () => { setShowSupervisorModal(true); setMobileMenuOpen(false); } },
+                    { icon: GripVertical, label: "Reorder", onClick: () => { setShowReorderModal(true); setMobileMenuOpen(false); } },
+                    { icon: Share2, label: "Share", onClick: () => { handleShare(); setMobileMenuOpen(false); } },
                     { icon: Sparkles, label: "Settings", onClick: () => { setShowPersonalise(true); setMobileMenuOpen(false); } },
                     { icon: FolderOpen, label: "Projects", onClick: () => { setShowProjectsDrawer(true); setMobileMenuOpen(false); } },
-                    { icon: Plus, label: "New Project", onClick: () => { navigate("/new-project"); setMobileMenuOpen(false); } },
+                    { icon: Plus, label: "New", onClick: () => { navigate("/new-project"); setMobileMenuOpen(false); } },
                   ].map((item) => (
                     <button key={item.label} onClick={item.onClick} title={item.label} className="flex flex-col items-center gap-1 px-2 py-3 rounded-xl bg-secondary/40 hover:bg-secondary text-foreground transition-all">
                       <item.icon size={18} />
@@ -2049,44 +2154,65 @@ ${thesisArea}`);
           <div className="mt-auto px-3 py-2 border-t border-border">
             <button onClick={() => setShowExportModal(true)}
               className="w-full py-1.5 rounded-md text-xs font-bold border border-border text-foreground hover:border-primary hover:text-primary transition-all">
-              Export all
+              Download ALL
             </button>
           </div>
         </nav>}
 
         {/* Editor */}
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-          {/* Chapter strip — compact numbered dots */}
-          <div className="h-10 border-b border-border flex items-center px-3 gap-2 overflow-x-auto flex-shrink-0 bg-background scrollbar-hide">
-            {(() => {
-              const sorted = project.chapters.slice().sort((a, b) => a.order_index - b.order_index);
-              const nonAbstract = sorted.filter(c => c.type !== "abstract");
-              return sorted.map((ch) => {
-                const locked = isChapterLocked(ch);
-                const isActive = activeChapterIndex === ch.order_index;
-                const chapterNum = nonAbstract.findIndex(c => c.id === ch.id) + 1;
-                return (
-                  <button
-                    key={ch.id}
-                    onClick={() => { if (!locked) setActiveChapterIndex(ch.order_index); else toast.error("Complete the previous chapter first."); }}
-                    title={ch.word_count_actual
-                      ? `${ch.title}\n${ch.word_count_actual.toLocaleString()} / ${(ch.word_count_target || 0).toLocaleString()}w`
-                      : ch.title}
-                    className={cn(
-                      "w-8 h-8 rounded-full text-[12px] font-extrabold flex-shrink-0 flex items-center justify-center transition-all",
-                      locked && "opacity-40 cursor-not-allowed",
-                      isActive
-                        ? "bg-foreground text-background"
-                        : ch.status === "completed"
-                          ? "bg-green/15 text-green hover:bg-green/25"
-                          : "bg-secondary text-muted-foreground hover:bg-secondary/70 hover:text-foreground"
-                    )}
-                  >
-                    {ch.status === "completed" ? "✓" : ch.type === "abstract" ? "A" : chapterNum}
-                  </button>
-                );
-              });
-            })()}
+          {/* Chapter strip — compact numbered dots + correction button at far right */}
+          <div className="h-10 border-b border-border flex items-center flex-shrink-0 bg-background">
+            {/* Scrollable dots */}
+            <div className="flex items-center px-3 gap-2 overflow-x-auto flex-1 min-w-0 scrollbar-hide">
+              {(() => {
+                const sorted = project.chapters.slice().sort((a, b) => a.order_index - b.order_index);
+                const nonAbstract = sorted.filter(c => c.type !== "abstract");
+                return sorted.map((ch) => {
+                  const locked = isChapterLocked(ch);
+                  const isActive = activeChapterIndex === ch.order_index;
+                  const chapterNum = nonAbstract.findIndex(c => c.id === ch.id) + 1;
+                  return (
+                    <button
+                      key={ch.id}
+                      onClick={() => { if (!locked) setActiveChapterIndex(ch.order_index); else toast.error("Complete the previous chapter first."); }}
+                      title={ch.word_count_actual
+                        ? `${ch.title}\n${ch.word_count_actual.toLocaleString()} / ${(ch.word_count_target || 0).toLocaleString()}w`
+                        : ch.title}
+                      className={cn(
+                        "relative w-8 h-8 rounded-full text-[12px] font-extrabold flex-shrink-0 flex items-center justify-center transition-all",
+                        locked && "opacity-40 cursor-not-allowed",
+                        isActive
+                          ? "bg-foreground text-background"
+                          : ch.status === "completed"
+                            ? "bg-green/15 text-green hover:bg-green/25"
+                            : "bg-secondary text-muted-foreground hover:bg-secondary/70 hover:text-foreground"
+                      )}
+                    >
+                      {ch.status === "completed" ? "✓" : ch.type === "abstract" ? "A" : chapterNum}
+                      {(supervisorCommentCounts[ch.id] ?? 0) > 0 && (
+                        <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-amber-500 text-[8px] font-bold text-white flex items-center justify-center pointer-events-none">
+                          {supervisorCommentCounts[ch.id] > 9 ? "9+" : supervisorCommentCounts[ch.id]}
+                        </span>
+                      )}
+                    </button>
+                  );
+                });
+              })()}
+            </div>
+            {/* Correction slot button — always pinned right */}
+            <div className="flex-shrink-0 flex items-center border-l border-border px-2 gap-1">
+              <button
+                onClick={() => currentChapter?.status === "completed" ? setShowSupervisorModal(true) : toast.error("Complete this chapter first.")}
+                title="Apply supervisor corrections"
+                className={cn(
+                  "w-7 h-7 rounded-md flex items-center justify-center transition-all",
+                  correctionDiff ? "text-amber-500 bg-amber-500/10" : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+                )}
+              >
+                <GitMerge size={13} />
+              </button>
+            </div>
           </div>
 
           {/* Content */}
@@ -2175,6 +2301,16 @@ ${thesisArea}`);
                     >
                       {isEditMode ? <><Check size={11} className="inline mr-0.5" /> Done</> : <>✎ Edit</>}
                     </button>
+                    {isEditMode && (
+                      <button
+                        onClick={() => setSplitPane(s => !s)}
+                        title="Split view (desktop)"
+                        className="hidden md:inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        <Columns2 size={11} />
+                        {splitPane ? "Single" : "Split"}
+                      </button>
+                    )}
                   </div>
                 </div>
                 {/* Recovery banner — shown when a previous auto-saved draft is found */}
@@ -2207,13 +2343,65 @@ ${thesisArea}`);
                   </div>
                 )}
                 {isEditMode ? (
-                  <textarea
-                    value={editContent}
-                    onChange={(e) => setEditContent(e.target.value)}
-                    autoFocus
-                    className="flex-1 w-full resize-none bg-transparent outline-none text-[14px] text-foreground leading-relaxed font-mono px-5 sm:px-10 py-6 min-h-[600px]"
-                    placeholder="Chapter content…"
-                  />
+                  splitPane ? (
+                    <div className="flex flex-1 overflow-hidden">
+                      {/* Left — raw markdown */}
+                      <textarea
+                        value={editContent}
+                        onChange={(e) => setEditContent(e.target.value)}
+                        autoFocus
+                        className="flex-1 w-full resize-none bg-transparent outline-none text-[13px] text-foreground leading-relaxed font-mono px-5 py-6 border-r border-border overflow-y-auto"
+                        placeholder="Chapter content…"
+                      />
+                      {/* Right — rendered preview */}
+                      <div className="flex-1 overflow-y-auto px-5 sm:px-8 py-6 prose-academic text-[14px]">
+                        <Markdown remarkPlugins={[remarkGfm]}>{editContent}</Markdown>
+                      </div>
+                    </div>
+                  ) : (
+                    <textarea
+                      value={editContent}
+                      onChange={(e) => setEditContent(e.target.value)}
+                      autoFocus
+                      className="flex-1 w-full resize-none bg-transparent outline-none text-[14px] text-foreground leading-relaxed font-mono px-5 sm:px-10 py-6 min-h-[600px]"
+                      placeholder="Chapter content…"
+                    />
+                  )
+                ) : correctionDiff ? (
+                  /* ── Correction diff view ── */
+                  <div className="flex flex-col h-full">
+                    {/* Diff toolbar */}
+                    <div className="flex-shrink-0 flex items-center gap-2 px-4 py-2.5 border-b border-border bg-amber-500/5">
+                      <span className="text-[11px] font-bold text-amber-600 dark:text-amber-400">Corrections applied</span>
+                      <span className="flex gap-2 text-[10px] ml-1">
+                        <span className="px-1.5 py-0.5 rounded bg-yellow-200/80 text-yellow-900">modified</span>
+                        <span className="px-1.5 py-0.5 rounded bg-green-200/80 text-green-900">added</span>
+                        <span className="px-1.5 py-0.5 rounded bg-red-200/80 text-red-900 line-through">deleted</span>
+                      </span>
+                      <div className="ml-auto flex items-center gap-2">
+                        <button onClick={handleDownloadWithHighlights} className="text-[11px] px-2.5 py-1 rounded border border-border text-muted-foreground hover:text-foreground transition-colors">⬇ Download highlighted</button>
+                        <button onClick={() => { setCorrectionDiff(null); setCorrectionRevised(null); }} className="text-[11px] text-muted-foreground hover:text-foreground transition-colors">Dismiss</button>
+                        <button onClick={handleAcceptCorrections} className="text-[11px] px-3 py-1 rounded bg-foreground text-background font-semibold hover:opacity-80 transition-opacity">Accept all</button>
+                      </div>
+                    </div>
+                    {/* Diff paragraphs */}
+                    <div className="flex-1 overflow-y-auto px-5 sm:px-10 py-6 max-w-[680px] lg:max-w-[920px] xl:max-w-[1080px] mx-auto w-full">
+                      {correctionDiff.map((para, i) => (
+                        <div
+                          key={i}
+                          className={cn(
+                            "mb-3 px-3 py-2 rounded border-l-4 text-[14px] leading-relaxed",
+                            para.type === "unchanged" ? "border-transparent" :
+                            para.type === "modified"  ? "bg-yellow-500/10 border-yellow-500" :
+                            para.type === "added"     ? "bg-green-500/10  border-green-500" :
+                                                        "bg-red-500/10    border-red-500 opacity-60 line-through"
+                          )}
+                        >
+                          <Markdown remarkPlugins={[remarkGfm]}>{para.text}</Markdown>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 ) : (
                   <Markdown remarkPlugins={[remarkGfm]} components={{
                     ol: ({ children, ...props }: any) => <ol {...props}>{children}</ol>,
@@ -3073,7 +3261,7 @@ ${thesisArea}`);
       </div>
 
       {/* ═══ EXPORT MODAL ═══ */}
-      <Modal open={showExportModal} onClose={() => setShowExportModal(false)} title="Export dissertation">
+      <Modal open={showExportModal} onClose={() => setShowExportModal(false)} title="Download ALL — Full Dissertation">
         <div className="bg-primary/5 border border-primary/20 rounded-md px-2.5 py-1.5 text-xs text-primary mb-3">
           Your tier: <b className="capitalize">{subscription.tier}</b> · {subscription.words_used.toLocaleString()} / {subscription.word_limit.toLocaleString()} words
         </div>
@@ -3354,10 +3542,112 @@ ${thesisArea}`);
         onDownloadAnyway={() => { setShowImageProgress(false); setShowFinalExport(true); }}
       />
 
+      {/* Supervisor corrections modal */}
+      {currentChapter && (
+        <SupervisorFeedbackModal
+          open={showSupervisorModal}
+          onClose={() => setShowSupervisorModal(false)}
+          chapter={currentChapter}
+          project={project}
+          onApplied={handleSupervisorRevisionApplied}
+        />
+      )}
+
+      {/* Chapter re-order modal */}
+      {showReorderModal && (
+        <ReorderChaptersModal
+          chapters={project.chapters}
+          onSave={handleReorderSave}
+          onClose={() => setShowReorderModal(false)}
+        />
+      )}
+
       {/* First-visit studio tour */}
       {showTour && <OnboardingTour onDone={handleTourDone} />}
+
+      {/* Supervisor share link modal */}
+      {showShareModal && shareUrl && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-foreground/30 backdrop-blur-sm">
+          <div className="w-full max-w-sm bg-background border border-border rounded-2xl shadow-2xl p-5 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="text-[15px] font-bold text-foreground">Share with supervisor</h2>
+                <p className="text-[11px] text-muted-foreground mt-0.5">Anyone with this link can read and comment on your draft.</p>
+              </div>
+              <button onClick={() => setShowShareModal(false)} className="p-1.5 rounded-lg text-muted-foreground hover:bg-secondary transition-colors">
+                <X size={16} />
+              </button>
+            </div>
+            <div className="flex gap-2">
+              <input
+                readOnly
+                value={shareUrl}
+                className="flex-1 text-[12px] bg-secondary/50 border border-border rounded-lg px-3 py-2 text-foreground outline-none truncate"
+                onFocus={e => e.currentTarget.select()}
+              />
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(shareUrl);
+                  setShareCopied(true);
+                  setTimeout(() => setShareCopied(false), 2000);
+                }}
+                className="flex-shrink-0 px-4 py-2 rounded-xl bg-foreground text-background text-[12px] font-bold hover:opacity-80 transition-opacity"
+              >
+                {shareCopied ? "Copied!" : "Copy"}
+              </button>
+            </div>
+            {(supervisorCommentCounts && Object.values(supervisorCommentCounts).some(v => v > 0)) && (
+              <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-3 flex items-center gap-1">
+                <MessageCircle size={11} />
+                Your supervisor has left comments — see badges on chapter dots.
+              </p>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
+}
+
+// ═══ DIFF UTILITIES ═══
+
+export type DiffParagraph = { text: string; type: "unchanged" | "modified" | "added" | "deleted" };
+
+function jaccardSim(a: string, b: string): number {
+  const wa = new Set(a.toLowerCase().split(/\s+/).filter(Boolean));
+  const wb = new Set(b.toLowerCase().split(/\s+/).filter(Boolean));
+  const inter = [...wa].filter(w => wb.has(w)).length;
+  const union = new Set([...wa, ...wb]).size;
+  return union === 0 ? 1 : inter / union;
+}
+
+function computeParaDiff(original: string, revised: string): DiffParagraph[] {
+  const origParas = original.split(/\n\n+/).filter(p => p.trim());
+  const revParas  = revised.split(/\n\n+/).filter(p => p.trim());
+  const result: DiffParagraph[] = [];
+  const origUsed = new Set<number>();
+
+  for (const rp of revParas) {
+    let bestIdx = -1, bestSim = 0;
+    for (let i = 0; i < origParas.length; i++) {
+      if (origUsed.has(i)) continue;
+      const s = jaccardSim(origParas[i], rp);
+      if (s > bestSim) { bestSim = s; bestIdx = i; }
+    }
+    if (bestSim > 0.8) {
+      origUsed.add(bestIdx);
+      result.push({ text: rp, type: "unchanged" });
+    } else if (bestSim > 0.3) {
+      origUsed.add(bestIdx);
+      result.push({ text: rp, type: "modified" });
+    } else {
+      result.push({ text: rp, type: "added" });
+    }
+  }
+  for (let i = 0; i < origParas.length; i++) {
+    if (!origUsed.has(i)) result.push({ text: origParas[i], type: "deleted" });
+  }
+  return result;
 }
 
 // ═══ HELPER COMPONENTS ═══

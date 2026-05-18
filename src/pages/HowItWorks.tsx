@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { PageHero } from "@/components/firstdraft/PageHero";
 import { CTABand } from "@/components/firstdraft/CTABand";
+import { InteractiveDemo } from "@/components/marketing/InteractiveDemo";
 
 const FONTS = {
   headline: '"Fraunces", "Playfair Display", Georgia, serif',
@@ -15,6 +16,11 @@ export default function HowItWorks() {
         title={<>From blank page to<br /><em style={{ fontStyle: "italic", color: "var(--ma-accent)" }}>submitted dissertation.</em></>}
         subtitle="Three steps, one platform. Here's exactly how PAPERSTUDIO works."
       />
+      {/* Interactive demo player */}
+      <section style={{ padding: "60px 24px 0", maxWidth: "960px", margin: "0 auto" }}>
+        <InteractiveDemo />
+      </section>
+
       <section style={{ padding: "100px 24px", maxWidth: "1200px", margin: "0 auto" }}>
         <style>{`
           .hiw-step-grid { display: grid; grid-template-columns: 1fr 2fr; gap: 64px; align-items: start; margin-bottom: 80px; }
