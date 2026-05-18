@@ -21,6 +21,7 @@ const SUPABASE_SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const GOOGLE_AI_API_KEY = Deno.env.get("GOOGLE_AI_API_KEY")!;
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY")!;
 import { buildPptxBase64, type PptxSpec } from "../_shared/pptx-builder.ts";
+import { inlineHumaniseSection } from "../_shared/humanise-section.ts";
 const ADMIN_EMAIL = "grey.izilein@gmail.com";
 
 // ─────────────────────────────────────────────────────────────────────
@@ -1356,42 +1357,29 @@ Deno.serve(async (req) => {
           }
         }
 
-        // ── HUMANISER PIPELINE ────────────────────────────────────────
-        // Run the 5-stage Academic Humaniser on substantive writing output
-        // BEFORE persisting. Excluded: clarify/plan cards, slides decks,
-        // short replies (<150 words), and document-correction (separate fn).
-        // Doc-correction never reaches this function — it has its own pipeline.
+        // ── INLINE HUMANISER ──────────────────────────────────────────
+        // Always-on single Gemini Flash call on substantive writing output.
+        // Excluded: clarify/plan cards, slides, short replies (<150 words).
+        // Silent — no SSE events. Result delivered in the `done` event as `content`.
         {
           const preWc = wordCount(fullText);
           const hasMarker = /\[CZAR_(CLARIFY|PLAN|IMAGE_SPEC)\]/.test(fullText || "");
-          // OPT-IN. Humaniser only runs when user explicitly enabled the
-          // "Auto-run Humaniser after each piece" setting. Default = OFF.
-          const humaniserOn = body.settings?.humanise_after_writing === true;
           const shouldHumanise =
             !!fullText &&
             preWc >= 150 &&
             !hasMarker &&
-            playbookPick !== "slides" &&
-            humaniserOn;
+            playbookPick !== "slides";
 
           if (shouldHumanise) {
-            console.log(`[czar-chat] humaniser starting (${preWc} words, mode=${mode}, playbook=${playbookPick})`);
-            write("humanise", { state: "start", words: preWc });
+            console.log(`[czar-chat] inline humaniser starting (${preWc} words)`);
             try {
-              const polished = await runHumaniserPipeline(fullText, pick.model, (ev) => {
-                write("humanise", ev);
-              }, humaniserAbort);
-              if (polished && polished.trim().length > 50) {
+              const polished = await inlineHumaniseSection(fullText, GOOGLE_AI_API_KEY, humaniserAbort.signal);
+              if (polished && polished.trim().length > 80) {
                 fullText = polished;
-                console.log(`[czar-chat] humaniser done: ${preWc} → ${wordCount(fullText)} words`);
-                write("humanise", { state: "done", words: wordCount(fullText) });
-              } else {
-                console.warn("[czar-chat] humaniser returned empty — keeping raw draft");
-                write("humanise", { state: "skipped", reason: "empty output" });
+                console.log(`[czar-chat] inline humaniser done: ${preWc} → ${wordCount(fullText)} words`);
               }
             } catch (e: any) {
-              console.error("[czar-chat] humaniser failed:", e?.message || e);
-              write("humanise", { state: "skipped", reason: String(e?.message || e).slice(0, 200) });
+              console.warn("[czar-chat] inline humaniser error — keeping raw draft:", e?.message || e);
             }
           }
         }
@@ -1407,10 +1395,9 @@ Deno.serve(async (req) => {
           catch (e) { console.error("[czar-chat] word increment failed:", (e as Error).message); }
         }
 
-        // Tell the client we're done IMMEDIATELY — don't make them wait for
-        // the follow-ups roundtrip. Follow-ups stream in afterwards on the
-        // same SSE connection and the client renders them when they arrive.
-        write("done", { conversation_id: conversationId, assistant_id: assistantId, words: wc });
+        // Tell the client we're done. Include the humanised content so the
+        // client can silently update the displayed message without a flash.
+        write("done", { conversation_id: conversationId, assistant_id: assistantId, words: wc, content: fullText });
 
         // Follow-ups: only for substantive replies, fired after `done` so they
         // never delay the user seeing their answer settle.
