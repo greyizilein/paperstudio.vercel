@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
-import { Copy, Wallet, Loader2, Users, TrendingUp } from "lucide-react";
+import { Copy, Wallet, Loader2, Users, TrendingUp, MessageCircle } from "lucide-react";
 
 interface Wallet { balance_usd: number; lifetime_earned_usd: number; total_referrals: number; }
 interface Earning { id: string; commission_usd: number; payment_amount_usd: number; created_at: string; payment_reference: string | null; }
@@ -39,10 +39,15 @@ export function ReferralPanel({ referralCode }: { referralCode: string }) {
     toast.success("Referral link copied!");
   };
 
-  const share = async () => {
+  const shareNative = async () => {
     if ((navigator as any).share) {
-      try { await (navigator as any).share({ title: "Join PaperStudio", text: "Get $0 to start writing your dissertation with AI:", url: link }); } catch {}
+      try { await (navigator as any).share({ title: "Join PaperStudio", text: "Write your dissertation with AI — use my link:", url: link }); } catch {}
     } else { copy(); }
+  };
+
+  const shareWhatsApp = () => {
+    const text = encodeURIComponent(`Write your dissertation with AI 🎓 Use my link: ${link}`);
+    window.open(`https://wa.me/?text=${text}`, "_blank", "noopener");
   };
 
   const withdraw = async () => {
@@ -83,7 +88,10 @@ export function ReferralPanel({ referralCode }: { referralCode: string }) {
           <button onClick={copy} className="p-1.5 rounded hover:bg-muted" title="Copy"><Copy className="w-3.5 h-3.5" /></button>
         </div>
         <div className="flex gap-2">
-          <button onClick={share} className="flex-1 text-xs py-1.5 rounded bg-primary text-primary-foreground font-semibold">Share</button>
+          <button onClick={shareWhatsApp} className="flex items-center justify-center gap-1 flex-1 text-xs py-1.5 rounded bg-[#25D366] text-white font-semibold">
+            <MessageCircle className="w-3 h-3" /> WhatsApp
+          </button>
+          <button onClick={shareNative} className="flex-1 text-xs py-1.5 rounded bg-primary text-primary-foreground font-semibold">Share</button>
           <button
             onClick={withdraw}
             disabled={withdrawing || wallet.balance_usd < 5}

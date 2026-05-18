@@ -9,6 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { PsThemePicker } from "@/components/ps/PsThemePicker";
 import { PsThemeToggle } from "@/components/ps/PsThemeToggle";
+import { ReferralPanel } from "@/components/dashboard/ReferralPanel";
 
 const SETTING_GROUPS = [
   {
@@ -121,6 +122,7 @@ export default function SettingsPage() {
 
   // Technical settings
   const [settingsJson, setSettingsJson] = useState<Record<string, string>>({});
+  const [referralCode, setReferralCode] = useState("");
 
   const isAdmin = user?.email === "grey.izilein@gmail.com";
 
@@ -158,6 +160,7 @@ export default function SettingsPage() {
         setPhoneNumber((profileRes.data as any).phone_number || "");
         setAltEmail((profileRes.data as any).alt_email || "");
         setSettingsJson((profileRes.data as any).settings_json || {});
+        setReferralCode((profileRes.data as any).referral_code || "");
       }
     } catch (err: any) { toast.error(err.message); }
     finally { setLoading(false); }
@@ -295,6 +298,13 @@ export default function SettingsPage() {
             <button onClick={handleSaveProfile} disabled={saving} className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-[12px] font-bold hover:bg-primary/90 transition-colors disabled:opacity-50 cursor-pointer">
               {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} Save changes
             </button>
+
+            {/* Referral Programme */}
+            {referralCode && (
+              <div className="pt-4 border-t border-border">
+                <ReferralPanel referralCode={referralCode} />
+              </div>
+            )}
           </TabsContent>
 
           {/* Appearance — theme + light/dark */}

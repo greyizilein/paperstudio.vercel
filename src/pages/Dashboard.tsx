@@ -37,20 +37,21 @@ export default function Dashboard() {
         ? (window as any).requestIdleCallback(cb, { timeout: 800 })
         : setTimeout(cb, 250);
     idle(() => {
-      checkOAuthReferralPrompt();
+      registerReferral();
     });
   };
 
-  const checkOAuthReferralPrompt = async () => {
+  const registerReferral = async () => {
     if (!user) return;
-    const isGoogleUser = user.app_metadata?.provider === "google";
-    if (!isGoogleUser) return;
     const { data: prof } = await supabase.from("profiles").select("settings_json").eq("user_id", user.id).maybeSingle();
     const settings = (prof?.settings_json as Record<string, string>) || {};
     if (settings.referral_prompted === "true") return;
     const { data: referralUse } = await supabase.from("referral_uses").select("id").eq("referred_user_id", user.id).maybeSingle();
     if (referralUse) return;
-    const stashed = (localStorage.getItem("ps_referral_code") || "").trim().toUpperCase();
+    // Check localStorage first, then fall back to metadata set during email signup
+    const localCode = (localStorage.getItem("ps_referral_code") || "").trim().toUpperCase();
+    const metaCode = ((user.user_metadata?.referral_code as string) || "").trim().toUpperCase();
+    const stashed = localCode || metaCode;
     if (!stashed) return;
     const { data: refCode } = await supabase.from("referral_codes").select("id").eq("code", stashed).eq("active", true).maybeSingle();
     if (!refCode) return;
