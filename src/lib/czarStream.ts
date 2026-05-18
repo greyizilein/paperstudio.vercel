@@ -22,7 +22,7 @@ export interface CzarStreamHandlers {
   onHumanise?: (ev: { state: string; stage?: number; label?: string; words?: number; reason?: string }) => void;
   onCheckout?: (ev: { product: string; tier: string; authorization_url: string; reference?: string }) => void;
   onError?: (msg: string, code?: number) => void;
-  onDone?: (data: { conversation_id: string; assistant_id?: string; words?: number; billing?: string }) => void;
+  onDone?: (data: { conversation_id: string; assistant_id?: string; words?: number; billing?: string; content?: string }) => void;
 }
 
 async function authHeaders() {

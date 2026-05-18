@@ -33,6 +33,7 @@ import {
 } from "./writerIdentity.ts";
 import { getQualityExemplars } from "./qualityExemplars.ts";
 import { teeAndPersistChapterStream } from "../_shared/chapter-stream-persist.ts";
+import { humaniseSectionStream } from "../_shared/humanise-section.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -1121,9 +1122,10 @@ REMEMBER (the system prompt is the contract; this is just a checklist):
           inputText: systemPrompt + userContent,
           outputTokens: Math.ceil((draftConfig.target_words || 3000) * 1.4),
         });
+        const humanisedClaudeResp = humaniseSectionStream(claudeResp, LOVABLE_API_KEY);
         if (canPersist) {
           return teeAndPersistChapterStream({
-            upstream: claudeResp,
+            upstream: humanisedClaudeResp,
             upstreamAbort,
             chapterId: chapter.id,
             userId: userIdResolved!,
@@ -1132,7 +1134,7 @@ REMEMBER (the system prompt is the contract; this is just a checklist):
             continuationPrefix,
           });
         }
-        return new Response(claudeResp.body, {
+        return new Response(humanisedClaudeResp.body, {
           headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
         });
       } catch (e) {
@@ -1252,9 +1254,10 @@ REMEMBER (the system prompt is the contract; this is just a checklist):
       outputTokens: Math.ceil((draftConfig.target_words || 3000) * 1.4),
     });
 
+    const humanisedGwResp = humaniseSectionStream(response, LOVABLE_API_KEY);
     if (canPersist) {
       return teeAndPersistChapterStream({
-        upstream: response,
+        upstream: humanisedGwResp,
         upstreamAbort: upstreamAbortGw,
         chapterId: chapter.id,
         userId: userIdResolved!,
@@ -1263,7 +1266,7 @@ REMEMBER (the system prompt is the contract; this is just a checklist):
         continuationPrefix,
       });
     }
-    return new Response(response.body, {
+    return new Response(humanisedGwResp.body, {
       headers: { ...corsHeaders, "Content-Type": "text/event-stream", "X-Model-Used": usedModel },
     });
   } catch (e) {
