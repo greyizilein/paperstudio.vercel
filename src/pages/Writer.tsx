@@ -960,6 +960,17 @@ export default function WriterPage() {
     } catch { /* ignore corrupt entries */ }
   }, [activeChapterIndex, project?.id]);
 
+  // ── Dismiss selection toolbar when clicking outside it ──
+  useEffect(() => {
+    const handler = (e: PointerEvent) => {
+      const toolbar = document.getElementById("contextual-toolbar");
+      if (toolbar && toolbar.contains(e.target as Node)) return;
+      setTextSelection(null);
+    };
+    document.addEventListener("pointerdown", handler);
+    return () => document.removeEventListener("pointerdown", handler);
+  }, []);
+
   // ── Detect figure markers in streaming content ──
   // Do NOT call image generation while prose is still streaming. The writer must
   // finish first; figures are queued after the final chapter text is saved so
@@ -1068,9 +1079,20 @@ ${thesisArea}`);
     setShowTour(false);
   };
 
-  const handleReorderSave = (newOrder: Chapter[]) => {
+  const handleChapterManagerSave = async (result: { chapters: Chapter[]; deletedIds: string[] }) => {
     if (!project || !user) return;
-    const reindexed = newOrder.map((ch, i) => ({ ...ch, order_index: i }));
+    if (result.deletedIds.length > 0) {
+      try {
+        await supabase.from("chapters").delete().in("id", result.deletedIds);
+      } catch (err: any) {
+        toast.error("Failed to delete chapters: " + err.message);
+        return;
+      }
+    }
+    const reindexed = result.chapters.map((ch, i) => ({ ...ch, order_index: i }));
+    // If the active chapter was deleted, reset to first available
+    const activeStillExists = reindexed.some(ch => ch.order_index === activeChapterIndex);
+    if (!activeStillExists && reindexed.length > 0) setActiveChapterIndex(reindexed[0].order_index);
     handleUpdate({ ...project, chapters: reindexed });
     setShowReorderModal(false);
   };
@@ -1791,15 +1813,9 @@ ${thesisArea}`);
   // ── Inline text-selection editing ──
   const handleTextSelection = () => {
     const sel = window.getSelection();
-    if (!sel || sel.rangeCount === 0 || sel.isCollapsed) {
-      setTextSelection(null);
-      return;
-    }
+    if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return; // never clear — pointerdown listener handles that
     const selectedText = sel.toString().trim();
-    if (!selectedText || selectedText.length < 4) {
-      setTextSelection(null);
-      return;
-    }
+    if (!selectedText || selectedText.length < 4) return;
     const range = sel.getRangeAt(0);
     const rect = range.getBoundingClientRect();
     setTextSelection({ text: selectedText, rect });
@@ -2370,36 +2386,52 @@ ${thesisArea}`);
                 ) : correctionDiff ? (
                   /* ── Correction diff view ── */
                   <div className="flex flex-col h-full">
+                    <style>{`
+                      .diff-del { background: rgba(239,68,68,0.18); color: #b91c1c; text-decoration: line-through; border-radius: 2px; padding: 0 1px; }
+                      .dark .diff-del { color: #f87171; }
+                      .diff-ins { background: rgba(34,197,94,0.18); color: #15803d; border-radius: 2px; padding: 0 1px; }
+                      .dark .diff-ins { color: #4ade80; }
+                    `}</style>
                     {/* Diff toolbar */}
-                    <div className="flex-shrink-0 flex items-center gap-2 px-4 py-2.5 border-b border-border bg-amber-500/5">
+                    <div className="flex-shrink-0 flex items-center gap-3 px-4 py-2.5 border-b border-border bg-amber-500/5 flex-wrap">
                       <span className="text-[11px] font-bold text-amber-600 dark:text-amber-400">Corrections applied</span>
-                      <span className="flex gap-2 text-[10px] ml-1">
-                        <span className="px-1.5 py-0.5 rounded bg-yellow-200/80 text-yellow-900">modified</span>
-                        <span className="px-1.5 py-0.5 rounded bg-green-200/80 text-green-900">added</span>
-                        <span className="px-1.5 py-0.5 rounded bg-red-200/80 text-red-900 line-through">deleted</span>
+                      <span className="flex gap-1.5 text-[10px]">
+                        <span className="px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300 font-semibold">~ modified</span>
+                        <span className="px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/40 text-emerald-800 dark:text-emerald-300 font-semibold">+ added</span>
+                        <span className="px-1.5 py-0.5 rounded bg-red-100 dark:bg-red-900/40 text-red-800 dark:text-red-300 font-semibold">– deleted</span>
+                        <span className="text-[10px] text-muted-foreground/60 ml-1">inline: <span className="diff-del" style={{fontSize:"10px"}}>removed</span> <span className="diff-ins" style={{fontSize:"10px"}}>added</span></span>
                       </span>
                       <div className="ml-auto flex items-center gap-2">
-                        <button onClick={handleDownloadWithHighlights} className="text-[11px] px-2.5 py-1 rounded border border-border text-muted-foreground hover:text-foreground transition-colors">⬇ Download highlighted</button>
+                        <button onClick={handleDownloadWithHighlights} className="text-[11px] px-2.5 py-1 rounded-lg border border-border text-muted-foreground hover:text-foreground transition-colors">⬇ Download</button>
                         <button onClick={() => { setCorrectionDiff(null); setCorrectionRevised(null); }} className="text-[11px] text-muted-foreground hover:text-foreground transition-colors">Dismiss</button>
-                        <button onClick={handleAcceptCorrections} className="text-[11px] px-3 py-1 rounded bg-foreground text-background font-semibold hover:opacity-80 transition-opacity">Accept all</button>
+                        <button onClick={handleAcceptCorrections} className="text-[11px] px-3 py-1 rounded-lg bg-foreground text-background font-semibold hover:opacity-80 transition-opacity">Accept all</button>
                       </div>
                     </div>
                     {/* Diff paragraphs */}
-                    <div className="flex-1 overflow-y-auto px-5 sm:px-10 py-6 max-w-[680px] lg:max-w-[920px] xl:max-w-[1080px] mx-auto w-full">
-                      {correctionDiff.map((para, i) => (
-                        <div
-                          key={i}
-                          className={cn(
-                            "mb-3 px-3 py-2 rounded border-l-4 text-[14px] leading-relaxed",
-                            para.type === "unchanged" ? "border-transparent" :
-                            para.type === "modified"  ? "bg-yellow-500/10 border-yellow-500" :
-                            para.type === "added"     ? "bg-green-500/10  border-green-500" :
-                                                        "bg-red-500/10    border-red-500 opacity-60 line-through"
-                          )}
-                        >
-                          <Markdown remarkPlugins={[remarkGfm]}>{para.text}</Markdown>
-                        </div>
-                      ))}
+                    <div className="flex-1 overflow-y-auto px-5 sm:px-10 py-6 max-w-[680px] lg:max-w-[920px] xl:max-w-[1080px] mx-auto w-full space-y-1">
+                      {correctionDiff.map((para, i) => {
+                        const isHeading = /^#{1,4}\s/.test(para.text.trimStart());
+                        return (
+                          <div
+                            key={i}
+                            className={cn(
+                              "px-3 py-2 rounded-md border-l-4 text-[14px] leading-relaxed transition-colors",
+                              para.type === "unchanged" ? "border-transparent" :
+                              para.type === "modified"  ? "bg-amber-500/8 border-amber-500" :
+                              para.type === "added"     ? "bg-emerald-500/10 border-emerald-500" :
+                                                          "bg-red-500/10 border-red-500 opacity-70"
+                            )}
+                          >
+                            {para.type === "modified" && para.diffHtml && !isHeading ? (
+                              <p dangerouslySetInnerHTML={{ __html: para.diffHtml }} className="text-foreground" />
+                            ) : para.type === "deleted" ? (
+                              <p className="line-through text-muted-foreground">{para.text}</p>
+                            ) : (
+                              <Markdown remarkPlugins={[remarkGfm]}>{para.text}</Markdown>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 ) : (
@@ -3557,7 +3589,9 @@ ${thesisArea}`);
       {showReorderModal && (
         <ReorderChaptersModal
           chapters={project.chapters}
-          onSave={handleReorderSave}
+          projectId={project.id}
+          userId={user?.id || ""}
+          onSave={handleChapterManagerSave}
           onClose={() => setShowReorderModal(false)}
         />
       )}
@@ -3611,7 +3645,12 @@ ${thesisArea}`);
 
 // ═══ DIFF UTILITIES ═══
 
-export type DiffParagraph = { text: string; type: "unchanged" | "modified" | "added" | "deleted" };
+export type DiffParagraph = {
+  text: string;
+  type: "unchanged" | "modified" | "added" | "deleted";
+  diffHtml?: string; // word-level inline diff for "modified" paragraphs
+  originalText?: string; // original text stored on "deleted" paragraphs
+};
 
 function jaccardSim(a: string, b: string): number {
   const wa = new Set(a.toLowerCase().split(/\s+/).filter(Boolean));
@@ -3619,6 +3658,51 @@ function jaccardSim(a: string, b: string): number {
   const inter = [...wa].filter(w => wb.has(w)).length;
   const union = new Set([...wa, ...wb]).size;
   return union === 0 ? 1 : inter / union;
+}
+
+// Word-level LCS diff — returns HTML with <del> and <ins> spans
+function wordLevelDiff(original: string, revised: string): string {
+  const esc = (s: string) => s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+  // tokenise into words+spaces
+  const ot = original.split(/(\s+)/).filter(Boolean);
+  const rt = revised.split(/(\s+)/).filter(Boolean);
+  const m = ot.length, n = rt.length;
+  // LCS table (only need current+prev row)
+  let prev = new Array(n + 1).fill(0);
+  let curr = new Array(n + 1).fill(0);
+  const dp: number[][] = [prev.slice()];
+  for (let i = 1; i <= m; i++) {
+    curr = new Array(n + 1).fill(0);
+    for (let j = 1; j <= n; j++) {
+      curr[j] = ot[i-1] === rt[j-1] ? dp[i-1][j-1] + 1 : Math.max(dp[i-1][j], curr[j-1]);
+    }
+    dp.push(curr.slice());
+    prev = curr;
+  }
+  // Backtrack
+  type Op = { text: string; op: "same"|"del"|"ins" };
+  const ops: Op[] = [];
+  let i = m, j = n;
+  while (i > 0 || j > 0) {
+    if (i > 0 && j > 0 && ot[i-1] === rt[j-1]) {
+      ops.unshift({ text: ot[i-1], op: "same" }); i--; j--;
+    } else if (j > 0 && (i === 0 || dp[i][j-1] >= dp[i-1][j])) {
+      ops.unshift({ text: rt[j-1], op: "ins" }); j--;
+    } else {
+      ops.unshift({ text: ot[i-1], op: "del" }); i--;
+    }
+  }
+  // Merge runs and build HTML
+  const merged: Op[] = [];
+  for (const op of ops) {
+    const last = merged[merged.length - 1];
+    if (last && last.op === op.op) last.text += op.text; else merged.push({ ...op });
+  }
+  return merged.map(op =>
+    op.op === "same" ? esc(op.text) :
+    op.op === "del"  ? `<del class="diff-del">${esc(op.text)}</del>` :
+                       `<ins class="diff-ins">${esc(op.text)}</ins>`
+  ).join("");
 }
 
 function computeParaDiff(original: string, revised: string): DiffParagraph[] {
@@ -3634,18 +3718,21 @@ function computeParaDiff(original: string, revised: string): DiffParagraph[] {
       const s = jaccardSim(origParas[i], rp);
       if (s > bestSim) { bestSim = s; bestIdx = i; }
     }
-    if (bestSim > 0.8) {
+    if (bestSim > 0.92) {
+      // truly unchanged — exact or near-exact match
       origUsed.add(bestIdx);
       result.push({ text: rp, type: "unchanged" });
-    } else if (bestSim > 0.3) {
+    } else if (bestSim > 0.25) {
+      // modified — compute word-level diff
       origUsed.add(bestIdx);
-      result.push({ text: rp, type: "modified" });
+      const diffHtml = wordLevelDiff(origParas[bestIdx], rp);
+      result.push({ text: rp, type: "modified", diffHtml, originalText: origParas[bestIdx] });
     } else {
       result.push({ text: rp, type: "added" });
     }
   }
   for (let i = 0; i < origParas.length; i++) {
-    if (!origUsed.has(i)) result.push({ text: origParas[i], type: "deleted" });
+    if (!origUsed.has(i)) result.push({ text: origParas[i], type: "deleted", originalText: origParas[i] });
   }
   return result;
 }

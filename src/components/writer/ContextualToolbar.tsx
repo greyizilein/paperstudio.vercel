@@ -1,5 +1,5 @@
-import { Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Loader2 } from "lucide-react";
 
 interface Props {
   rect: DOMRect;
@@ -9,39 +9,42 @@ interface Props {
 }
 
 const ACTIONS = [
-  { id: "rewrite", label: "Rewrite", icon: "↺" },
+  { id: "rewrite",  label: "Rewrite",  icon: "↺" },
   { id: "simplify", label: "Simplify", icon: "↔" },
-  { id: "expand", label: "Expand", icon: "+" },
-  { id: "explain", label: "Explain", icon: "?" },
-  { id: "fix", label: "Fix", icon: "✓" },
-  { id: "cite", label: "Cite", icon: '‟' },
+  { id: "expand",   label: "Expand",   icon: "+"  },
+  { id: "explain",  label: "Explain",  icon: "?"  },
+  { id: "fix",      label: "Fix",      icon: "✓" },
+  { id: "cite",     label: "Cite",     icon: "‟"  },
 ];
 
 export function ContextualToolbar({ rect, isLoading, activeAction, onAction }: Props) {
-  const toolbarHeight = 40;
   const toolbarWidth = Math.min(340, window.innerWidth - 16);
 
-  // Prefer below the selection so the browser's native copy menu (above) doesn't block it
+  // Prefer below so browser's native copy/paste menu (above) doesn't collide
   let top = rect.bottom + 8;
   let left = rect.left + rect.width / 2 - toolbarWidth / 2;
 
-  // Flip above if not enough room below
-  if (top + toolbarHeight > window.innerHeight - 8) top = rect.top - toolbarHeight - 8;
+  if (top + 44 > window.innerHeight - 8) top = rect.top - 52;
   if (left < 8) left = 8;
   if (left + toolbarWidth > window.innerWidth - 8) left = window.innerWidth - toolbarWidth - 8;
 
   return (
     <div
+      id="contextual-toolbar"
       className="fixed z-[200] flex items-center gap-0.5 bg-foreground text-background rounded-2xl px-1.5 py-1.5 shadow-2xl animate-in fade-in zoom-in-95 duration-100 overflow-x-auto scrollbar-hide"
       style={{ top, left, maxWidth: toolbarWidth }}
-      onMouseDown={(e) => e.stopPropagation()}
-      onTouchStart={(e) => e.stopPropagation()}
-      onTouchEnd={(e) => e.stopPropagation()}
+      // preventDefault on pointerdown stops the browser from clearing the text selection
+      // when the user moves their pointer/finger to the toolbar.
+      onPointerDown={(e) => e.preventDefault()}
     >
       {ACTIONS.map((a) => (
         <button
           key={a.id}
-          onClick={() => onAction(a.id)}
+          // Use pointerDown so the action fires while the selection is still live.
+          onPointerDown={(e) => {
+            e.preventDefault();
+            if (!isLoading) onAction(a.id);
+          }}
           disabled={isLoading}
           title={a.label}
           className={cn(
