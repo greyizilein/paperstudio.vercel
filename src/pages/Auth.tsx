@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { motion } from "framer-motion";
 import { Mail, Loader2, AlertCircle } from "lucide-react";
+import { OnboardingCarousel } from "@/components/auth/OnboardingCarousel";
 import { supabase } from "@/integrations/supabase/client";
 import { Logo } from "@/components/firstdraft/Logo";
 import { FDButton } from "@/components/firstdraft/FDButton";
@@ -110,15 +111,35 @@ export default function Auth() {
     <div className="min-h-screen bg-[#1a1a1a] text-white flex flex-col">
       <div className="bg-noise fixed inset-0 z-0 opacity-[0.03]" />
 
-      <div className="relative z-10 flex-1 flex items-center justify-center px-4 py-12">
+      <div className="relative z-10 flex-1 flex items-stretch md:flex-row flex-col">
+        {/* Left — onboarding carousel (desktop: fixed panel, mobile: compact strip above form) */}
+        <div className="md:w-[420px] md:flex-shrink-0 md:min-h-screen md:border-r md:border-white/10 flex flex-col md:sticky md:top-0 md:h-screen">
+          {/* Mobile: compact top label */}
+          <div className="md:hidden px-6 pt-8 pb-2 text-center">
+            <span className="text-lg font-bold uppercase tracking-tight text-white">PAPERSTUDIO</span>
+          </div>
+          {/* Desktop: logo */}
+          <div className="hidden md:block px-8 pt-8 pb-2">
+            <span className="text-base font-bold uppercase tracking-tight text-white">PAPERSTUDIO</span>
+          </div>
+          <div className="flex-1 md:block hidden">
+            <OnboardingCarousel />
+          </div>
+          {/* Mobile carousel strip */}
+          <div className="md:hidden px-4 pb-4">
+            <OnboardingCarousel />
+          </div>
+        </div>
+
+        {/* Right — login form */}
+        <div className="flex-1 flex items-center justify-center px-4 py-10 md:py-16">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           className="w-full max-w-md"
         >
-          <div className="text-center mb-10">
-            <span className="text-2xl font-bold uppercase tracking-tight text-white">PAPERSTUDIO</span>
-            <h1 className="text-3xl font-bold mt-6 mb-2 text-white">
+          <div className="text-center mb-8">
+            <h1 className="text-2xl font-bold mb-1.5 text-white">
               {mode === "login" ? "Welcome back" : mode === "signup" ? "Create your account" : "Reset password"}
             </h1>
             <p className="text-white/70 text-sm">
@@ -229,6 +250,7 @@ export default function Auth() {
             </div>
           </div>
         </motion.div>
+        </div>
       </div>
     </div>
   );
