@@ -336,6 +336,11 @@ export default function WriterPage() {
   const [showSidebar, setShowSidebar] = useState(false);
   const [showProjectsDrawer, setShowProjectsDrawer] = useState(false);
   const [allProjects, setAllProjects] = useState<Project[]>([]);
+  // Project context menu (long-press on mobile / hover ⋯ on desktop)
+  const [projectMenu, setProjectMenu] = useState<string | null>(null); // project id with open menu
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [renameText, setRenameText] = useState("");
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isEditMode, setIsEditMode] = useState(false);
   const [splitPane, setSplitPane] = useState(false);
   const [editContent, setEditContent] = useState("");
@@ -2195,7 +2200,7 @@ ${thesisArea}`);
               <span className="text-[10px] text-muted-foreground ml-auto">{subscription.words_used.toLocaleString()}/{subscription.word_limit.toLocaleString()} words</span>
             </div>
             {/* Project list */}
-            <div className="flex-1 overflow-y-auto">
+            <div className="flex-1 overflow-y-auto" onClick={() => setProjectMenu(null)}>
               {allProjects.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-full gap-2 text-muted-foreground px-4 text-center">
                   <FolderOpen size={24} className="opacity-40" />
@@ -2206,36 +2211,130 @@ ${thesisArea}`);
                 const total = p.chapters.length;
                 const pct = total > 0 ? Math.round((done / total) * 100) : 0;
                 const isCurrent = p.id === projectId;
-                return (
-                  <div
-                    key={p.id}
-                    onClick={() => { setShowProjectsDrawer(false); navigate(`/writer/${p.id}`); }}
-                    className={cn(
-                      "flex items-center gap-2.5 px-4 py-3 border-b border-border/50 cursor-pointer transition-colors hover:bg-secondary/40",
-                      isCurrent && "bg-primary/5"
-                    )}
-                  >
-                    <div className={cn("w-2 h-2 rounded-full flex-shrink-0", isCurrent ? "bg-primary" : pct === 100 ? "bg-green" : "bg-border")} />
-                    <div className="flex-1 min-w-0">
-                      <div className={cn("text-[12px] font-bold truncate", isCurrent ? "text-primary" : "text-foreground")}>{p.title}</div>
-                      <div className="text-[10px] text-muted-foreground mt-0.5">{done}/{total} ch · {pct}%</div>
-                    </div>
-                    <button
-                      onClick={async e => {
-                        e.stopPropagation();
-                        if (!confirm(`Delete "${p.title}"?`)) return;
+                const menuOpen = projectMenu === p.id;
+                const isRenaming = renamingId === p.id;
+
+                const startRename = () => {
+                  setRenamingId(p.id);
+                  setRenameText(p.title);
+                  setProjectMenu(null);
+                };
+                const commitRename = async () => {
+                  const trimmed = renameText.trim();
+                  if (!trimmed || trimmed === p.title) { setRenamingId(null); return; }
+                  try {
+                    await supabase.from("projects").update({ title: trimmed } as any).eq("id", p.id);
+                    setAllProjects(prev => prev.map(proj => proj.id === p.id ? { ...proj, title: trimmed } : proj));
+                    if (p.id === projectId) setProject((prev: any) => prev ? { ...prev, title: trimmed } : prev);
+                    toast.success("Project renamed");
+                  } catch { toast.error("Could not rename project"); }
+                  setRenamingId(null);
+                };
+                const handleDelete = async () => {
+                  setProjectMenu(null);
+                  toast("Delete this project?", {
+                    action: {
+                      label: "Delete",
+                      onClick: async () => {
                         try {
                           await deleteProject(p.id);
                           setAllProjects(prev => prev.filter(proj => proj.id !== p.id));
                           toast.success("Project deleted");
                           if (p.id === projectId) navigate("/new-project");
                         } catch (err: any) { toast.error(err.message); }
-                      }}
-                      className="text-muted-foreground hover:text-destructive p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                      },
+                    },
+                    cancel: { label: "Cancel", onClick: () => {} },
+                  });
+                };
+
+                return (
+                  <div
+                    key={p.id}
+                    className={cn(
+                      "group relative flex items-center gap-2.5 px-4 py-3 border-b border-border/50 select-none hover:bg-secondary/40 transition-colors",
+                      isCurrent && "bg-primary/5",
+                      !isRenaming && "cursor-pointer"
+                    )}
+                    onClick={(e) => {
+                      if (isRenaming || menuOpen) { e.stopPropagation(); return; }
+                      setShowProjectsDrawer(false);
+                      navigate(`/writer/${p.id}`);
+                    }}
+                    onContextMenu={(e) => { e.preventDefault(); setProjectMenu(menuOpen ? null : p.id); }}
+                    onTouchStart={() => {
+                      longPressTimerRef.current = setTimeout(() => setProjectMenu(p.id), 500);
+                    }}
+                    onTouchEnd={() => {
+                      if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
+                    }}
+                    onTouchMove={() => {
+                      if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
+                    }}
+                  >
+                    <div className={cn("w-2 h-2 rounded-full flex-shrink-0", isCurrent ? "bg-primary" : pct === 100 ? "bg-green-500" : "bg-border")} />
+                    <div className="flex-1 min-w-0">
+                      {isRenaming ? (
+                        <input
+                          autoFocus
+                          value={renameText}
+                          onChange={e => setRenameText(e.target.value)}
+                          onBlur={commitRename}
+                          onKeyDown={e => { if (e.key === "Enter") commitRename(); if (e.key === "Escape") setRenamingId(null); }}
+                          onClick={e => e.stopPropagation()}
+                          className="w-full text-[12px] font-bold bg-background border border-primary rounded px-1.5 py-0.5 outline-none text-foreground"
+                        />
+                      ) : (
+                        <div className={cn("text-[12px] font-bold truncate", isCurrent ? "text-primary" : "text-foreground")}>{p.title}</div>
+                      )}
+                      <div className="text-[10px] text-muted-foreground mt-0.5">{done}/{total} ch · {pct}%</div>
+                    </div>
+
+                    {/* ⋯ menu trigger — always visible on mobile, hover on desktop */}
+                    <button
+                      onClick={e => { e.stopPropagation(); setProjectMenu(menuOpen ? null : p.id); }}
+                      className={cn(
+                        "p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors flex-shrink-0",
+                        "opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
+                      )}
+                      title="Project options"
                     >
-                      <Trash2 size={11} />
+                      <MoreVertical size={13} />
                     </button>
-                    <ChevronRight size={13} className="text-muted-foreground flex-shrink-0" />
+
+                    {/* Context menu */}
+                    {menuOpen && (
+                      <div
+                        onClick={e => e.stopPropagation()}
+                        className="absolute right-3 top-full mt-1 z-50 min-w-[170px] rounded-xl shadow-lg border border-border bg-background py-1 animate-in fade-in zoom-in-95 duration-100"
+                      >
+                        <button
+                          onClick={() => { setShowProjectsDrawer(false); navigate(`/writer/${p.id}`); setProjectMenu(null); }}
+                          className="flex items-center gap-2.5 w-full px-3 py-2 text-[12px] text-foreground hover:bg-secondary/50 transition-colors"
+                        >
+                          <PenLine size={12} className="text-muted-foreground" /> Open project
+                        </button>
+                        <button
+                          onClick={() => { window.open(`/writer/${p.id}`, "_blank"); setProjectMenu(null); }}
+                          className="flex items-center gap-2.5 w-full px-3 py-2 text-[12px] text-foreground hover:bg-secondary/50 transition-colors"
+                        >
+                          <Share2 size={12} className="text-muted-foreground" /> Open in new tab
+                        </button>
+                        <button
+                          onClick={startRename}
+                          className="flex items-center gap-2.5 w-full px-3 py-2 text-[12px] text-foreground hover:bg-secondary/50 transition-colors"
+                        >
+                          <FileEdit size={12} className="text-muted-foreground" /> Rename
+                        </button>
+                        <div className="my-1 border-t border-border/60" />
+                        <button
+                          onClick={handleDelete}
+                          className="flex items-center gap-2.5 w-full px-3 py-2 text-[12px] text-destructive hover:bg-destructive/5 transition-colors"
+                        >
+                          <Trash2 size={12} /> Delete project
+                        </button>
+                      </div>
+                    )}
                   </div>
                 );
               })}
