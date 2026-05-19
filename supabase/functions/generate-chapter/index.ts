@@ -56,16 +56,13 @@ const BANNED_PHRASES = [
 const ALLOWED_MODELS: Record<string, string> = {
   // User-selectable tiers
   "instant":            "gemini-2.5-flash",
-  "extended-thinking":  "claude-sonnet-4-5",
+  "extended-thinking":  "claude-sonnet-4-6",
   "deep-reasoning":     "claude-opus-4-7",
   // Internal system models (not user-selectable)
-  "claude-sonnet-4-5":  "claude-sonnet-4-5",
-  "claude-sonnet-4-6":  "claude-sonnet-4-5",
-  "claude-opus-4":      "claude-opus-4-1",
-  "claude-opus-4-6":    "claude-opus-4-5",
+  "claude-sonnet-4-6":  "claude-sonnet-4-6",
+  "claude-opus-4-7":    "claude-opus-4-7",
   "gemini-2.5-flash":   "gemini-2.5-flash",
   "gemini-2.5-pro":     "gemini-2.5-pro",
-  "gemini-3-pro":       "gemini-2.0-flash",
 };
 
 // Models reserved for SYSTEM use only (never user-selectable in PaperStudio).
@@ -83,8 +80,8 @@ const TIER_ACCESS: Record<string, string[]> = {
   // Internal system model IDs also allowed for fallback paths:
   "gemini-2.5-flash":  ["free", "undergraduate", "masters", "phd", "custom"],
   "gemini-2.5-pro":    ["masters", "phd", "custom"],
-  "claude-sonnet-4-5": ["masters", "phd", "custom"],
   "claude-sonnet-4-6": ["masters", "phd", "custom"],
+  "claude-opus-4-7":   ["phd", "custom"],
 };
 
 function resolveModel(modelId?: string): string {
