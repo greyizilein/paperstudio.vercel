@@ -408,7 +408,7 @@ function SlideShare({ accent }: IllProps) {
       <circle cx="30" cy="21" r="5" fill={accent} fillOpacity="0.3" stroke={accent} strokeOpacity="0.5" strokeWidth="0.8" />
       {/* URL bar */}
       <rect x="42" y="15" width="180" height="12" rx="6" fill="white" fillOpacity="0.08" />
-      <text x="132" y="24" textAnchor="middle" fontSize="7" fill="white" fillOpacity="0.45" fontFamily="monospace">paperstudio.app/share/abc123</text>
+      <text x="132" y="24" textAnchor="middle" fontSize="7" fill="white" fillOpacity="0.45" fontFamily="monospace">paperstudio.dev/share/abc123</text>
       {/* Read-only badge */}
       <rect x="230" y="15" width="50" height="12" rx="6" fill={accent} fillOpacity="0.2" stroke={accent} strokeOpacity="0.4" strokeWidth="0.5" />
       <text x="255" y="24" textAnchor="middle" fontSize="7" fill={accent} fontFamily="sans-serif">Read-only</text>
