@@ -100,6 +100,36 @@ export const AI_MODELS: AIModel[] = [
     gatewayModel: "llama-3.1-8b-instant",
     tierAccess: ["free", "undergraduate", "masters", "phd", "custom"],
   },
+  {
+    id: "deepseek-r1-groq",
+    name: "DeepSeek R1 70B",
+    provider: "Groq",
+    tier: "advanced",
+    description: "DeepSeek R1 reasoning model via Groq. Strong at structured academic tasks.",
+    capabilities: ["Reasoning", "Fast", "Open-source"],
+    gatewayModel: "deepseek-r1-distill-llama-70b",
+    tierAccess: ["undergraduate", "masters", "phd", "custom"],
+  },
+  {
+    id: "gemma2-9b",
+    name: "Gemma 2 9B",
+    provider: "Groq",
+    tier: "standard",
+    description: "Google's compact Gemma 2 via Groq. Fast and free-tier accessible.",
+    capabilities: ["Fast", "Compact", "Open-source"],
+    gatewayModel: "gemma2-9b-it",
+    tierAccess: ["free", "undergraduate", "masters", "phd", "custom"],
+  },
+  {
+    id: "llama-3.2-3b",
+    name: "Llama 3.2 3B",
+    provider: "Groq",
+    tier: "standard",
+    description: "Meta's smallest Llama 3.2 via Groq. Fastest option for quick tasks.",
+    capabilities: ["Ultra-fast", "Compact", "Open-source"],
+    gatewayModel: "llama-3.2-3b-preview",
+    tierAccess: ["free", "undergraduate", "masters", "phd", "custom"],
+  },
 ];
 
 // Default — Gemini 2.5 Flash (works for all tiers, including free).
