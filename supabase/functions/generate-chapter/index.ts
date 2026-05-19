@@ -64,8 +64,11 @@ const ALLOWED_MODELS: Record<string, string> = {
   "gemini-2.5-pro": "gemini-2.5-pro",
   "gemini-3-flash": "gemini-2.0-flash",
   "gemini-3-pro": "gemini-2.0-flash",
-  "llama-3.3-70b": "llama-3.3-70b-versatile",
-  "llama-3.1-8b":  "llama-3.1-8b-instant",
+  "llama-3.3-70b":   "llama-3.3-70b-versatile",
+  "llama-3.1-8b":    "llama-3.1-8b-instant",
+  "deepseek-r1-groq":"deepseek-r1-distill-llama-70b",
+  "gemma2-9b":       "gemma2-9b-it",
+  "llama-3.2-3b":    "llama-3.2-3b-preview",
 };
 
 // Models reserved for SYSTEM use only (never user-selectable in PaperStudio).
@@ -87,6 +90,9 @@ const TIER_ACCESS: Record<string, string[]> = {
   "gpt-5-flagship":   ["phd", "custom"],
   "llama-3.3-70b":    ["undergraduate", "masters", "phd", "custom"],
   "llama-3.1-8b":     ["free", "undergraduate", "masters", "phd", "custom"],
+  "deepseek-r1-groq": ["undergraduate", "masters", "phd", "custom"],
+  "gemma2-9b":        ["free", "undergraduate", "masters", "phd", "custom"],
+  "llama-3.2-3b":     ["free", "undergraduate", "masters", "phd", "custom"],
 };
 
 function resolveModel(modelId?: string): string {

@@ -25,6 +25,9 @@ const CZAR_MODELS: Array<{ id: string; label: string; desc: string; provider: st
   { id: "qwen3.6-plus",      label: "Qwen 3.6 Plus",      provider: "Alibaba",   desc: "Strong multilingual model with deep reasoning." },
   { id: "llama-3.3-70b",    label: "Llama 3.3 70B",      provider: "Groq",      desc: "Meta's fast open-source model. Low latency via Groq." },
   { id: "llama-3.1-8b",     label: "Llama 3.1 8B",       provider: "Groq",      desc: "Ultra-fast lightweight model. Great for quick tasks." },
+  { id: "deepseek-r1-groq", label: "DeepSeek R1 70B",    provider: "Groq",      desc: "Reasoning-focused model. Strong on structured academic tasks." },
+  { id: "gemma2-9b",        label: "Gemma 2 9B",         provider: "Groq",      desc: "Google's compact open model via Groq. Fast and free." },
+  { id: "llama-3.2-3b",     label: "Llama 3.2 3B",       provider: "Groq",      desc: "Smallest Llama via Groq. Fastest option for quick tasks." },
   { id: "gemini-3-pro",      label: "Gemini 3 Pro",       provider: "Google",    desc: "Top-tier reasoning. Used internally for image generation only.", tag: "image-only", locked: true, lockReason: "Image generation only" },
   { id: "claude-opus-4-6",   label: "Claude Opus 4.6",    provider: "Anthropic", desc: "Heaviest reasoning. Unlocks automatically in Agent mode.", tag: "agent-only", locked: true, lockReason: "Unlocks in Agent mode" },
 ];

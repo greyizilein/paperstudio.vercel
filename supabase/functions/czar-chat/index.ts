@@ -96,6 +96,21 @@ function pickWritingModel(tier: string, isAdmin: boolean, think: boolean, toolsR
         return { provider: "anthropic", model: "claude-sonnet-4-6", thinking: true, tools: true };
       }
       return { provider: "groq", model: "llama-3.1-8b-instant", thinking: false, tools: false };
+    case "deepseek-r1-groq":
+      if (isAgentMode) {
+        return { provider: "anthropic", model: "claude-sonnet-4-6", thinking: true, tools: true };
+      }
+      return { provider: "groq", model: "deepseek-r1-distill-llama-70b", thinking: false, tools: false };
+    case "gemma2-9b":
+      if (isAgentMode) {
+        return { provider: "anthropic", model: "claude-sonnet-4-6", thinking: true, tools: true };
+      }
+      return { provider: "groq", model: "gemma2-9b-it", thinking: false, tools: false };
+    case "llama-3.2-3b":
+      if (isAgentMode) {
+        return { provider: "anthropic", model: "claude-sonnet-4-6", thinking: true, tools: true };
+      }
+      return { provider: "groq", model: "llama-3.2-3b-preview", thinking: false, tools: false };
     case "claude-opus-4-6":
       // Opus only unlocks for high-level analytical / mathematical /
       // programming work or when the user is in Agent mode. Otherwise
@@ -1535,6 +1550,7 @@ async function streamGroq(opts: {
     body: JSON.stringify({
       model: opts.model,
       stream: true,
+      max_tokens: 8192,
       messages: [{ role: "system", content: opts.system }, ...opts.messages],
     }),
   });
