@@ -1,4 +1,8 @@
-// czar-humanise v12 — 5-stage sequential pipeline (original pipeline, 5–13% AI scores)
+// czar-humanise v13 — 5-stage sequential pipeline, speed-optimised
+//
+// Stages 1–4 use Haiku (fast, rule-following) — ~3-5s each
+// Stage 5 uses Sonnet (creative voice, AI-tell removal) — ~10-15s
+// Total: ~25-35s vs ~90-120s for all-Sonnet. Stays well within 150s Supabase limit.
 //
 // Each stage has ONE specific job, run sequentially. Output of stage N → input of stage N+1.
 // Stage 1: Structure Break    — varies sentence syntax openings
@@ -14,11 +18,13 @@ const corsHeaders = {
 };
 
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY") || "";
-const CLAUDE_MODEL = "claude-sonnet-4-5";
+const HAIKU_MODEL = "claude-haiku-4-5";
+const SONNET_MODEL = "claude-sonnet-4-5";
 
 const STAGES = [
   {
     label: "Structure Break",
+    model: HAIKU_MODEL,
     prompt: `You are a humanisation engine — Stage 1: STRUCTURE BREAK.
 
 Your task: rewrite the academic text below so that NO TWO consecutive sentences share the same syntactic structure at their opening.
@@ -35,6 +41,7 @@ Rules:
   },
   {
     label: "Citation Texture",
+    model: HAIKU_MODEL,
     prompt: `You are a humanisation engine — Stage 2: CITATION TEXTURE.
 
 Your task: vary how all citations and references are integrated into the text.
@@ -53,6 +60,7 @@ Rules:
   },
   {
     label: "Human Fingerprints",
+    model: HAIKU_MODEL,
     prompt: `You are a humanisation engine — Stage 3: HUMAN FINGERPRINTS.
 
 Your task: insert the following human writing traits into the text. Each trait should appear at least twice across the full text.
@@ -73,6 +81,7 @@ Rules:
   },
   {
     label: "Paragraph Rhythm",
+    model: HAIKU_MODEL,
     prompt: `You are a humanisation engine — Stage 4: PARAGRAPH RHYTHM.
 
 Your task: vary the paragraph structure and opening moves so the text has uneven, human rhythm.
@@ -92,6 +101,7 @@ Rules:
   },
   {
     label: "Surface Polish",
+    model: SONNET_MODEL,
     prompt: `You are a humanisation engine — Stage 5: SURFACE POLISH (final pass).
 
 Your task: read the text as a whole and remove any remaining AI tells. This is a light editorial pass — do not restructure arguments.
@@ -123,7 +133,7 @@ function wordCount(s: string): number {
   return (s || "").trim().split(/\s+/).filter(Boolean).length;
 }
 
-async function callClaude(systemPrompt: string, userText: string, signal: AbortSignal): Promise<string> {
+async function callClaude(systemPrompt: string, userText: string, signal: AbortSignal, model: string = SONNET_MODEL): Promise<string> {
   const resp = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     signal,
@@ -133,7 +143,7 @@ async function callClaude(systemPrompt: string, userText: string, signal: AbortS
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: CLAUDE_MODEL,
+      model,
       max_tokens: 8000,
       system: systemPrompt,
       messages: [{ role: "user", content: userText }],
@@ -192,8 +202,8 @@ Deno.serve(async (req) => {
         catch { /* closed */ }
       };
 
-      console.log(`[czar-humanise v12] start: ${original_words} words, 5-stage pipeline`);
-      send("pipeline_start", { stages: 5, provider: "claude-sonnet", original_words, version: "v12" });
+      console.log(`[czar-humanise v13] start: ${original_words} words, 5-stage pipeline (haiku×4 + sonnet×1)`);
+      send("pipeline_start", { stages: 5, provider: "claude", original_words, version: "v13" });
 
       let current = text;
       let stagesCompleted = 0;
@@ -203,7 +213,7 @@ Deno.serve(async (req) => {
           const stage = STAGES[i];
           send("stage_start", { stage: i + 1, label: stage.label });
 
-          current = await callClaude(stage.prompt, current, upstreamSignal);
+          current = await callClaude(stage.prompt, current, upstreamSignal, stage.model);
           stagesCompleted++;
 
           const words = wordCount(current);
@@ -217,12 +227,12 @@ Deno.serve(async (req) => {
           original_words,
           final_words,
           provider: "claude-sonnet",
-          version: "v12",
+          version: "v13",
         });
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : String(e);
         if (!msg.includes("abort") && !msg.includes("cancel")) {
-          console.error("[czar-humanise v12] error:", msg);
+          console.error("[czar-humanise v13] error:", msg);
         }
         send("done", {
           humanised: stagesCompleted > 0 ? current : text,
@@ -230,7 +240,7 @@ Deno.serve(async (req) => {
           original_words,
           final_words: wordCount(current),
           provider: "claude-sonnet",
-          version: "v12",
+          version: "v13",
           error: msg.slice(0, 200),
         });
       } finally {
