@@ -62,9 +62,8 @@ const ALLOWED_MODELS: Record<string, string> = {
   "gpt-5-flagship": "gemini-2.5-pro",
   "gemini-2.5-flash": "gemini-2.5-flash",
   "gemini-2.5-pro": "gemini-2.5-pro",
-  "gemini-3-flash":  "gemini-2.0-flash",
-  "gemini-3-pro":    "gemini-2.0-flash",
-  "gpt-oss-120b":    "openai/gpt-oss-120b",
+  "gemini-3-flash": "gemini-2.0-flash",
+  "gemini-3-pro":   "gemini-2.0-flash",
 };
 
 // Models reserved for SYSTEM use only (never user-selectable in PaperStudio).
@@ -84,7 +83,6 @@ const TIER_ACCESS: Record<string, string[]> = {
   "claude-sonnet-4-5":["masters", "phd", "custom"],
   "gemini-3-pro":     ["phd", "custom"],
   "gpt-5-flagship":   ["phd", "custom"],
-  "gpt-oss-120b":     ["undergraduate", "masters", "phd", "custom"],
 };
 
 function resolveModel(modelId?: string): string {
@@ -1095,19 +1093,12 @@ REMEMBER (the system prompt is the contract; this is just a checklist):
     const upstreamAbortGw = new AbortController();
     async function callGateway(modelToTry: string): Promise<Response> {
       const isQ = modelToTry.startsWith("qwen");
-      const isGroq = modelToTry.startsWith("openai/gpt-oss");
       const url = isQ
         ? "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions"
-        : isGroq
-        ? "https://api.groq.com/openai/v1/chat/completions"
         : "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
-      const key = isQ
-        ? Deno.env.get("DASHSCOPE_API_KEY")
-        : isGroq
-        ? Deno.env.get("GROQ_API_KEY")
-        : LOVABLE_API_KEY;
-      if (!key) throw new Error(isQ ? "DashScope API key not configured." : isGroq ? "Groq API key not configured." : "AI gateway key not configured.");
-      console.log(`[generate-chapter] → ${isQ ? "DashScope" : isGroq ? "Groq" : "Google AI"} model=${modelToTry}`);
+      const key = isQ ? Deno.env.get("DASHSCOPE_API_KEY") : LOVABLE_API_KEY;
+      if (!key) throw new Error(isQ ? "DashScope API key not configured." : "AI gateway key not configured.");
+      console.log(`[generate-chapter] → ${isQ ? "DashScope" : "Google AI"} model=${modelToTry}`);
       return await fetch(url, {
         method: "POST",
         headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },

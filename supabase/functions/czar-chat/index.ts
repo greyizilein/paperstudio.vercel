@@ -60,7 +60,7 @@ interface ChatRequest {
 // Default when no override is present is GPT 5.2.
 // ─────────────────────────────────────────────────────────────────────
 function pickWritingModel(tier: string, isAdmin: boolean, think: boolean, toolsRequested: boolean, modelOverride?: string, wantsImage?: boolean, isDataAnalysis?: boolean, isAgentMode?: boolean): {
-  provider: "anthropic" | "google" | "qwen" | "groq";
+  provider: "anthropic" | "google" | "qwen";
   model: string;
   thinking: boolean;
   tools: boolean;
@@ -86,11 +86,6 @@ function pickWritingModel(tier: string, isAdmin: boolean, think: boolean, toolsR
         return { provider: "anthropic", model: "claude-sonnet-4-6", thinking: true, tools: true };
       }
       return { provider: "qwen", model: "qwen3.6-plus", thinking: false, tools: false };
-    case "gpt-oss-120b":
-      if (isAgentMode) {
-        return { provider: "anthropic", model: "claude-sonnet-4-6", thinking: true, tools: true };
-      }
-      return { provider: "groq", model: "openai/gpt-oss-120b", thinking: false, tools: false };
     case "claude-opus-4-6":
       // Opus only unlocks for high-level analytical / mathematical /
       // programming work or when the user is in Agent mode. Otherwise
@@ -1161,13 +1156,6 @@ Deno.serve(async (req) => {
                 onCheckout: (ev) => { stopHeartbeat(); write("checkout", ev); },
               },
             });
-          } else if (pick.provider === "groq") {
-            await streamGroq({
-              model: pick.model,
-              system: systemPrompt,
-              messages: [...historyMsgs, { role: "user", content: finalUserContent }],
-              onDelta: enqueueDelta,
-            });
           } else if (pick.provider === "qwen") {
             await streamQwen({
               model: pick.model,
@@ -1506,58 +1494,6 @@ async function streamGoogle(opts: {
         if (typeof delta === "string" && delta.length) opts.onDelta(delta);
       } catch {
         // partial JSON — re-buffer
-        buffer = line + "\n" + buffer;
-        break;
-      }
-    }
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────
-// Groq streaming — OpenAI-compatible
-// ─────────────────────────────────────────────────────────────────────
-async function streamGroq(opts: {
-  model: string;
-  system: string;
-  messages: { role: string; content: string }[];
-  onDelta: (text: string) => void;
-}) {
-  const key = Deno.env.get("GROQ_API_KEY");
-  if (!key) throw new Error("Groq API key not configured.");
-  const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: opts.model,
-      stream: true,
-      max_tokens: 8192,
-      messages: [{ role: "system", content: opts.system }, ...opts.messages],
-    }),
-  });
-  if (!res.ok || !res.body) {
-    const txt = await res.text().catch(() => "");
-    throw new Error(`Groq ${res.status}: ${txt.slice(0, 300)}`);
-  }
-  const reader = res.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    let nl: number;
-    while ((nl = buffer.indexOf("\n")) !== -1) {
-      let line = buffer.slice(0, nl);
-      buffer = buffer.slice(nl + 1);
-      if (line.endsWith("\r")) line = line.slice(0, -1);
-      if (!line.startsWith("data: ")) continue;
-      const json = line.slice(6).trim();
-      if (json === "[DONE]") return;
-      try {
-        const parsed = JSON.parse(json);
-        const delta = parsed.choices?.[0]?.delta?.content;
-        if (typeof delta === "string" && delta.length) opts.onDelta(delta);
-      } catch {
         buffer = line + "\n" + buffer;
         break;
       }

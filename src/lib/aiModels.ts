@@ -80,16 +80,6 @@ export const AI_MODELS: AIModel[] = [
     gatewayModel: "gemini-2.0-flash",
     tierAccess: ["phd", "custom"],
   },
-  {
-    id: "gpt-oss-120b",
-    name: "GPT OSS 120B",
-    provider: "Groq",
-    tier: "advanced",
-    description: "OpenAI open-source 120B model served via Groq. Fast inference.",
-    capabilities: ["Fast", "Open-source", "Long context"],
-    gatewayModel: "openai/gpt-oss-120b",
-    tierAccess: ["undergraduate", "masters", "phd", "custom"],
-  },
 ];
 
 // Default — Gemini 2.5 Flash (works for all tiers, including free).

@@ -23,7 +23,6 @@ const CZAR_MODELS: Array<{ id: string; label: string; desc: string; provider: st
   { id: "gpt-5.2",           label: "GPT-5.2",            provider: "OpenAI",    desc: "Fast, capable everyday model." },
   { id: "gemini-2.5-flash",  label: "Gemini 2.5 Flash",   provider: "Google",    desc: "Fast multimodal model. Great for everyday tasks." },
   { id: "qwen3.6-plus",      label: "Qwen 3.6 Plus",      provider: "Alibaba",   desc: "Strong multilingual model with deep reasoning." },
-  { id: "gpt-oss-120b",     label: "GPT OSS 120B",       provider: "Groq",      desc: "OpenAI open-source 120B model. Fast inference via Groq." },
   { id: "gemini-3-pro",      label: "Gemini 3 Pro",       provider: "Google",    desc: "Top-tier reasoning. Used internally for image generation only.", tag: "image-only", locked: true, lockReason: "Image generation only" },
   { id: "claude-opus-4-6",   label: "Claude Opus 4.6",    provider: "Anthropic", desc: "Heaviest reasoning. Unlocks automatically in Agent mode.", tag: "agent-only", locked: true, lockReason: "Unlocks in Agent mode" },
 ];
