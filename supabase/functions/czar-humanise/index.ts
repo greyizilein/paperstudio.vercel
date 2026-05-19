@@ -102,7 +102,6 @@ Deno.serve(async (req) => {
             model: CLAUDE_MODEL,
             max_tokens: 8000,
             temperature: 0.95,
-            top_p: 0.90,
             stream: true,
             system: SYSTEM_PROMPT,
             messages: [
