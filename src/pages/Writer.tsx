@@ -1503,7 +1503,11 @@ ${thesisArea}`);
     setIsHumanising(true);
     setHumanisedText(null);
     setHumaniseStages([
-      { stage: 1, label: "Rewriting chapter...", status: "pending" },
+      { stage: 1, label: "Structure Break", status: "pending" },
+      { stage: 2, label: "Citation Texture", status: "pending" },
+      { stage: 3, label: "Human Fingerprints", status: "pending" },
+      { stage: 4, label: "Paragraph Rhythm", status: "pending" },
+      { stage: 5, label: "Surface Polish", status: "pending" },
     ]);
 
     const abort = new AbortController();
