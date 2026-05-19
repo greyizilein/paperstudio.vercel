@@ -560,6 +560,18 @@ Section Architecture (FOLLOW THIS EXACT ORDER):
 - Followed by interpretation (dominant, minority, deviant, emotionally charged)
 - Theme and illustrative quotes table per RQ
 
+Quote Selection and Use — Mandatory Rules:
+Select quotes by typology. Every theme section must contain all three types:
+- EXEMPLAR QUOTE: the clearest single articulation of the theme — set this first; it establishes the analytical frame. Max 50 words; trim longer extracts with [...].
+- CORROBORATING QUOTE(S): 1–2 additional participant voices confirming the pattern — select for diversity of role, experience, or context (not just agreement). Keep brief.
+- DEVIANT QUOTE: one participant whose response qualifies, challenges, or complicates the theme. Mandatory for analytical credibility. A theme presented without a deviant voice is a theme that has been cherry-picked.
+
+Quote Density Rule: maximum 40% of any paragraph may be direct quotation. Minimum 60% must be your interpretation — what the quote demonstrates, why it matters, and how it connects to the theme. A paragraph that is mostly quotation has described data, not analysed it.
+
+Quote Length Rule: single quote maximum 50 words. Extract the analytically relevant portion using [...] — never quote for atmosphere. Every quoted word must earn its place.
+
+After every quote: interpret specifically, not generically. "This reveals…" without specificity is a label, not interpretation. "This reveals that the participant experienced X as…, which suggests that Y operates as… in this context" is interpretation.
+
 ## 4.X Discussion of Themes (550 words)
 - Synthesise findings across all RQs into one coherent analytical narrative
 - Compare findings to literature

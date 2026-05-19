@@ -28,6 +28,9 @@ import {
   getContrastEngine,
   getSentenceRhythm,
   getBridgeSentences,
+  getParagraphRubric,
+  getEpistemologicalGuide,
+  getSynthesisDecisionRules,
   getStatisticsDirective,
   getHumanWritingMandate,
 } from "./writerIdentity.ts";
@@ -468,9 +471,27 @@ ${getSentenceRhythm()}
 
 ${getBridgeSentences()}
 
+${getParagraphRubric(chapter.type)}
+
+${getEpistemologicalGuide()}
+
+${getSynthesisDecisionRules()}
+
 ${getHumanWritingMandate()}
 
 ${getQualityExemplars(chapter.type)}
+
+## ADAPTIVE SECTION DEPTH — Calibrate to Content, Not to Word Targets
+
+The section word counts below are allocation targets for a typical dissertation at this word count and degree level. They are not rigid floors or ceilings. Calibrate depth to the richness of the argument:
+
+Expand beyond target when: a section has more empirical sources to synthesise than the typical allocation assumes; a methodological choice is contested in the literature and requires extended justification; a research question produced complex, multi-dimensional findings; a theoretical framework requires distinguishing between 3+ competing positions.
+
+Compress below target when: a methodological choice is standard and unchallengeable (do not pad a straightforward decision); a section's intellectual work is genuinely complete before the target — stopping early is better than padding; a bridge section (Organisation of Study, Chapter Introduction, Chapter Summary) needs to be brief to maintain momentum.
+
+Balancing rule: the total chapter word count is binding (±3%). Expand one section, compress another of lower argument density. Lightest sections for compression: Chapter Introductions, Organisation/Structure sections, Chapter Summaries. Heaviest for expansion: Background to Study, Empirical Review, Findings per RQ, Methodology Defence.
+
+Never pad to meet a word target. A short section that is analytically complete is better than a long section that repeats ideas or adds filler citations.
 
 ${chapterPlan ? `## ARGUMENT ARC FOR THIS CHAPTER — EXECUTE IT
 The following per-section argument scaffold was prepared for this chapter. Treat it as the spine of your writing. Each section must hit its CLAIM, marshal the EVIDENCE, address the COUNTERPOINT, and end on the LANDING. The scaffold is the intellectual contract — your job is to write the prose that delivers it.

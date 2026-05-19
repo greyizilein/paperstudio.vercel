@@ -202,6 +202,125 @@ You write human academic prose from the first word. You do not generate text and
 }
 
 /**
+ * PARAGRAPH ROLE RUBRIC — what each section's paragraphs must DO, not just structural rules.
+ * Complements the exemplars (which show HOW from other domains) with section-specific mandates.
+ */
+export function getParagraphRubric(chapterType: string): string {
+  return `
+## Paragraph Role Rubric — Section-Specific Mandates
+
+Every section has a rhetorical JOB. Before writing each paragraph, identify which role it plays and apply the mandate below.
+
+**Background (§1.1) paragraphs:**
+- Each paragraph moves ONE step closer to this specific study. Progression is non-negotiable: global significance → sectoral/regional patterns → local/contextual evidence → the precise gap this study addresses.
+- No paragraph stays at the same level of specificity as the previous one.
+- No paragraph ends without naming a consequence ("this matters because…" / "the implication is that…"). A Background paragraph without consequence is a catalogue, not an argument.
+- Every empirical claim cites a specific source with a specific finding — not "many studies show."
+
+**Statement of Problem (§1.2) paragraphs:**
+- Every sentence must contain at least one of: gap identification, consequence of gap, or urgency. A sentence containing none of these belongs in the Background.
+- The gap must be named as a TYPE: theoretical, methodological, contextual, empirical, or policy-related — not "there is a gap in the literature."
+- Consequence is not rhetorical ("this is important") — it must name WHO is affected and HOW.
+
+**Literature Review thematic paragraphs:**
+- CLAIM → EVIDENCE CHAIN (2–3 sources) → HINGE → INTERPRETIVE LANDING. No exceptions.
+- A paragraph that lists three findings without a hinge is a catalogue, not a review. Stop. Insert the hinge before the landing.
+- Two studies agreeing → convergence paragraph. Open with the convergence claim ("Three independent inquiries confirm…"), not with "Both Smith and Jones found…"
+- Two studies contradicting → contrast paragraph. Hinge is mandatory. Close by explaining WHY they contradict — not just that they do.
+
+**Methodology justification paragraphs:**
+- Every significant methodological choice must pass the five-layer test:
+  1. Define the concept or approach.
+  2. Name at least one plausible alternative.
+  3. Justify the chosen option with direct reference to THIS study's objectives, variables, and context.
+  4. Acknowledge the limitation the choice introduces.
+  5. Explain why that limitation does not invalidate the study.
+- A methodology paragraph that skips layers 4 and 5 is a textbook summary, not a defence. Add the limitation and the rebuttal before moving on.
+
+**Findings interpretation paragraphs:**
+- Result → what it MEASURES → effect size or practical significance → what it MEANS for the research question → link to literature (if Discussion) or to the next finding (if Results-only).
+- Never interpret without the number. Never report the number without the interpretation. These two moves are inseparable.
+- A findings paragraph that states a result without explaining what it reveals has reported data; it has not analysed it.
+
+**Conclusion paragraphs:**
+- Each paragraph addresses ONE research question or ONE thematic finding — not the entire study.
+- Structure: what was found → what it means → what it contributes (to theory, practice, or both).
+- Never restates the RQ verbatim — reference it in prose.
+- Never introduces a finding not discussed in Chapter 4.
+- Ends on contribution or implication, not on a summary of what the section covered.
+`;
+}
+
+/**
+ * EPISTEMOLOGICAL MODAL GUIDE — verb selection by evidence type.
+ * The most consistent quality signal separating competent from expert writing.
+ */
+export function getEpistemologicalGuide(): string {
+  return `
+## Epistemological Modal Guide — Match Verb to Evidence
+
+The verb you choose to attribute a source signals your assessment of the evidence's strength. Using the wrong verb is not just imprecise — it is an epistemological error. Apply this before citing any source.
+
+| Evidence source | Use these verbs | Never use |
+|---|---|---|
+| Systematic review or meta-analysis (≥10 studies) | demonstrates, confirms, establishes, reveals | suggests (underclaims), proves (overclaims) |
+| Multiple corroborating studies (3–9) | suggests, indicates, supports the view that, points to | demonstrates (overclaims) |
+| Single empirical study | found, reported, observed, identified, noted | demonstrates (overclaims a single study) |
+| Theoretical / conceptual claim | proposes, argues, contends, posits, theorises | shows, proves, found (empirical verbs for conceptual claims are category errors) |
+| Conflicting or uncertain evidence | appears to, seems to, tentatively suggests | clearly shows, definitively establishes |
+| Own study findings | suggests, indicates, reveals | proves, demonstrates conclusively (overclaims own findings) |
+| Government / institutional report | reports, states, documents, records | argues (institutional reports do not argue) |
+| Widely-contested theoretical position | claims, maintains, asserts | states, shows (treats contested ground as settled) |
+
+**Critical distinctions:**
+- "argues" = takes a position (theoretical and interpretive claims)
+- "found" = empirical result (measured outcomes from data collection)
+- "suggests" = inferred claim with remaining uncertainty (indirect or partial evidence)
+Using "argues" for an empirical finding, or "found" for a theoretical claim, are category errors — never do this.
+
+**Confidence-calibration rule:** When three studies agree and one conflicts, the synthesis verb must reflect the weight of evidence: "The consensus across three independent studies suggests X, though Kumar (2021) found a contrasting pattern in…" — not vaguely "Some studies suggest X."
+`;
+}
+
+/**
+ * EVIDENCE SYNTHESIS DECISION RULES — when studies share a paragraph vs. each gets its own.
+ */
+export function getSynthesisDecisionRules(): string {
+  return `
+## Evidence Synthesis Decision Rules
+
+Before writing any literature or discussion section, decide how each cluster of sources is structured. This determines paragraph boundaries and prevents the most common failure in academic writing: the chain of isolated summaries.
+
+**One source per paragraph — ONLY when:**
+- It is a foundational or landmark study the field directly builds on or contests
+- Your study's argument specifically depends on critiquing or extending it
+- It contains multiple distinct findings each requiring separate treatment
+→ Structure: source's contribution → develop the critique or extension → close on what remains unresolved.
+
+**Multiple sources in one paragraph — WHEN:**
+- 3+ studies reach the same conclusion → convergence paragraph. Open with the convergence claim ("Three independent inquiries confirm…"). Interleave studies as evidence. Close on what the convergence REVEALS — not just that it exists.
+- 2 studies contradict → contrast paragraph. State Study A. Use a strong hinge ("Yet…" / "This position was challenged by…"). State Study B. Then explain WHY they contradict: different samples, different instruments, different operationalisations, different contexts. Never leave a contradiction unexplained.
+- Studies from different fields reach parallel conclusions → cross-domain synthesis. Name the cross-domain convergence explicitly — it is a stronger claim than single-domain agreement.
+
+**Meta-analytic evidence — always its own paragraph:**
+- Open with the pooled finding and confidence interval.
+- Reference 1–2 individual studies that diverge from the pool, explaining why.
+- Close on the current state of evidence: settled, contested, or context-dependent.
+
+**The pairing rule (empirical + theoretical):**
+- Empirical finding FIRST, theoretical framework SECOND — always.
+- Data anchors the claim; theory explains the mechanism.
+- Reversing this makes the paragraph read as evidence-shopping for a pre-formed theory.
+
+**What a synthesis paragraph must never do:**
+- List sources in chronological order with no conceptual connection ("Smith (2010) found X. Jones (2015) found Y. Brown (2020) also found Y.")
+- Attribute agreement without explaining what the agreement MEANS
+- Attribute contradiction without explaining what caused it
+- End on a bare citation standing alone
+`;
+}
+
+/**
  * Language level instructions — maps 1-7 scale to prompt guidance.
  */
 export function getLanguageLevelInstructions(level: number): string {
