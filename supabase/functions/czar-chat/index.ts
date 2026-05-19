@@ -61,7 +61,7 @@ interface ChatRequest {
 // Model selection — 3 user-facing tiers map to actual models.
 // Tier gating: Instant = all; Extended Thinking = masters+; Deep Reasoning = phd+.
 // ─────────────────────────────────────────────────────────────────────
-function pickWritingModel(tier: string, isAdmin: boolean, think: boolean, toolsRequested: boolean, modelOverride?: string, wantsImage?: boolean, isDataAnalysis?: boolean, isAgentMode?: boolean): {
+function pickWritingModel(tier: string, isAdmin: boolean, think: boolean, toolsRequested: boolean, modelOverride?: string, wantsImage?: boolean, isDataAnalysis?: boolean, isAgentMode?: boolean, isComplexTask?: boolean): {
   provider: "anthropic" | "google" | "qwen";
   model: string;
   thinking: boolean;
@@ -70,28 +70,29 @@ function pickWritingModel(tier: string, isAdmin: boolean, think: boolean, toolsR
   const tools = toolsRequested;
   const isPaid = ["masters", "phd", "custom"].includes(tier) || isAdmin;
   const isPhd = ["phd", "custom"].includes(tier) || isAdmin;
+  // Heavy task signal: data analysis, agent mode, or explicitly complex (long prompt / big doc)
+  const heavy = !!(isDataAnalysis || isAgentMode || isComplexTask);
 
   // Honour the user's explicit tier selection.
   switch (modelOverride) {
     case "instant":
+      // In agent mode even Instant needs Claude for tool-calling
       if (isAgentMode) return { provider: "anthropic", model: "claude-sonnet-4-6", thinking: true, tools: true };
       return { provider: "google", model: "gemini-2.5-flash", thinking: false, tools: false };
 
     case "extended-thinking":
-      if (isAgentMode || isPaid) {
-        return { provider: "anthropic", model: "claude-sonnet-4-6", thinking: true, tools: true };
-      }
-      // Tier too low — silently serve Instant quality
-      return { provider: "google", model: "gemini-2.5-flash", thinking: false, tools: false };
+      if (!isPaid) return { provider: "google", model: "gemini-2.5-flash", thinking: false, tools: false };
+      // Complex/data/agent tasks → Claude Sonnet with thinking
+      if (heavy) return { provider: "anthropic", model: "claude-sonnet-4-6", thinking: true, tools: true };
+      // Conversational/medium tasks → Gemini Pro (capable but lighter)
+      return { provider: "google", model: "gemini-2.5-pro", thinking: false, tools: false };
 
     case "deep-reasoning":
-      if (isAgentMode || isPhd) {
-        return { provider: "anthropic", model: "claude-opus-4-7", thinking: true, tools: true };
-      }
-      if (isPaid) {
-        return { provider: "anthropic", model: "claude-sonnet-4-6", thinking: true, tools: true };
-      }
-      return { provider: "google", model: "gemini-2.5-flash", thinking: false, tools: false };
+      if (!isPaid) return { provider: "google", model: "gemini-2.5-flash", thinking: false, tools: false };
+      if (!isPhd) return { provider: "anthropic", model: "claude-sonnet-4-6", thinking: true, tools: true };
+      // PhD/custom: heavy tasks → Opus 4.7; lighter tasks → Sonnet 4.6
+      if (heavy) return { provider: "anthropic", model: "claude-opus-4-7", thinking: true, tools: true };
+      return { provider: "anthropic", model: "claude-sonnet-4-6", thinking: true, tools: true };
 
     // ── Internal system-only cases (not user-selectable) ──
     case "claude-opus-4-6":
@@ -1024,7 +1025,10 @@ Deno.serve(async (req) => {
         const isDataAnalysis = dataAnalysisPrompt || mathProgPrompt || dataFileAttached;
         const toolsRequested = mode === "plan" || mode === "build" || mode === "agent" || think || wantsImage;
         const modelOverride = (body.settings?.model_id as string | undefined) || undefined;
-        let pick = pickWritingModel(tier, isAdmin, think, toolsRequested, modelOverride, wantsImage, isDataAnalysis, isAgentMode);
+        // isComplexTask: long academic prompt, large request, or any data/code signal
+        const isComplexTask = isDataAnalysis || requestedWords >= 3000 || inherentlyLarge ||
+          /\b(chapter|dissertation|thesis|literature\s+review|methodology|findings|analysis|synthesis|argument|critical|framework)\b/i.test(userMessage);
+        let pick = pickWritingModel(tier, isAdmin, think, toolsRequested, modelOverride, wantsImage, isDataAnalysis, isAgentMode, isComplexTask);
 
         // ── Agent auto-router ────────────────────────────────────────
         // In Agent mode, when the user has NOT pinned a specific model

@@ -27,7 +27,7 @@ export async function notifyAdmin(
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          from: "PaperStudio <noreply@paperstudio.app>",
+          from: "PaperStudio <noreply@paperstudio.dev>",
           to: [ADMIN_EMAIL],
           subject: `[${kind}] ${subject}`,
           html: body.replace(/\n/g, "<br>"),

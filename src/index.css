@@ -303,31 +303,52 @@
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
-/* ── BookLoader animations ─────────────────────────────────────────── */
-@keyframes ps-book-sway {
-  0%, 100% { transform: rotate(0deg); }
-  50%      { transform: rotate(-2deg); }
+/* ── PaperStudio scan-loader animations ─────────────────────────────── */
+@keyframes ps-page-float {
+  0%, 100% { transform: translateY(0px); }
+  50%       { transform: translateY(-5px); }
 }
-@keyframes ps-book-sway-r {
-  0%, 100% { transform: rotate(0deg); }
-  50%      { transform: rotate(2deg); }
+@keyframes ps-scan {
+  0%    { transform: translateY(0px);   opacity: 0; }
+  6%    { opacity: 1; }
+  80%   { transform: translateY(36px);  opacity: 0.95; }
+  92%   { transform: translateY(36px);  opacity: 0; }
+  100%  { transform: translateY(0px);   opacity: 0; }
 }
-@keyframes ps-book-tip {
-  0%   { transform: rotate(0deg); }
-  35%  { transform: rotate(0deg); }
-  55%  { transform: rotate(-32deg); }
-  75%  { transform: rotate(-32deg); }
-  100% { transform: rotate(0deg); }
+@keyframes ps-spark {
+  0%    { transform: translateY(0px);   opacity: 0; }
+  6%    { opacity: 1; }
+  80%   { transform: translateY(36px);  opacity: 1; }
+  92%   { transform: translateY(36px);  opacity: 0; }
+  100%  { transform: translateY(0px);   opacity: 0; }
 }
-@keyframes ps-book-open-pulse {
-  0%, 100% { transform: translateY(0); opacity: 1; }
-  50%      { transform: translateY(-3px); opacity: 0.85; }
+@keyframes ps-tl-1 {
+  0%, 5%    { opacity: 0.2; }
+  12%, 28%  { opacity: 1; }
+  40%, 100% { opacity: 0.38; }
 }
-.ps-book-1     { animation: ps-book-sway   2.4s ease-in-out infinite; }
-.ps-book-2     { animation: ps-book-sway-r 2.4s ease-in-out infinite 0.2s; }
-.ps-book-3     { animation: ps-book-sway   2.4s ease-in-out infinite 0.4s; }
-.ps-book-tip   { animation: ps-book-tip    2.4s ease-in-out infinite; }
-.ps-book-open  { animation: ps-book-open-pulse 2.4s ease-in-out infinite; transform-origin: 96px 72px; }
+@keyframes ps-tl-2 {
+  0%, 28%   { opacity: 0.2; }
+  35%, 52%  { opacity: 1; }
+  64%, 100% { opacity: 0.38; }
+}
+@keyframes ps-tl-3 {
+  0%, 52%   { opacity: 0.2; }
+  58%, 73%  { opacity: 1; }
+  84%, 100% { opacity: 0.38; }
+}
+@keyframes ps-tl-4 {
+  0%, 73%   { opacity: 0.2; }
+  79%, 92%  { opacity: 1; }
+  100%      { opacity: 0.38; }
+}
+.ps-loader-page { animation: ps-page-float 3.2s ease-in-out infinite; }
+.ps-scan-beam   { animation: ps-scan      2.8s ease-in-out infinite; }
+.ps-scan-spark  { animation: ps-spark     2.8s ease-in-out infinite; }
+.ps-tl-1        { animation: ps-tl-1      2.8s ease-in-out infinite; }
+.ps-tl-2        { animation: ps-tl-2      2.8s ease-in-out infinite; }
+.ps-tl-3        { animation: ps-tl-3      2.8s ease-in-out infinite; }
+.ps-tl-4        { animation: ps-tl-4      2.8s ease-in-out infinite; }
 
 /* ─────────────────────────────────────────────────────────────────────────
    PAPERSTUDIO Marketing surface (ZOE-derived dark terracotta).
