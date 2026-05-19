@@ -12,7 +12,9 @@ import { streamCzarChat, streamDocCorrection, exportCorrectedDoc } from "@/lib/c
 import { CzarDocCorrectModal } from "@/components/czar/CzarDocCorrectModal";
 import { applyTheme, DEFAULT_THEME_ID } from "@/lib/czarThemes";
 import { toast } from "@/hooks/use-toast";
-import { Settings, Pencil, FileText } from "lucide-react";
+import { Settings, Pencil, FileText, Wand2, X, Check, StopCircle, Loader2 } from "lucide-react";
+import { computeParaDiff, type DiffParagraph } from "@/lib/diffUtils";
+import { cn } from "@/lib/utils";
 import { CzarIcon } from "@/components/icons/CzarIcon";
 import { ImageAckModal, ImageProgressModal, hasAckedImageNotice, ackImageNotice } from "@/components/ImageNoticeModal";
 import { CzarAttachModal, type AttachSelection } from "@/components/czar/CzarAttachModal";
@@ -145,6 +147,13 @@ export default function Czar() {
   useEffect(() => {
     if (typeof window !== "undefined") localStorage.setItem("czar:preview-width", String(previewWidth));
   }, [previewWidth]);
+  // Humaniser panel state
+  const [czarHumanise, setCzarHumanise] = useState<{ msgId: string; original: string } | null>(null);
+  const [czarHumanisedText, setCzarHumanisedText] = useState<string | null>(null);
+  const [czarHumaniseDiff, setCzarHumaniseDiff] = useState<DiffParagraph[] | null>(null);
+  const [isCzarHumanising, setIsCzarHumanising] = useState(false);
+  const [czarHumaniseStage, setCzarHumaniseStage] = useState<"pending" | "running" | "done">("pending");
+  const czarHumaniseAbortRef = useRef<AbortController | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const composerRef = useRef<CzarComposerHandle>(null);
   const isAdmin = (user?.email || "").toLowerCase() === "grey.izilein@gmail.com";
@@ -726,6 +735,118 @@ export default function Czar() {
     }
   }, []);
 
+  const handleCzarHumanise = (msgId: string, content: string) => {
+    setCzarHumanise({ msgId, original: content });
+    setCzarHumanisedText(null);
+    setCzarHumaniseDiff(null);
+    setCzarHumaniseStage("pending");
+    setIsCzarHumanising(false);
+  };
+
+  const handleStartCzarHumanise = async () => {
+    if (!czarHumanise || isCzarHumanising) return;
+    setIsCzarHumanising(true);
+    setCzarHumaniseStage("running");
+    setCzarHumanisedText(null);
+    setCzarHumaniseDiff(null);
+
+    const abort = new AbortController();
+    czarHumaniseAbortRef.current = abort;
+    const hardTimeout = setTimeout(() => {
+      abort.abort();
+      toast({ title: "Humaniser timed out. Please try again.", variant: "destructive" });
+      setIsCzarHumanising(false);
+      setCzarHumaniseStage("pending");
+    }, 120_000);
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
+      else headers.Authorization = `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`;
+
+      const resp = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/czar-humanise`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ text: czarHumanise.original }),
+        signal: abort.signal,
+      });
+
+      if (!resp.ok || !resp.body) {
+        toast({ title: `Humaniser failed (${resp.status})`, variant: "destructive" });
+        setIsCzarHumanising(false);
+        setCzarHumaniseStage("pending");
+        clearTimeout(hardTimeout);
+        return;
+      }
+
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = "";
+      let currentEvent = "message";
+      let gotDone = false;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        let nl: number;
+        while ((nl = buf.indexOf("\n")) !== -1) {
+          let line = buf.slice(0, nl);
+          buf = buf.slice(nl + 1);
+          if (line.endsWith("\r")) line = line.slice(0, -1);
+          if (!line) { currentEvent = "message"; continue; }
+          if (line.startsWith("event:")) { currentEvent = line.slice(6).trim(); continue; }
+          if (!line.startsWith("data:")) continue;
+          const payload = line.slice(5).trim();
+          if (!payload) continue;
+          try {
+            const parsed = JSON.parse(payload);
+            if (currentEvent === "done") {
+              gotDone = true;
+              if (parsed?.error || parsed?.stages_completed === 0) {
+                toast({ title: `Humaniser error: ${parsed?.error || "no output returned."}`, variant: "destructive" });
+              } else {
+                const result = parsed?.humanised || "";
+                if (result && result.trim().length > 50) {
+                  setCzarHumanisedText(result);
+                  setCzarHumaniseDiff(computeParaDiff(czarHumanise.original, result));
+                  setCzarHumaniseStage("done");
+                } else {
+                  toast({ title: "Humaniser returned an empty result. Please try again.", variant: "destructive" });
+                  setCzarHumaniseStage("pending");
+                }
+              }
+            }
+          } catch { /* skip malformed */ }
+        }
+      }
+
+      if (!gotDone && !abort.signal.aborted) {
+        toast({ title: "Humaniser ended unexpectedly. Please try again.", variant: "destructive" });
+        setCzarHumaniseStage("pending");
+      }
+    } catch (e: any) {
+      if (e?.name !== "AbortError" && !abort.signal.aborted) {
+        toast({ title: e?.message || "Humaniser failed", variant: "destructive" });
+        setCzarHumaniseStage("pending");
+      }
+    } finally {
+      clearTimeout(hardTimeout);
+      setIsCzarHumanising(false);
+    }
+  };
+
+  const handleApplyCzarHumanised = () => {
+    if (!czarHumanisedText || !czarHumanise) return;
+    setMessages(prev => prev.map(m => m.id === czarHumanise.msgId ? { ...m, content: czarHumanisedText } : m));
+    setCzarHumanise(null);
+    setCzarHumanisedText(null);
+    setCzarHumaniseDiff(null);
+    setCzarHumaniseStage("pending");
+    toast({ title: "Message humanised and applied." });
+  };
+
   const regenerate = (msgId: string) => {
     // Find the previous user message and resend it
     const idx = messages.findIndex((m) => m.id === msgId);
@@ -1122,6 +1243,7 @@ export default function Czar() {
                   mode={mode}
                   onApprovePlan={handleApprovePlan}
                   showQuillCaret={settings.show_quill_caret !== false}
+                  onHumanise={handleCzarHumanise}
                 />
               )}
             </div>
@@ -1281,6 +1403,129 @@ export default function Czar() {
         initial={attachLastSel ?? undefined}
       />
       {/* Preview panel is rendered above (inline desktop split + mobile sheet). */}
+
+      {/* Humaniser panel */}
+      {czarHumanise && (
+        <div className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center p-4 bg-foreground/30 backdrop-blur-sm">
+          <div className="w-full max-w-2xl bg-background border border-border rounded-2xl shadow-2xl p-5 animate-in fade-in slide-in-from-bottom-4 duration-200">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="text-[15px] font-bold text-foreground flex items-center gap-2">
+                  <Wand2 size={15} className="text-primary" />
+                  AI Humaniser
+                </h2>
+                <p className="text-[11px] text-muted-foreground mt-0.5">
+                  Rewrites this response to pass AI detection. Credits deducted from your word pack.
+                </p>
+              </div>
+              <button
+                onClick={() => { czarHumaniseAbortRef.current?.abort(); setCzarHumanise(null); setIsCzarHumanising(false); }}
+                className="p-1.5 rounded-lg text-muted-foreground hover:bg-secondary transition-colors"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Stage indicator */}
+            <div className="mb-4 flex items-center gap-2.5 text-[12px]">
+              <span className={cn(
+                "w-4 h-4 rounded-full flex items-center justify-center flex-shrink-0 text-[9px] font-bold",
+                czarHumaniseStage === "done"    ? "bg-green-500/20 text-green-500" :
+                czarHumaniseStage === "running" ? "bg-primary/20 text-primary animate-pulse" :
+                "bg-secondary text-muted-foreground"
+              )}>
+                {czarHumaniseStage === "done" ? "✓" : 1}
+              </span>
+              <span className={cn(
+                czarHumaniseStage === "running" ? "text-foreground font-medium" :
+                czarHumaniseStage === "done"    ? "text-foreground" : "text-muted-foreground"
+              )}>
+                Rewriting response...
+              </span>
+              {czarHumaniseStage === "running" && <Loader2 size={11} className="animate-spin text-primary ml-auto" />}
+            </div>
+
+            {/* Diff view */}
+            {czarHumanisedText && czarHumaniseDiff && (
+              <div className="mb-4">
+                <style>{`
+                  .czar-diff-del { background: rgba(239,68,68,0.18); color: #b91c1c; text-decoration: line-through; border-radius: 2px; padding: 0 1px; }
+                  .dark .czar-diff-del { color: #f87171; }
+                  .czar-diff-ins { background: rgba(34,197,94,0.18); color: #15803d; border-radius: 2px; padding: 0 1px; }
+                  .dark .czar-diff-ins { color: #4ade80; }
+                `}</style>
+                <div className="flex items-center gap-2 mb-2 flex-wrap">
+                  <span className="text-[11px] font-semibold text-foreground">{czarHumanisedText.trim().split(/\s+/).filter(Boolean).length.toLocaleString()} words</span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300 font-semibold">~ modified</span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/40 text-emerald-800 dark:text-emerald-300 font-semibold">+ added</span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-100 dark:bg-red-900/40 text-red-800 dark:text-red-300 font-semibold">– deleted</span>
+                </div>
+                <div className="overflow-y-auto max-h-[50vh] rounded-lg border border-border space-y-0.5 p-2 bg-background text-[13px] leading-relaxed">
+                  {czarHumaniseDiff.map((para, i) => (
+                    <div
+                      key={i}
+                      className={cn(
+                        "px-2 py-1.5 rounded border-l-4",
+                        para.type === "unchanged" ? "border-transparent" :
+                        para.type === "modified"  ? "bg-amber-500/8 border-amber-500" :
+                        para.type === "added"     ? "bg-emerald-500/10 border-emerald-500" :
+                                                    "bg-red-500/10 border-red-500 opacity-70"
+                      )}
+                    >
+                      {para.type === "modified" && para.diffHtml ? (
+                        <p dangerouslySetInnerHTML={{ __html: para.diffHtml.replace(/diff-del/g, "czar-diff-del").replace(/diff-ins/g, "czar-diff-ins") }} />
+                      ) : para.type === "deleted" ? (
+                        <p className="line-through text-muted-foreground">{para.text}</p>
+                      ) : (
+                        <p>{para.text}</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Actions */}
+            <div className="flex gap-2">
+              {!isCzarHumanising && czarHumaniseStage !== "done" && (
+                <button
+                  onClick={handleStartCzarHumanise}
+                  className="flex-1 h-9 rounded-lg bg-primary text-primary-foreground text-[13px] font-semibold hover:bg-primary/90 transition-colors flex items-center justify-center gap-2"
+                >
+                  <Wand2 size={13} />
+                  Humanise response
+                </button>
+              )}
+              {isCzarHumanising && (
+                <button
+                  onClick={() => { czarHumaniseAbortRef.current?.abort(); setIsCzarHumanising(false); setCzarHumaniseStage("pending"); }}
+                  className="flex-1 h-9 rounded-lg bg-secondary text-foreground text-[13px] font-medium hover:bg-secondary/80 transition-colors flex items-center justify-center gap-2"
+                >
+                  <StopCircle size={13} />
+                  Cancel
+                </button>
+              )}
+              {czarHumanisedText && (
+                <>
+                  <button
+                    onClick={() => { setCzarHumanisedText(null); setCzarHumaniseDiff(null); setCzarHumaniseStage("pending"); }}
+                    className="h-9 px-4 rounded-lg bg-secondary text-foreground text-[13px] font-medium hover:bg-secondary/80 transition-colors"
+                  >
+                    Retry
+                  </button>
+                  <button
+                    onClick={handleApplyCzarHumanised}
+                    className="flex-1 h-9 rounded-lg bg-primary text-primary-foreground text-[13px] font-semibold hover:bg-primary/90 transition-colors flex items-center justify-center gap-2"
+                  >
+                    <Check size={13} />
+                    Apply humanised version
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
