@@ -315,6 +315,7 @@ export default function WriterPage() {
   const [humanisedText, setHumanisedText] = useState<string | null>(null);
   const [isHumanising, setIsHumanising] = useState(false);
   const humaniseAbortRef = useRef<AbortController | null>(null);
+  const [humaniseDiff, setHumaniseDiff] = useState<DiffParagraph[] | null>(null);
   // Per-figure simulated progress (0–100)
   const [figureProgress, setFigureProgress] = useState<Record<string, number>>({});
   // Image acknowledgment + progress modals
@@ -1564,12 +1565,17 @@ ${thesisArea}`);
               setHumaniseStages(prev => prev.map(st => st.stage === s ? { ...st, status: "skipped" } : st));
             } else if (currentEvent === "done") {
               gotDone = true;
-              const result = parsed?.humanised || "";
-              if (result && result.trim().length > 50) {
-                setHumanisedText(result);
-                setHumaniseStages(prev => prev.map(st => st.status === "pending" ? { ...st, status: "skipped" } : st));
+              if (parsed?.error || parsed?.stages_completed === 0) {
+                toast.error(`Humaniser error: ${parsed?.error || "no output returned. Please try again."}`);
               } else {
-                toast.error("Humaniser returned an empty result. Please try again.");
+                const result = parsed?.humanised || "";
+                if (result && result.trim().length > 50) {
+                  setHumanisedText(result);
+                  setHumaniseDiff(computeParaDiff(content, result));
+                  setHumaniseStages(prev => prev.map(st => st.status === "pending" ? { ...st, status: "skipped" } : st));
+                } else {
+                  toast.error("Humaniser returned an empty result. Please try again.");
+                }
               }
             }
           } catch { /* skip malformed */ }
@@ -1596,12 +1602,15 @@ ${thesisArea}`);
     const wc = countBodyWords(humanisedText);
     const chapterWords = currentChapter.word_count_actual || 0;
     handleUpdate({ ...project, chapters: project.chapters.map(c => c.id === currentChapter.id ? { ...c, content: humanisedText, word_count_actual: wc } : c) });
+    // Keep textarea in sync when user is in edit mode
+    if (isEditMode) setEditContent(humanisedText);
     if (!isTestUser) {
       incrementWordsUsed(user.id, Math.max(0, chapterWords)).catch(() => {});
       setSubscription(s => ({ ...s, words_used: s.words_used + Math.max(0, chapterWords) }));
     }
     setShowHumanisePanel(false);
     setHumanisedText(null);
+    setHumaniseDiff(null);
     setHumaniseStages([]);
     toast.success("Chapter humanised and applied.");
   };
@@ -2332,6 +2341,7 @@ ${thesisArea}`);
                   if (!currentChapter?.content) { toast.error("Complete this chapter first."); return; }
                   setShowHumanisePanel(true);
                   setHumanisedText(null);
+                  setHumaniseDiff(null);
                   setHumaniseStages([]);
                   setIsHumanising(false);
                 }}
@@ -3670,7 +3680,7 @@ ${thesisArea}`);
       {/* Humanise panel */}
       {showHumanisePanel && currentChapter && (
         <div className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center p-4 bg-foreground/30 backdrop-blur-sm">
-          <div className="w-full max-w-md bg-background border border-border rounded-2xl shadow-2xl p-5 animate-in fade-in slide-in-from-bottom-4 duration-200">
+          <div className="w-full max-w-2xl bg-background border border-border rounded-2xl shadow-2xl p-5 animate-in fade-in slide-in-from-bottom-4 duration-200">
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h2 className="text-[15px] font-bold text-foreground flex items-center gap-2">
@@ -3723,10 +3733,46 @@ ${thesisArea}`);
               </div>
             )}
 
-            {/* Result ready */}
+            {/* Result ready — diff view */}
             {humanisedText && (
-              <div className="mb-4 px-3 py-2.5 bg-green-500/10 border border-green-500/20 rounded-lg text-[12px] text-green-600 dark:text-green-400">
-                Humanisation complete — {countBodyWords(humanisedText).toLocaleString()} words ready to apply.
+              <div className="mb-4">
+                <style>{`
+                  .diff-del { background: rgba(239,68,68,0.18); color: #b91c1c; text-decoration: line-through; border-radius: 2px; padding: 0 1px; }
+                  .dark .diff-del { color: #f87171; }
+                  .diff-ins { background: rgba(34,197,94,0.18); color: #15803d; border-radius: 2px; padding: 0 1px; }
+                  .dark .diff-ins { color: #4ade80; }
+                `}</style>
+                <div className="flex items-center gap-2 mb-2 flex-wrap">
+                  <span className="text-[11px] font-semibold text-foreground">{countBodyWords(humanisedText).toLocaleString()} words</span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300 font-semibold">~ modified</span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/40 text-emerald-800 dark:text-emerald-300 font-semibold">+ added</span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-100 dark:bg-red-900/40 text-red-800 dark:text-red-300 font-semibold">– deleted</span>
+                  <span className="text-[10px] text-muted-foreground/60 ml-1">inline: <span className="diff-del" style={{fontSize:"10px"}}>removed</span> <span className="diff-ins" style={{fontSize:"10px"}}>added</span></span>
+                </div>
+                {humaniseDiff && (
+                  <div className="overflow-y-auto max-h-[50vh] rounded-lg border border-border space-y-0.5 p-2 bg-background text-[13px] leading-relaxed">
+                    {humaniseDiff.map((para, i) => (
+                      <div
+                        key={i}
+                        className={cn(
+                          "px-2 py-1.5 rounded border-l-4",
+                          para.type === "unchanged" ? "border-transparent" :
+                          para.type === "modified"  ? "bg-amber-500/8 border-amber-500" :
+                          para.type === "added"     ? "bg-emerald-500/10 border-emerald-500" :
+                                                      "bg-red-500/10 border-red-500 opacity-70"
+                        )}
+                      >
+                        {para.type === "modified" && para.diffHtml ? (
+                          <p dangerouslySetInnerHTML={{ __html: para.diffHtml }} />
+                        ) : para.type === "deleted" ? (
+                          <p className="line-through text-muted-foreground">{para.text}</p>
+                        ) : (
+                          <p>{para.text}</p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 
@@ -3753,7 +3799,7 @@ ${thesisArea}`);
               {humanisedText && (
                 <>
                   <button
-                    onClick={() => { setHumanisedText(null); setHumaniseStages([]); }}
+                    onClick={() => { setHumanisedText(null); setHumaniseDiff(null); setHumaniseStages([]); }}
                     className="h-9 px-4 rounded-lg bg-secondary text-foreground text-[13px] font-medium hover:bg-secondary/80 transition-colors"
                   >
                     Retry
