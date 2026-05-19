@@ -7,84 +7,50 @@ export interface AIModel {
   capabilities: string[];
   gatewayModel: string;
   tierAccess: string[];
-  /** If true, the model is only selectable when writing Chapter 4 (data analysis). */
-  ch4Only?: boolean;
 }
 
-// PaperStudio user-facing model lineup. Tier-gated.
-//   • Free            → Gemini 2.5 Flash
-//   • Undergraduate   → + Gemini 3 Flash, GPT-5.2
-//   • Masters         → + Gemini 2.5 Pro, Claude Sonnet 4.6
-//   • PhD / Custom    → + Gemini 3 Pro
+// PaperStudio user-facing model tiers. Three abstract capability levels.
+// Users never see model names — only the tier label.
 //
-// IMPORTANT: Claude Opus 4.6 stays SYSTEM-ONLY (Agent mode complex tasks)
-// and is intentionally NOT in this list.
+//   • Instant          → Gemini Flash — all tiers
+//   • Extended Thinking → Claude Sonnet — Masters+
+//   • Deep Reasoning    → Claude Opus  — PhD / Custom
+//
 export const AI_MODELS: AIModel[] = [
   {
-    id: "gemini-2.5-flash",
-    name: "Gemini 2.5 Flash",
+    id: "instant",
+    name: "Instant",
     provider: "Google",
     tier: "standard",
-    description: "Fast, capable everyday model. Great for most writing tasks.",
-    capabilities: ["Fast", "Long context", "Multimodal"],
+    description: "Fast generation. Great for all writing tasks.",
+    capabilities: ["Fast", "Long context", "All tiers"],
     gatewayModel: "gemini-2.5-flash",
     tierAccess: ["free", "undergraduate", "masters", "phd", "custom"],
   },
   {
-    id: "gemini-3-flash",
-    name: "Gemini 3 Flash",
-    provider: "Google",
+    id: "extended-thinking",
+    name: "Extended Thinking",
+    provider: "Anthropic",
     tier: "advanced",
-    description: "Next-gen Gemini Flash preview. Better reasoning at low latency.",
-    capabilities: ["Next-gen", "Fast", "Multimodal", "Long context"],
-    gatewayModel: "gemini-2.0-flash",
-    tierAccess: ["undergraduate", "masters", "phd", "custom"],
-  },
-  {
-    id: "gpt-5.2",
-    name: "Gemini 2.5 Flash",
-    provider: "Google",
-    tier: "advanced",
-    description: "Solid reasoning at low latency. Reliable everyday model.",
-    capabilities: ["Fast", "Reliable reasoning", "Multimodal", "Long context"],
-    gatewayModel: "gemini-2.5-flash",
-    tierAccess: ["undergraduate", "masters", "phd", "custom"],
-  },
-  {
-    id: "gemini-2.5-pro",
-    name: "Gemini 2.5 Pro",
-    provider: "Google",
-    tier: "premium",
-    description: "Deep reasoning, big context, multimodal. Strong on complex chapters.",
-    capabilities: ["Deep reasoning", "Long context", "Multimodal"],
-    gatewayModel: "gemini-2.5-pro",
+    description: "More careful reasoning and longer context. Best for complex chapters.",
+    capabilities: ["Deep reasoning", "Long context", "Tool use"],
+    gatewayModel: "claude-sonnet-4-6",
     tierAccess: ["masters", "phd", "custom"],
   },
   {
-    id: "claude-sonnet-4-6",
-    name: "Claude Sonnet 4.6",
+    id: "deep-reasoning",
+    name: "Deep Reasoning",
     provider: "Anthropic",
     tier: "premium",
-    description: "Best academic prose, adaptive thinking, tool use. Masters & above.",
-    capabilities: ["Best academic prose", "Tool use", "Long context", "Adaptive thinking"],
-    gatewayModel: "claude-sonnet-4-5",
-    tierAccess: ["masters", "phd", "custom"],
-  },
-  {
-    id: "gemini-3-pro",
-    name: "Gemini 3 Pro",
-    provider: "Google",
-    tier: "premium",
-    description: "Top-tier Gemini reasoning. PhD only.",
-    capabilities: ["Top-tier reasoning", "Long context", "Multimodal"],
-    gatewayModel: "gemini-2.0-flash",
+    description: "Maximum quality and heaviest processing. For dissertations that demand the best.",
+    capabilities: ["Maximum quality", "Heaviest model", "PhD-grade"],
+    gatewayModel: "claude-opus-4-7",
     tierAccess: ["phd", "custom"],
   },
 ];
 
-// Default — Gemini 2.5 Flash (works for all tiers, including free).
-export const DEFAULT_MODEL_ID = "gemini-2.5-flash";
-export const FREE_MODEL_ID = "gemini-2.5-flash";
+export const DEFAULT_MODEL_ID = "instant";
+export const FREE_MODEL_ID = "instant";
 
 export function getModelById(id: string): AIModel | undefined {
   return AI_MODELS.find((m) => m.id === id);

@@ -283,7 +283,10 @@ export function CzarSidebar({
         </button>
         <div className="flex-1" />
         <button
-          onClick={() => navigate("/dashboard")}
+          onClick={() => {
+            const last = localStorage.getItem("ps:last-project");
+            navigate(last ? `/writer/${last}` : "/dashboard");
+          }}
           className="w-9 h-9 rounded-lg flex items-center justify-center hover:bg-black/5 transition-colors"
           style={{ color: "var(--czar-text-dim)" }}
           title="Back to PaperStudio"
@@ -460,7 +463,10 @@ export function CzarSidebar({
         )}
 
         <button
-          onClick={() => navigate("/dashboard")}
+          onClick={() => {
+            const last = localStorage.getItem("ps:last-project");
+            navigate(last ? `/writer/${last}` : "/dashboard");
+          }}
           className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-[11.5px] font-medium hover:opacity-100"
           style={{ color: "var(--czar-text-dim)", opacity: 0.85 }}
         >

@@ -211,7 +211,15 @@ export async function streamGenerateChapter(options: StreamGenerateOptions) {
       // not on continuations (continuation appends; polish operates on whole).
       let polished = fullContent;
       if (!options.continuation && fullContent.length > 200) {
-        polished = await polishChapter(fullContent, signal);
+        const bannedPhraseHits = (fullContent.match(
+          /(Furthermore|Moreover|Additionally|This demonstrates|This highlights|This underscores|It is (?:important|worth noting)|In today's|This therefore)\b/gi
+        ) || []).length;
+        polished = await polishChapter(
+          bannedPhraseHits >= 3
+            ? `[INSTRUCTION: This chapter draft contains ${bannedPhraseHits} AI-tell phrases (Furthermore, Moreover, Additionally, "This demonstrates/highlights/underscores", etc.). As you polish, replace every instance with natural academic transitions — human writers rarely use these.]\n\n${fullContent}`
+            : fullContent,
+          signal
+        );
       }
 
       onDone(polished !== fullContent ? polished : undefined);

@@ -22,6 +22,7 @@ import {
 } from "@/lib/constants";
 import { CITATION_STYLE_METADATA, inferCitationStyle } from "@/lib/citationStylesMeta";
 import { Slider } from "@/components/ui/slider";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 type WizardStep = 0 | 1 | 2 | 3 | 4;
 
@@ -645,13 +646,18 @@ export function NewProject({ onBack, onCreate }: { onBack: () => void; onCreate:
                   </div>
                 </div>
 
-                <TickGroup
-                  label="Degree Level"
-                  required
-                  options={DEGREE_OPTIONS}
-                  value={form.degree}
-                  onChange={(v) => updateForm("degree", v)}
-                />
+                <div>
+                  <label className="block text-[11px] font-bold text-foreground mb-1">Degree Level <span className="text-destructive">*</span></label>
+                  <div className="sm:hidden">
+                    <Select value={form.degree} onValueChange={(v) => updateForm("degree", v)}>
+                      <SelectTrigger className="w-full text-[13px]"><SelectValue placeholder="Select degree…" /></SelectTrigger>
+                      <SelectContent>{DEGREE_OPTIONS.map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent>
+                    </Select>
+                  </div>
+                  <div className="hidden sm:block">
+                    <TickGroup options={DEGREE_OPTIONS} value={form.degree} onChange={(v) => updateForm("degree", v)} />
+                  </div>
+                </div>
 
                 <div>
                   <label className="block text-[11px] font-bold text-foreground mb-1">Total Word Count</label>
@@ -691,7 +697,17 @@ export function NewProject({ onBack, onCreate }: { onBack: () => void; onCreate:
                 {/* Citation Style — all 12 styles with descriptions */}
                 <div>
                   <label className="block text-[11px] font-bold text-foreground mb-1.5">Citation Style</label>
-                  <div className="flex flex-wrap gap-1.5">
+                  {/* Mobile: dropdown */}
+                  <div className="sm:hidden">
+                    <Select value={form.citation_style} onValueChange={(v) => updateForm("citation_style", v)}>
+                      <SelectTrigger className="w-full text-[13px]"><SelectValue placeholder="Select style…" /></SelectTrigger>
+                      <SelectContent>
+                        {CITATION_STYLE_METADATA.map((s) => <SelectItem key={s.id} value={s.id}>{s.label}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {/* Desktop: pill grid */}
+                  <div className="hidden sm:flex flex-wrap gap-1.5">
                     {CITATION_STYLE_METADATA.map((style) => {
                       const active = form.citation_style === style.id;
                       return (
@@ -702,9 +718,7 @@ export function NewProject({ onBack, onCreate }: { onBack: () => void; onCreate:
                           title={style.description}
                           className={cn(
                             "rounded-full px-2.5 py-1 text-[11px] font-medium border transition-all cursor-pointer",
-                            active
-                              ? "bg-primary text-primary-foreground border-primary"
-                              : "bg-background text-muted-foreground border-border hover:border-primary/40 hover:text-foreground"
+                            active ? "bg-primary text-primary-foreground border-primary" : "bg-background text-muted-foreground border-border hover:border-primary/40 hover:text-foreground"
                           )}
                         >
                           {style.label}
@@ -719,12 +733,20 @@ export function NewProject({ onBack, onCreate }: { onBack: () => void; onCreate:
                   )}
                 </div>
 
-                <TickGroup
-                  label="Language Style"
-                  options={["English (UK)", "English (US)", "English (Nigeria / West Africa)", "English (Australia)"]}
-                  value={form.language_style}
-                  onChange={(v) => updateForm("language_style", v)}
-                />
+                <div>
+                  <label className="block text-[11px] font-bold text-foreground mb-1">Language Style</label>
+                  <div className="sm:hidden">
+                    <Select value={form.language_style} onValueChange={(v) => updateForm("language_style", v)}>
+                      <SelectTrigger className="w-full text-[13px]"><SelectValue placeholder="Select language…" /></SelectTrigger>
+                      <SelectContent>
+                        {["English (UK)", "English (US)", "English (Nigeria / West Africa)", "English (Australia)"].map((l) => <SelectItem key={l} value={l}>{l}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="hidden sm:block">
+                    <TickGroup options={["English (UK)", "English (US)", "English (Nigeria / West Africa)", "English (Australia)"]} value={form.language_style} onChange={(v) => updateForm("language_style", v)} />
+                  </div>
+                </div>
 
                 {/* Writing Mode — compact tick row */}
                 <div>
@@ -772,13 +794,20 @@ export function NewProject({ onBack, onCreate }: { onBack: () => void; onCreate:
         {step === 1 && (
           <motion.div key="step-1" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-2.5">
             <section className="rounded-[10px] border border-border bg-card p-3.5 space-y-2.5">
-              <TickGroup
-                label="How are you researching it?"
-                required
-                options={["Quantitative", "Qualitative", "Mixed Methods"]}
-                value={form.research_methodology}
-                onChange={(v) => updateForm("research_methodology", v as Methodology)}
-              />
+              <div>
+                <label className="block text-[11px] font-bold text-foreground mb-1">How are you researching it? <span className="text-destructive">*</span></label>
+                <div className="sm:hidden">
+                  <Select value={form.research_methodology} onValueChange={(v) => updateForm("research_methodology", v as Methodology)}>
+                    <SelectTrigger className="w-full text-[13px]"><SelectValue placeholder="Select methodology…" /></SelectTrigger>
+                    <SelectContent>
+                      {["Quantitative", "Qualitative", "Mixed Methods"].map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="hidden sm:block">
+                  <TickGroup options={["Quantitative", "Qualitative", "Mixed Methods"]} value={form.research_methodology} onChange={(v) => updateForm("research_methodology", v as Methodology)} />
+                </div>
+              </div>
               <p className="text-[10px] text-muted-foreground leading-snug">
                 <Info size={10} className="inline mr-1 text-primary" />
                 Sampling & sample-size live in Chapter 3 settings.
@@ -787,14 +816,22 @@ export function NewProject({ onBack, onCreate }: { onBack: () => void; onCreate:
 
             <section className="rounded-[10px] border border-border bg-card p-3.5">
               <CardTitle>Study type</CardTitle>
-              <div className="flex flex-wrap gap-1.5">
+              {/* Mobile: dropdown */}
+              <div className="sm:hidden mb-1.5">
+                <Select value={form.research_framework} onValueChange={(v) => updateForm("research_framework", v)}>
+                  <SelectTrigger className="w-full text-[13px]"><SelectValue placeholder="Select study type…" /></SelectTrigger>
+                  <SelectContent>
+                    {FRAMEWORK_OPTIONS.map((fw) => (
+                      <SelectItem key={fw} value={fw}>{fw}{fw === suggestedFramework ? " ✦" : ""}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              {/* Desktop: chip grid */}
+              <div className="hidden sm:flex flex-wrap gap-1.5">
                 {FRAMEWORK_OPTIONS.map((fw) => (
                   <div key={fw} className="relative">
-                    <TickChip
-                      label={fw}
-                      active={form.research_framework === fw}
-                      onClick={() => updateForm("research_framework", fw)}
-                    />
+                    <TickChip label={fw} active={form.research_framework === fw} onClick={() => updateForm("research_framework", fw)} />
                     {fw === suggestedFramework && (
                       <span className="absolute -top-1.5 -right-1.5 text-[8px] font-black bg-primary text-primary-foreground px-1 py-0 rounded-full leading-tight pointer-events-none">✦</span>
                     )}
@@ -826,9 +863,28 @@ export function NewProject({ onBack, onCreate }: { onBack: () => void; onCreate:
             </section>
 
             <section className="rounded-[10px] border border-border bg-card p-3.5 space-y-2.5">
-              <TickGroup label="Formality" options={FORMALITY_OPTIONS} value={form.formality} onChange={(v) => updateForm("formality", v)} />
-              <TickGroup label="Voice" options={VOICE_OPTIONS} value={form.voice} onChange={(v) => updateForm("voice", v)} />
-              <TickGroup label="Hedging" options={HEDGING_OPTIONS} value={form.hedging} onChange={(v) => updateForm("hedging", v)} />
+              {/* Mobile: 3 stacked dropdowns */}
+              <div className="sm:hidden space-y-2">
+                {[
+                  { label: "Formality", opts: FORMALITY_OPTIONS, field: "formality" as const },
+                  { label: "Voice", opts: VOICE_OPTIONS, field: "voice" as const },
+                  { label: "Hedging", opts: HEDGING_OPTIONS, field: "hedging" as const },
+                ].map(({ label, opts, field }) => (
+                  <div key={field}>
+                    <label className="block text-[11px] font-bold text-foreground mb-1">{label}</label>
+                    <Select value={form[field] as string} onValueChange={(v) => updateForm(field, v)}>
+                      <SelectTrigger className="w-full text-[13px]"><SelectValue placeholder={`Select ${label.toLowerCase()}…`} /></SelectTrigger>
+                      <SelectContent>{opts.map((o) => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent>
+                    </Select>
+                  </div>
+                ))}
+              </div>
+              {/* Desktop: existing tick groups */}
+              <div className="hidden sm:block space-y-2.5">
+                <TickGroup label="Formality" options={FORMALITY_OPTIONS} value={form.formality} onChange={(v) => updateForm("formality", v)} />
+                <TickGroup label="Voice" options={VOICE_OPTIONS} value={form.voice} onChange={(v) => updateForm("voice", v)} />
+                <TickGroup label="Hedging" options={HEDGING_OPTIONS} value={form.hedging} onChange={(v) => updateForm("hedging", v)} />
+              </div>
             </section>
           </motion.div>
         )}

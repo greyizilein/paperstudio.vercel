@@ -387,6 +387,12 @@ export default function WriterPage() {
     return () => mq.removeEventListener("change", handler);
   }, []);
 
+  // Store last visited project so CZAR can navigate directly back.
+  useEffect(() => {
+    if (!projectId) return;
+    try { localStorage.setItem("ps:last-project", projectId); } catch { /* quota / private mode */ }
+  }, [projectId]);
+
   // Show onboarding tour for first-time studio visitors
   useEffect(() => {
     if (!user) return;
@@ -2872,34 +2878,23 @@ ${thesisArea}`);
                     }}
                     className={cn(
                       "w-full text-left px-2.5 py-2 rounded-lg border transition-all flex items-start gap-2",
-                      active
-                        ? "border-primary bg-primary/5"
-                        : "border-border hover:border-primary/50 bg-background",
+                      active ? "border-primary bg-primary/5" : "border-border hover:border-primary/50 bg-background",
                       locked && "opacity-60 cursor-not-allowed hover:border-border"
                     )}
                   >
                     <div className="mt-0.5 flex-shrink-0">
-                      {locked ? (
-                        <Lock size={13} className="text-muted-foreground" />
-                      ) : active ? (
-                        <Check size={13} className="text-primary" />
-                      ) : (
-                        <Cpu size={13} className="text-muted-foreground" />
-                      )}
+                      {locked ? <Lock size={13} className="text-muted-foreground" /> : active ? <Check size={13} className="text-primary" /> : <Cpu size={13} className="text-muted-foreground" />}
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5 flex-wrap">
                         <span className="text-[12.5px] font-bold text-foreground">{m.name}</span>
-                        <span className="text-[9.5px] font-semibold text-muted-foreground">· {m.provider}</span>
                         {locked && (
                           <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200">
                             {getMinTierLabel(m.id)}
                           </span>
                         )}
                         {active && !locked && (
-                          <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
-                            Active
-                          </span>
+                          <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">Active</span>
                         )}
                       </div>
                       <div className="text-[11px] text-muted-foreground leading-snug mt-0.5">{m.description}</div>
@@ -2908,9 +2903,7 @@ ${thesisArea}`);
                 );
               })}
               {!isTestUser && (subscription?.tier || "free").toLowerCase() === "free" && (
-                <div className="text-[10.5px] text-muted-foreground pt-1">
-                  Locked models become available after upgrading your plan.
-                </div>
+                <div className="text-[10.5px] text-muted-foreground pt-1">Extended Thinking and Deep Reasoning unlock with Masters+.</div>
               )}
             </div>
           </PanelSection>

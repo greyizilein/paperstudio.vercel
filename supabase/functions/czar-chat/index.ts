@@ -57,7 +57,9 @@ interface ChatRequest {
 //     back to Claude Sonnet 4.6 for that turn (the tool path still handles
 //     image generation under the hood).
 //
-// Default when no override is present is GPT 5.2.
+// ─────────────────────────────────────────────────────────────────────
+// Model selection — 3 user-facing tiers map to actual models.
+// Tier gating: Instant = all; Extended Thinking = masters+; Deep Reasoning = phd+.
 // ─────────────────────────────────────────────────────────────────────
 function pickWritingModel(tier: string, isAdmin: boolean, think: boolean, toolsRequested: boolean, modelOverride?: string, wantsImage?: boolean, isDataAnalysis?: boolean, isAgentMode?: boolean): {
   provider: "anthropic" | "google" | "qwen";
@@ -66,48 +68,49 @@ function pickWritingModel(tier: string, isAdmin: boolean, think: boolean, toolsR
   tools: boolean;
 } {
   const tools = toolsRequested;
+  const isPaid = ["masters", "phd", "custom"].includes(tier) || isAdmin;
+  const isPhd = ["phd", "custom"].includes(tier) || isAdmin;
 
-  // Honour the user's explicit selection.
+  // Honour the user's explicit tier selection.
   switch (modelOverride) {
-    case "claude-sonnet-4-6":
-      return { provider: "anthropic", model: "claude-sonnet-4-6", thinking: think, tools };
-    case "gpt-5.2":
-      // GPT-5.2 has no agentic tool loop — it cannot call web_search, cite_check,
-      // or generate_image. In Agent mode we must use Claude regardless of the
-      // user's saved preference (for this turn only; saved selection is untouched).
-      if (isAgentMode) {
+    case "instant":
+      if (isAgentMode) return { provider: "anthropic", model: "claude-sonnet-4-6", thinking: true, tools: true };
+      return { provider: "google", model: "gemini-2.5-flash", thinking: false, tools: false };
+
+    case "extended-thinking":
+      if (isAgentMode || isPaid) {
+        return { provider: "anthropic", model: "claude-sonnet-4-6", thinking: true, tools: true };
+      }
+      // Tier too low — silently serve Instant quality
+      return { provider: "google", model: "gemini-2.5-flash", thinking: false, tools: false };
+
+    case "deep-reasoning":
+      if (isAgentMode || isPhd) {
+        return { provider: "anthropic", model: "claude-opus-4-7", thinking: true, tools: true };
+      }
+      if (isPaid) {
         return { provider: "anthropic", model: "claude-sonnet-4-6", thinking: true, tools: true };
       }
       return { provider: "google", model: "gemini-2.5-flash", thinking: false, tools: false };
-    case "qwen3.6-plus":
-      // Qwen runs through DashScope (OpenAI-compatible). No agentic tools yet.
-      // Agent mode falls back to Claude, identical to GPT-5.2 behaviour.
-      if (isAgentMode) {
-        return { provider: "anthropic", model: "claude-sonnet-4-6", thinking: true, tools: true };
-      }
-      return { provider: "qwen", model: "qwen3.6-plus", thinking: false, tools: false };
+
+    // ── Internal system-only cases (not user-selectable) ──
     case "claude-opus-4-6":
-      // Opus only unlocks for high-level analytical / mathematical /
-      // programming work or when the user is in Agent mode. Otherwise
-      // silently fall back to GPT 5.2 for THIS turn — never overwrite
-      // the user's saved selection.
+      // Opus unlocks for analytical/data work or Agent mode only.
       if (isDataAnalysis || isAgentMode) {
         return { provider: "anthropic", model: "claude-opus-4-7", thinking: think, tools };
       }
       return { provider: "google", model: "gemini-2.5-flash", thinking: false, tools: false };
     case "gemini-3-pro":
-      // Gemini stays image-only. For non-image turns, route through Claude
-      // Sonnet 4.6 (with image tool still available) for this turn only.
+      // Image generation only — route through Claude with image tool.
       return { provider: "anthropic", model: "claude-sonnet-4-6", thinking: think, tools: wantsImage ? true : tools };
   }
 
-  // No explicit model selection. Agent mode always needs Claude — GPT-5.2 has
-  // no agentic tool loop and cannot fulfill the autonomous brief.
+  // No explicit selection. Agent mode always needs Claude.
   if (isAgentMode) {
     return { provider: "anthropic", model: "claude-sonnet-4-6", thinking: true, tools: true };
   }
 
-  // Default: GPT 5.2 for all non-agent turns.
+  // Default: Instant (Gemini Flash).
   return { provider: "google", model: "gemini-2.5-flash", thinking: false, tools: false };
 }
 

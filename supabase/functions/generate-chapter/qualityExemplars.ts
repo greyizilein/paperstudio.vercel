@@ -62,41 +62,88 @@ const METHODOLOGY_EXEMPLAR = `
 A positivist, deductive, quantitative design was adopted. The choice was deliberate: the research questions concerned the strength and direction of relationships between price perception, perceived quality, and consumer preference — questions best answered through measurement rather than interpretation. A cross-sectional survey was administered to 312 adult shoppers across three Lagos markets (Yaba, Balogun, and Aswani), selected because they represent the densest concentrations of Okrika trade in the metropolitan area. Sample size was determined through G*Power analysis, which indicated that detecting a medium effect (f² = 0.15) at α = 0.05 with 80% power required a minimum of 153 respondents; the achieved sample exceeds this threshold and supports robust subgroup analysis. The instrument, adapted from Sweeney and Soutar's (2001) PERVAL scale, demonstrated acceptable internal consistency across all four subscales (Cronbach's α between 0.78 and 0.87). Transferability to non-urban or non-Nigerian second-hand contexts remains uncertain — a limitation discussed in §3.10 — but the design supports defensible inference within the studied population.
 `;
 
+// ── NEGATIVE COUNTER-EXEMPLARS ────────────────────────────────────────────────
+// One "AI tells" paragraph per chapter type — exactly what NOT to produce.
+
+const NEGATIVE_INTRO = `
+**Counter-exemplar — Introduction (DO NOT write like this):**
+*Why this is flagged: opens with a vague scene-setting claim with no evidence; uniform 18-word sentence rhythm throughout; closes with a summary rather than an implication; "Furthermore" and "It is important to note" are AI fingerprints.*
+
+Leadership is a concept that has been studied extensively in many fields and contexts. Furthermore, it is important to note that transformational leadership has received significant attention in recent decades. Scholars have explored its applications in various organisational settings. Moreover, its relevance to post-colonial contexts has been highlighted by numerous researchers. This therefore suggests that a comprehensive understanding of leadership is crucial for addressing governance challenges. Additionally, this study aims to contribute to the existing body of literature. It is worth noting that the findings will have important implications for policy and practice.
+`;
+
+const NEGATIVE_LITREVIEW = `
+**Counter-exemplar — Literature Review (DO NOT write like this):**
+*Why this is flagged: identical sentence length throughout; evidence dropped as trailing citations rather than woven into argument; "Furthermore", "Moreover", "Additionally" used as paragraph glue; no interpretive landing or rhetorical hinge; closing sentence announces what the section "demonstrates" — the single most reliable AI tell.*
+
+Several scholars have examined the relationship between leadership and institutional effectiveness. Burns (1978) introduced the concept of transformational leadership and noted its potential for positive change. Furthermore, Bass (1985) expanded on this framework and highlighted its relevance across different contexts. Moreover, subsequent studies have confirmed these findings in various settings. Additionally, researchers have noted that institutional factors play an important role in mediating leadership outcomes. This demonstrates the importance of considering contextual variables when applying transformational leadership theory. It is worth noting that the evidence base continues to grow in this area.
+`;
+
+const NEGATIVE_METHODOLOGY = `
+**Counter-exemplar — Methodology (DO NOT write like this):**
+*Why this is flagged: design choice stated but not justified; sample size given without any power analysis or threshold justification; uniform 20-word sentences; reliability figures absent; closes with a summary claim ("ensuring rigour") rather than an honest limitation.*
+
+A quantitative research design was adopted for this study. Furthermore, a cross-sectional survey was administered to 200 participants. Additionally, the survey instrument was adapted from existing validated scales. Moreover, the reliability of the instrument was confirmed before data collection began. Data were collected across multiple sites in order to ensure a representative sample. Furthermore, the data were analysed using SPSS software. This therefore ensured the rigour and validity of the findings throughout the research process.
+`;
+
+const NEGATIVE_FINDINGS = `
+**Counter-exemplar — Findings (DO NOT write like this):**
+*Why this is flagged: results stated without specificity or source anchoring; "This highlights" and "This underscores" used as mechanical transitions; uniform sentence length; no interpretive move distinguishing what the data show from what they mean; closing sentence inflates significance.*
+
+The findings revealed several important patterns. Furthermore, participants reported high levels of dissatisfaction with current communication practices. Additionally, there were notable differences between clinical and administrative staff. Moreover, patient outcomes were found to be significantly affected by communication quality. This highlights the importance of effective communication in healthcare settings. This underscores the need for targeted intervention programmes. It is important to note that these findings have significant implications for policy and practice in the National Health Service.
+`;
+
+const NEGATIVE_CONCLUSION = `
+**Counter-exemplar — Conclusion (DO NOT write like this):**
+*Why this is flagged: restates the introduction nearly word-for-word; "Furthermore", "Moreover", "Additionally" used as connectives; no new interpretive move; ends with a generic "future research" boilerplate; "It is important to note" is an AI fingerprint; uniform sentence length.*
+
+This study has examined the role of transformational leadership in post-colonial governance contexts. Furthermore, it has explored the relationship between leadership style and institutional effectiveness. Additionally, the findings have confirmed the importance of contextual factors in mediating these relationships. Moreover, the study has contributed to the existing literature in several important ways. It is important to note that further research is needed in this area. Future studies should explore additional variables and contexts. This will ensure a more comprehensive understanding of the phenomenon under investigation.
+`;
+
 export function getQualityExemplars(chapterType: string): string {
   // Route two exemplars per call — primary matches chapter type; secondary
   // offers a second register anchor from a contrasting subject domain.
   let primary = LEADERSHIP_BACKGROUND_EXEMPLAR;
   let secondary = HEALTH_INTRO_EXEMPLAR;
 
+  let negative = NEGATIVE_INTRO;
+
   switch (chapterType) {
     case "introduction":
     case "abstract":
       primary = LEADERSHIP_BACKGROUND_EXEMPLAR;
       secondary = HEALTH_INTRO_EXEMPLAR;
+      negative = NEGATIVE_INTRO;
       break;
     case "literature_review":
       primary = LEADERSHIP_LITREVIEW_EXEMPLAR;
       secondary = HEALTH_LITREVIEW_EXEMPLAR;
+      negative = NEGATIVE_LITREVIEW;
       break;
     case "methodology":
       primary = METHODOLOGY_EXEMPLAR;
       secondary = LEADERSHIP_LITREVIEW_EXEMPLAR;
+      negative = NEGATIVE_METHODOLOGY;
       break;
     case "findings":
       primary = HEALTH_LITREVIEW_EXEMPLAR;
       secondary = METHODOLOGY_EXEMPLAR;
+      negative = NEGATIVE_FINDINGS;
       break;
     case "conclusion":
       primary = RELIGION_DISCUSSION_EXEMPLAR;
       secondary = LEADERSHIP_LITREVIEW_EXEMPLAR;
+      negative = NEGATIVE_CONCLUSION;
       break;
     case "systematic_literature_review":
       primary = LEADERSHIP_LITREVIEW_EXEMPLAR;
       secondary = HEALTH_LITREVIEW_EXEMPLAR;
+      negative = NEGATIVE_LITREVIEW;
       break;
     default:
       primary = RELIGION_THEORY_EXEMPLAR;
       secondary = HEALTH_INTRO_EXEMPLAR;
+      negative = NEGATIVE_INTRO;
   }
 
   return `
@@ -109,6 +156,11 @@ ${primary}
 
 ${secondary}
 
+## Counter-Exemplar — Avoid This Pattern
+The paragraph below is what AI reliably produces. Its tells are annotated. Your output must NOT resemble this.
+
+${negative}
+
 What these exemplars demonstrate (your output must replicate ALL of these):
 - Opens with a CLAIM or specific evidence — never a broad scene-setting sentence
 - Evidence is woven INTO the argument, not dropped beside it as a trailing citation
@@ -117,5 +169,6 @@ What these exemplars demonstrate (your output must replicate ALL of these):
 - Sentence lengths vary deliberately — a 50-word analytical sentence next to a short declarative one
 - The writer's interpretive voice lands the paragraph — an implication, not a summary
 - No paragraph ends with "this demonstrates the importance of X" or any variant
+- NEVER use: Furthermore, Moreover, Additionally, "This demonstrates/highlights/underscores", "It is important to note", "In today's"
 `;
 }
