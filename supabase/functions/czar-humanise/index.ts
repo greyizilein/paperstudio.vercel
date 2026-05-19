@@ -15,7 +15,7 @@ const corsHeaders = {
 };
 
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY") || "";
-const CLAUDE_MODEL = "claude-sonnet-4-5";
+const CLAUDE_MODEL = "claude-3-5-sonnet-latest";
 
 const SYSTEM_PROMPT = `You are an expert academic editor and ghostwriter. Your sole function is to rewrite text to achieve a 0% AI-detection score (maximum burstiness and maximum perplexity) while strictly maintaining the academic integrity, citations, and data of the original text.
 
