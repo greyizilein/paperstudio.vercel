@@ -23,6 +23,9 @@ export type CzarMode = "chat" | "plan" | "build" | "agent";
 // Keywords that suggest the user wants to make edits inside the document.
 const EDIT_KEYWORDS = /\b(fix|correct|revise|edit|change|update|improve|rewrite|modify|amend|adjust|proofread|review|check|correct|grammar|spell|annotate|redline|mark)\b/i;
 
+// Keywords that indicate the attached document contains supervisor/reviewer feedback.
+const FEEDBACK_KEYWORDS = /\b(feedback|correction|tracked.?change|supervisor|comment|annotation|revision|reviewer|mark.?up|redline)\b/i;
+
 // File extensions/mimes that qualify for the doc-correction pipeline.
 function isDocFile(a: CzarAttachment): boolean {
   const lower = a.filename.toLowerCase();
@@ -45,6 +48,8 @@ interface Props {
   onDocEditModeChange?: (v: boolean) => void;
   /** Called instead of onSend when smart-detection fires (doc + edit keywords). */
   onSmartDocEdit?: (text: string, attachments: CzarAttachment[]) => void;
+  /** Called when a .docx with feedback/corrections keywords is submitted — triggers supervisor feedback parsing. */
+  onSupervisorFeedback?: (text: string, attachments: CzarAttachment[]) => void;
 }
 
 export interface CzarComposerHandle {
@@ -66,7 +71,7 @@ const MODE_META: Record<CzarMode, { label: string; Icon: typeof ScrollText; hint
 };
 
 export const CzarComposer = forwardRef<CzarComposerHandle, Props>(function CzarComposer(
-  { onSend, onStop, disabled, streaming, thinkingMode, onToggleThinking, mode = "chat", onModeChange, subscription, onUpgrade, docEditMode = false, onDocEditModeChange, onSmartDocEdit },
+  { onSend, onStop, disabled, streaming, thinkingMode, onToggleThinking, mode = "chat", onModeChange, subscription, onUpgrade, docEditMode = false, onDocEditModeChange, onSmartDocEdit, onSupervisorFeedback },
   ref,
 ) {
   const { user } = useAuth();
@@ -129,6 +134,17 @@ export const CzarComposer = forwardRef<CzarComposerHandle, Props>(function CzarC
     }
     const payloadText = text.trim();
     const payloadAttachments = attachments.filter((a) => a.status === "ready");
+
+    // Supervisor feedback detection: .docx + feedback/corrections keywords → parse inline.
+    if (onSupervisorFeedback && payloadAttachments.some((a) => a.filename.toLowerCase().endsWith(".docx") && a.status === "ready") && FEEDBACK_KEYWORDS.test(payloadText)) {
+      onSupervisorFeedback(payloadText, payloadAttachments);
+      requestAnimationFrame(() => {
+        setText("");
+        setAttachments([]);
+        if (taRef.current) taRef.current.style.height = "auto";
+      });
+      return;
+    }
 
     // Smart detection: doc file + edit-like keywords → offer doc correction mode
     // Only fires when the user hasn't already opted in explicitly (docEditMode).

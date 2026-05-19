@@ -52,18 +52,20 @@ const BANNED_PHRASES = [
   "it is obvious that", "this paper will", "this study will",
 ];
 
-  // ALLOWED_MODELS whitelist — curated PaperStudio lineup
+  // ALLOWED_MODELS whitelist — 3 user-facing tiers + internal system models
 const ALLOWED_MODELS: Record<string, string> = {
-  "claude-sonnet-4-5": "claude-sonnet-4-5",
-  "claude-sonnet-4-6": "claude-sonnet-4-5",
-  "claude-opus-4": "claude-opus-4-1",
-  "claude-opus-4-6": "claude-opus-4-5",
-  "gpt-5.2": "gemini-2.5-flash",
-  "gpt-5-flagship": "gemini-2.5-pro",
-  "gemini-2.5-flash": "gemini-2.5-flash",
-  "gemini-2.5-pro": "gemini-2.5-pro",
-  "gemini-3-flash": "gemini-2.0-flash",
-  "gemini-3-pro":   "gemini-2.0-flash",
+  // User-selectable tiers
+  "instant":            "gemini-2.5-flash",
+  "extended-thinking":  "claude-sonnet-4-5",
+  "deep-reasoning":     "claude-opus-4-7",
+  // Internal system models (not user-selectable)
+  "claude-sonnet-4-5":  "claude-sonnet-4-5",
+  "claude-sonnet-4-6":  "claude-sonnet-4-5",
+  "claude-opus-4":      "claude-opus-4-1",
+  "claude-opus-4-6":    "claude-opus-4-5",
+  "gemini-2.5-flash":   "gemini-2.5-flash",
+  "gemini-2.5-pro":     "gemini-2.5-pro",
+  "gemini-3-pro":       "gemini-2.0-flash",
 };
 
 // Models reserved for SYSTEM use only (never user-selectable in PaperStudio).
@@ -75,14 +77,14 @@ const BLOCKED_USER_MODELS = new Set<string>([
 
 // Per-tier access for user-picked models (mirrors src/lib/aiModels.ts).
 const TIER_ACCESS: Record<string, string[]> = {
-  "gemini-2.5-flash": ["free", "undergraduate", "masters", "phd", "custom"],
-  "gemini-3-flash":   ["undergraduate", "masters", "phd", "custom"],
-  "gpt-5.2":          ["undergraduate", "masters", "phd", "custom"],
-  "gemini-2.5-pro":   ["masters", "phd", "custom"],
-  "claude-sonnet-4-6":["masters", "phd", "custom"],
-  "claude-sonnet-4-5":["masters", "phd", "custom"],
-  "gemini-3-pro":     ["phd", "custom"],
-  "gpt-5-flagship":   ["phd", "custom"],
+  "instant":           ["free", "undergraduate", "masters", "phd", "custom"],
+  "extended-thinking": ["masters", "phd", "custom"],
+  "deep-reasoning":    ["phd", "custom"],
+  // Internal system model IDs also allowed for fallback paths:
+  "gemini-2.5-flash":  ["free", "undergraduate", "masters", "phd", "custom"],
+  "gemini-2.5-pro":    ["masters", "phd", "custom"],
+  "claude-sonnet-4-5": ["masters", "phd", "custom"],
+  "claude-sonnet-4-6": ["masters", "phd", "custom"],
 };
 
 function resolveModel(modelId?: string): string {
@@ -1035,7 +1037,7 @@ REMEMBER (the system prompt is the contract; this is just a checklist):
           thinking: allowThinking,
           maxTokens: computedMax,
           thinkingBudget: thinkBudget || undefined,
-          temperature: allowThinking ? 1 : ((project.writing_mode === "natural") ? 0.85 : 0.6),
+          temperature: allowThinking ? 1 : ((project.writing_mode === "natural") ? 0.72 : 0.6),
           signal: upstreamAbort.signal,
         });
         logAiUsage({
@@ -1063,14 +1065,14 @@ REMEMBER (the system prompt is the contract; this is just a checklist):
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         if (e instanceof AnthropicRateLimitError) {
-          console.warn(`[generate-chapter] Claude rate-limited (${e.status}) — falling back to GPT-5.2`);
+          console.warn(`[generate-chapter] Claude rate-limited (${e.status}) — falling back to Gemini Flash`);
           resolvedModel = "gemini-2.5-flash";
           // fall through to gateway path below
         } else {
           // Auth/quota errors: try GPT-5.2 fallback for paid tiers/admin instead of failing hard.
           const isAuthOrQuota = /401|403|402|429|529|unauthor|forbidden|invalid.*key|api.*key|quota|credit|insufficient/i.test(msg);
           if (isAuthOrQuota && (isAdmin || userTier !== "free")) {
-            console.warn(`[generate-chapter] Claude failed (${msg.slice(0, 120)}) — falling back to GPT-5.2`);
+            console.warn(`[generate-chapter] Claude failed (${msg.slice(0, 120)}) — falling back to Gemini Flash`);
             resolvedModel = "gemini-2.5-flash";
             // fall through
           } else {
@@ -1109,7 +1111,7 @@ REMEMBER (the system prompt is the contract; this is just a checklist):
             { role: "user", content: userContent },
           ],
           stream: true,
-          temperature: (project.writing_mode === "natural") ? 0.85 : 0.6,
+          temperature: (project.writing_mode === "natural") ? 0.72 : 0.6,
         }),
         signal: upstreamAbortGw.signal,
       });

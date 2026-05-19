@@ -18,13 +18,10 @@ interface Props {
 // CZAR model lineup. Some models are LOCKED to specific roles:
 //   • Gemini 3 Pro      — image generation only (cannot be selected for chat)
 //   • Claude Opus 4.6   — Agent mode only (cannot be selected outside Agent)
-const CZAR_MODELS: Array<{ id: string; label: string; desc: string; provider: string; tag?: string; locked?: boolean; lockReason?: string }> = [
-  { id: "claude-sonnet-4-6", label: "Claude Sonnet 4.6", provider: "Anthropic", desc: "Default. Best academic prose, tools, long context." },
-  { id: "gpt-5.2",           label: "GPT-5.2",            provider: "OpenAI",    desc: "Fast, capable everyday model." },
-  { id: "gemini-2.5-flash",  label: "Gemini 2.5 Flash",   provider: "Google",    desc: "Fast multimodal model. Great for everyday tasks." },
-  { id: "qwen3.6-plus",      label: "Qwen 3.6 Plus",      provider: "Alibaba",   desc: "Strong multilingual model with deep reasoning." },
-  { id: "gemini-3-pro",      label: "Gemini 3 Pro",       provider: "Google",    desc: "Top-tier reasoning. Used internally for image generation only.", tag: "image-only", locked: true, lockReason: "Image generation only" },
-  { id: "claude-opus-4-6",   label: "Claude Opus 4.6",    provider: "Anthropic", desc: "Heaviest reasoning. Unlocks automatically in Agent mode.", tag: "agent-only", locked: true, lockReason: "Unlocks in Agent mode" },
+const CZAR_MODELS: Array<{ id: string; label: string; desc: string; minTier?: string }> = [
+  { id: "instant",           label: "Instant",           desc: "Fast response. Great for everyday tasks and quick questions." },
+  { id: "extended-thinking", label: "Extended Thinking", desc: "Careful reasoning and long context. Best for essays, analysis, and research.", minTier: "masters" },
+  { id: "deep-reasoning",    label: "Deep Reasoning",    desc: "Maximum quality. Heaviest processing — for dissertations and complex academic work.", minTier: "phd" },
 ];
 
 const TOGGLES = [
@@ -130,7 +127,7 @@ export function CzarSettingsDrawer({ open, onClose, settings, onChange, czarTier
   const activeTheme = settings.theme ?? DEFAULT_THEME_ID;
   const themeName = CZAR_THEMES.find((t) => t.id === activeTheme)?.name ?? "Default";
   const currentModelId = settings.model_id ?? DEFAULT_MODEL_ID;
-  const claudeModelLabel = CZAR_MODELS.find((m) => m.id === currentModelId)?.label ?? "Claude Sonnet 4.6";
+  const claudeModelLabel = CZAR_MODELS.find((m) => m.id === currentModelId)?.label ?? "Instant";
 
   const close = () => { setSection(null); onClose(); };
 
@@ -398,32 +395,31 @@ export function CzarSettingsDrawer({ open, onClose, settings, onChange, czarTier
           <div className="p-3">
             <div className="rounded-2xl overflow-hidden" style={{ background: "var(--czar-surface)", border: "1px solid var(--czar-border)" }}>
               {CZAR_MODELS.map((m, i) => {
+                const tierOrder = ["free", "undergraduate", "masters", "phd", "custom"];
+                const userTierIdx = tierOrder.indexOf(czarTier);
+                const minTierIdx = m.minTier ? tierOrder.indexOf(m.minTier) : 0;
+                const locked = !isAdmin && userTierIdx < minTierIdx;
                 const active = currentModelId === m.id;
+                const tierLabel = m.minTier === "masters" ? "Masters+" : m.minTier === "phd" ? "PhD+" : null;
                 return (
                   <button
                     key={m.id}
                     type="button"
-                    disabled={m.locked}
-                    onClick={() => { if (!m.locked) set("model_id", m.id); }}
+                    disabled={locked}
+                    onClick={() => { if (!locked) set("model_id", m.id); }}
                     className="w-full flex items-center justify-between gap-3 py-3 px-4 text-left transition-colors hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
-                    title={m.locked ? m.lockReason : undefined}
-                    style={{
-                      borderTop: i === 0 ? undefined : "1px solid var(--czar-border)",
-                    }}
+                    style={{ borderTop: i === 0 ? undefined : "1px solid var(--czar-border)" }}
                   >
                     <div className="flex-1 min-w-0">
                       <div className="text-[13px] flex items-center flex-wrap gap-2" style={{ color: "var(--czar-text)" }}>
                         <span>{m.label}</span>
-                        <span className="text-[10px] opacity-60">{m.provider}</span>
-                        {m.tag && (
+                        {tierLabel && locked && (
                           <span className="text-[9.5px] uppercase tracking-wide rounded px-1.5 py-[1px]" style={{ background: "var(--czar-surface-elev)", border: "1px solid var(--czar-border)", color: "var(--czar-text-faint)" }}>
-                            {m.tag === "image-only" ? "Image only" : m.tag === "agent-only" ? "Agent only" : m.tag === "data-analysis" ? "Data analysis only" : m.tag}
+                            {tierLabel}
                           </span>
                         )}
                       </div>
-                      <div className="text-[10.5px]" style={{ color: "var(--czar-text-faint)" }}>
-                        {m.desc}{m.locked ? ` · ${m.lockReason}` : ""}
-                      </div>
+                      <div className="text-[10.5px]" style={{ color: "var(--czar-text-faint)" }}>{m.desc}</div>
                     </div>
                     <span
                       className="shrink-0 inline-flex items-center justify-center rounded-full transition-all"

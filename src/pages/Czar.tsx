@@ -22,6 +22,8 @@ import { CzarAgentRunCard } from "@/components/czar/CzarAgentRunCard";
 import { CzarPreviewPanel, type PreviewActivityItem } from "@/components/czar/CzarPreviewPanel";
 import type { CzarToolCallState } from "@/components/czar/CzarToolCard";
 import { toolEventToState } from "@/components/czar/CzarToolCard";
+import type { FeedbackItem } from "@/components/czar/FeedbackCard";
+import { authedHeaders } from "@/lib/edgeFetch";
 
 export interface CzarMessage {
   id: string;
@@ -41,6 +43,16 @@ export interface CzarMessage {
   correctionDocId?: string;
   /** Original filename of the corrected document. */
   correctionFilename?: string;
+  /** Parsed supervisor feedback items — renders as FeedbackCard in thread. */
+  feedbackItems?: import("@/components/czar/FeedbackCard").FeedbackItem[];
+  /** Diff paragraphs — renders as DiffCard in thread. */
+  diffData?: import("@/lib/diffUtils").DiffParagraph[];
+  /** Original text before corrections, used by DiffCard accept/dismiss. */
+  diffOriginal?: string;
+  /** Revised text accepted by DiffCard — replaces diffData with plain content. */
+  diffAccepted?: boolean;
+  /** Storage path of the source file this feedback was parsed from. */
+  feedbackSourcePath?: string;
 }
 
 const DEFAULT_SETTINGS: Record<string, any> = {
@@ -718,6 +730,191 @@ export default function Czar() {
     setShowDocCorrectModal(true);
   }, []);
 
+  // Supervisor feedback flow: parse a DOCX attachment and inject a FeedbackCard message.
+  const handleSupervisorFeedback = useCallback(async (text: string, attachments: CzarAttachment[]) => {
+    const docAtt = attachments.find((a) => a.filename.toLowerCase().endsWith(".docx") && a.status === "ready");
+    if (!docAtt) return;
+
+    const userTempId = crypto.randomUUID();
+    const asstTempId = crypto.randomUUID();
+    setMessages((prev) => [
+      ...prev,
+      { id: userTempId, role: "user", content: text, attachments },
+      { id: asstTempId, role: "assistant", content: "Parsing supervisor feedback…", streaming: true },
+    ]);
+    setStreaming(true);
+
+    try {
+      // Download the file from storage and convert to base64 for the edge function.
+      const { data: fileData, error: dlErr } = await supabase.storage.from("czar-uploads").download(docAtt.path);
+      if (dlErr || !fileData) throw new Error("Could not read the uploaded file.");
+
+      const buf = await fileData.arrayBuffer();
+      const bytes = new Uint8Array(buf);
+      let bin = "";
+      for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+      const docxBase64 = btoa(bin);
+
+      const resp = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/parse-supervisor-feedback`,
+        {
+          method: "POST",
+          headers: await authedHeaders(),
+          body: JSON.stringify({ docxBase64, filename: docAtt.filename }),
+        }
+      );
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error || "Could not parse feedback");
+
+      const items: FeedbackItem[] = (data.items || []).map((it: FeedbackItem) => ({
+        ...it, selected: true, override: "", scope: "local" as const,
+      }));
+
+      if (items.length === 0) {
+        setMessages((prev) => prev.map((m) =>
+          m.id === asstTempId
+            ? { ...m, streaming: false, content: "No tracked changes or comments were found in this document. If you have comments embedded as text, paste them below and I'll help apply the corrections." }
+            : m
+        ));
+        return;
+      }
+
+      setMessages((prev) => prev.map((m) =>
+        m.id === asstTempId
+          ? { ...m, streaming: false, content: "", feedbackItems: items, feedbackSourcePath: docAtt.path }
+          : m
+      ));
+    } catch (e: any) {
+      toast({ title: "Feedback parse failed", description: e?.message || "Unknown error", variant: "destructive" });
+      setMessages((prev) => prev.map((m) =>
+        m.id === asstTempId
+          ? { ...m, streaming: false, content: `⚠️ ${e?.message || "Could not parse feedback"}` }
+          : m
+      ));
+    } finally {
+      setStreaming(false);
+    }
+  }, []);
+
+  // Apply selected feedback items using apply-supervisor-corrections.
+  const handleApplyFeedback = useCallback(async (msgId: string, selected: FeedbackItem[], sourcePath?: string) => {
+    // First mark the FeedbackCard as applying.
+    setMessages((prev) => prev.map((m) => m.id === msgId ? { ...m, streaming: true } : m));
+    setStreaming(true);
+
+    const asstTempId = crypto.randomUUID();
+    setMessages((prev) => [
+      ...prev,
+      { id: asstTempId, role: "assistant", content: "", streaming: true },
+    ]);
+
+    try {
+      // We need the original document text. Download from storage and extract text.
+      let originalText = "";
+      if (sourcePath) {
+        const { data: fileData } = await supabase.storage.from("czar-uploads").download(sourcePath);
+        if (fileData) {
+          const buf = await fileData.arrayBuffer();
+          const bytes = new Uint8Array(buf);
+          let bin = "";
+          for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+          const b64 = btoa(bin);
+          // Extract plain text via a lightweight XML strip (same approach as
+          // parse-supervisor-feedback reads document.xml).
+          try {
+            const resp2 = await fetch(
+              `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/parse-supervisor-feedback`,
+              {
+                method: "POST",
+                headers: await authedHeaders(),
+                body: JSON.stringify({ docxBase64: b64, filename: "doc.docx", extractTextOnly: true }),
+              }
+            );
+            const d2 = await resp2.json();
+            originalText = d2.plainText || d2.text || "";
+          } catch { /* fall through — apply without diff */ }
+        }
+      }
+
+      const headers = await authedHeaders();
+      const resp = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/apply-supervisor-corrections`,
+        {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            chapter: { content: originalText, title: "Document", chapter_type: "general" },
+            project: {
+              citation_style: settings?.citation_style || "Harvard",
+              language_style: settings?.language || "UK",
+            },
+            feedbackItems: selected,
+          }),
+        }
+      );
+
+      if (!resp.ok || !resp.body) {
+        const err = await resp.json().catch(() => ({}));
+        throw new Error((err as any).error || "Apply corrections failed");
+      }
+
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = "";
+      let revisedText = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        let idx: number;
+        while ((idx = buf.indexOf("\n")) !== -1) {
+          const line = buf.slice(0, idx).trim();
+          buf = buf.slice(idx + 1);
+          if (!line.startsWith("data: ")) continue;
+          const json = line.slice(6).trim();
+          if (json === "[DONE]") break;
+          try {
+            const parsed = JSON.parse(json);
+            const chunk = parsed.choices?.[0]?.delta?.content as string | undefined;
+            if (chunk) {
+              revisedText += chunk;
+              setMessages((prev) => prev.map((m) =>
+                m.id === asstTempId ? { ...m, content: revisedText } : m
+              ));
+            }
+          } catch { /* ignore parse error */ }
+        }
+      }
+
+      // Compute diff and convert to DiffCard.
+      let diffData: DiffParagraph[] | undefined;
+      if (originalText && revisedText) {
+        const { computeParaDiff } = await import("@/lib/diffUtils");
+        diffData = computeParaDiff(originalText, revisedText);
+      }
+
+      setMessages((prev) => prev.map((m) => {
+        if (m.id === msgId) return { ...m, streaming: false };
+        if (m.id === asstTempId) {
+          return diffData
+            ? { ...m, streaming: false, content: "", diffData, diffOriginal: originalText }
+            : { ...m, streaming: false };
+        }
+        return m;
+      }));
+    } catch (e: any) {
+      toast({ title: "Apply failed", description: e?.message || "Unknown error", variant: "destructive" });
+      setMessages((prev) => prev.map((m) =>
+        m.id === asstTempId
+          ? { ...m, streaming: false, content: `⚠️ ${e?.message || "Could not apply corrections"}` }
+          : m.id === msgId ? { ...m, streaming: false } : m
+      ));
+    } finally {
+      setStreaming(false);
+    }
+  }, [settings]);
+
   const handleDownloadCorrected = useCallback(async (documentId: string, fmt: "docx" | "pdf") => {
     toast({ title: "Preparing corrected document…" });
     try {
@@ -1257,6 +1454,19 @@ export default function Czar() {
                   onApprovePlan={handleApprovePlan}
                   showQuillCaret={settings.show_quill_caret !== false}
                   onHumanise={handleCzarHumanise}
+                  onApplyFeedback={handleApplyFeedback}
+                  onAcceptDiff={(msgId) => {
+                    setMessages((prev) => prev.map((m) =>
+                      m.id === msgId
+                        ? { ...m, content: m.diffData?.map((p) => p.type === "deleted" ? "" : (p.type === "added" || p.type === "modified" ? p.text : p.text)).filter(Boolean).join("\n\n") || m.content, diffData: undefined, diffOriginal: undefined, diffAccepted: true }
+                        : m
+                    ));
+                  }}
+                  onDismissDiff={(msgId) => {
+                    setMessages((prev) => prev.map((m) =>
+                      m.id === msgId ? { ...m, diffData: undefined, diffOriginal: undefined } : m
+                    ));
+                  }}
                 />
               )}
             </div>
@@ -1276,6 +1486,7 @@ export default function Czar() {
               docEditMode={docEditMode}
               onDocEditModeChange={setDocEditMode}
               onSmartDocEdit={handleSmartDocEdit}
+              onSupervisorFeedback={handleSupervisorFeedback}
             />
           </div>
 
