@@ -80,6 +80,26 @@ export const AI_MODELS: AIModel[] = [
     gatewayModel: "gemini-2.0-flash",
     tierAccess: ["phd", "custom"],
   },
+  {
+    id: "llama-3.3-70b",
+    name: "Llama 3.3 70B",
+    provider: "Groq",
+    tier: "advanced",
+    description: "Meta's fast open-source model via Groq. Low latency, strong reasoning.",
+    capabilities: ["Fast", "Open-source", "Long context"],
+    gatewayModel: "llama-3.3-70b-versatile",
+    tierAccess: ["undergraduate", "masters", "phd", "custom"],
+  },
+  {
+    id: "llama-3.1-8b",
+    name: "Llama 3.1 8B",
+    provider: "Groq",
+    tier: "standard",
+    description: "Lightweight Llama via Groq. Ultra-fast, good for everyday tasks.",
+    capabilities: ["Ultra-fast", "Open-source"],
+    gatewayModel: "llama-3.1-8b-instant",
+    tierAccess: ["free", "undergraduate", "masters", "phd", "custom"],
+  },
 ];
 
 // Default — Gemini 2.5 Flash (works for all tiers, including free).
