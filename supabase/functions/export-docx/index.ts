@@ -3,7 +3,7 @@ import {
   Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType,
   TableRow, TableCell, Table, WidthType, BorderStyle, ShadingType,
   LevelFormat, PageBreak, Footer, Header, PageNumber, ImageRun, TableOfContents,
-  SectionType, NumberFormat,
+  SectionType, NumberFormat, FootnoteReferenceRun,
 } from "https://esm.sh/docx@8.5.0";
 import { getCitationStyleDocx } from "../generate-chapter/citationStyles.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -223,11 +223,26 @@ function markdownToDocxParagraphs(
   size = 24,
   figures: FigureMap = new Map(),
   styleRules?: DocxStyleRules,
+  footnoteCollector?: Map<number, Paragraph[]>,
 ): (Paragraph | Table)[] {
   const rules = styleRules ?? getCitationStyleDocx("Harvard");
   const bodyLineSpacing = rules.lineSpacing;
-  // Strip footnote definitions (e.g. [^1]: text) — they are handled separately
-  const mdClean = md.replace(/^\[\^\d+\]:.+$/gm, "").replace(/\[\^(\d+)\]/g, "[$1]");
+  let mdClean: string;
+  if (rules.usesFootnotes && footnoteCollector) {
+    // Collect footnote definitions as Word paragraphs, strip them from body text
+    mdClean = md.replace(/^\[\^(\d+)\]:\s*(.+)$/gm, (_full, numStr, text) => {
+      const n = parseInt(numStr, 10);
+      if (!footnoteCollector.has(n)) {
+        footnoteCollector.set(n, [
+          new Paragraph({ children: parseInline(text.trim(), font, Math.max(size - 2, 18)), spacing: { before: 0, after: 40 } }),
+        ]);
+      }
+      return "";
+    });
+  } else {
+    // Non-footnote styles: strip definitions and convert inline [^N] to [N] text
+    mdClean = md.replace(/^\[\^\d+\]:.+$/gm, "").replace(/\[\^(\d+)\]/g, "[$1]");
+  }
   // Replace chart blocks with text tables first
   const content = mdClean.replace(CHART_BLOCK_RE, (_, json) => chartBlockToText(json));
   const lines = content.split("\n");
@@ -425,16 +440,19 @@ function markdownToDocxParagraphs(
       i++; continue;
     }
 
+    const lineChildren = rules.usesFootnotes && footnoteCollector
+      ? parseInlineWithFnRefs(line, font, size) as any[]
+      : parseInline(line, font, size);
     if (inReferences) {
       paragraphs.push(new Paragraph({
-        children: parseInline(line, font, size),
+        children: lineChildren,
         spacing: { before: 0, after: 120, line: bodyLineSpacing },
         indent: { left: 720, hanging: 720 },
         alignment: AlignmentType.JUSTIFIED,
       }));
     } else {
       paragraphs.push(new Paragraph({
-        children: parseInline(line, font, size),
+        children: lineChildren,
         spacing: { before: 0, after: 120, line: bodyLineSpacing },
         alignment: AlignmentType.JUSTIFIED,
       }));
@@ -498,6 +516,24 @@ function parseInlineItalic(text: string, font = "Times New Roman", size = 24): T
     runs.push(new TextRun({ text, font, size, italics: true }));
   }
   return runs;
+}
+
+// Like parseInline, but converts [^N] markdown footnote markers to Word FootnoteReferenceRun.
+// Used when rendering body text for footnote-based citation styles (OSCOLA, Chicago N-B, etc.)
+function parseInlineWithFnRefs(text: string, font: string, size: number): (TextRun | FootnoteReferenceRun)[] {
+  // Split on footnote markers: "text [^1] more [^2] end" → ["text ", "[^1]", "1", " more ", "[^2]", "2", " end"]
+  const parts = text.split(/(\[\^(\d+)\])/);
+  const runs: (TextRun | FootnoteReferenceRun)[] = [];
+  for (let i = 0; i < parts.length; i++) {
+    const mod = i % 3;
+    if (mod === 0) {
+      if (parts[i]) runs.push(...parseInline(parts[i], font, size));
+    } else if (mod === 2) {
+      runs.push(new FootnoteReferenceRun(parseInt(parts[i], 10)) as unknown as FootnoteReferenceRun);
+    }
+    // mod === 1 is the full [^N] match — skip
+  }
+  return runs.length > 0 ? runs : parseInline(text, font, size);
 }
 
 function parseMarkdownTable(tableLines: string[], font = "Times New Roman", size = 24): Table | null {
@@ -963,6 +999,8 @@ async function buildDocx(
   const { isFinalExport, singleDocument, czarCoverPage, authorName, submissionDetails, fontFamily: font, fontSize: size, figuresByChapter, citationStyle } = opts;
   const sd = submissionDetails || {};
   const styleRules = getCitationStyleDocx(citationStyle || sd.citationStyle || "Harvard");
+  // Shared collector — populated by all markdownToDocxParagraphs calls, then passed to packDoc
+  const footnoteCollector: Map<number, Paragraph[]> = new Map();
 
   // Pre-strip any leading "# Chapter N" heading the model emitted
   const cleanChapters = chapters.map(ch => ({ ...ch, content: stripLeadingChapterHeading(ch.content || "") }));
@@ -977,7 +1015,7 @@ async function buildDocx(
     for (const m of figuresByChapter.values()) {
       for (const [k, v] of m.entries()) mergedFigs.set(k, v);
     }
-    const bodyChildren: (Paragraph | Table)[] = markdownToDocxParagraphs(joined, font, size, mergedFigs, styleRules);
+    const bodyChildren: (Paragraph | Table)[] = markdownToDocxParagraphs(joined, font, size, mergedFigs, styleRules, footnoteCollector);
 
     if (czarCoverPage) {
       // Proper Word title page (centered, with page break) followed by the body
@@ -991,7 +1029,7 @@ async function buildDocx(
       return await packDoc([
         { children: titlePageParas, footerCenter: false, hideFooter: true, sectionType: SectionType.NEXT_PAGE },
         { children: bodyChildren, footerCenter: true, pageNumberFormat: NumberFormat.DECIMAL, restartPageNumber: 1, sectionType: SectionType.NEXT_PAGE },
-      ], font, size, styleRules);
+      ], font, size, styleRules, footnoteCollector);
     }
 
     // No cover page: flat single section with optional inline title heading.
@@ -1006,7 +1044,7 @@ async function buildDocx(
       }));
     }
     sectionChildren.push(...bodyChildren);
-    return await packDoc([{ children: sectionChildren, footerCenter: true }], font, size, styleRules);
+    return await packDoc([{ children: sectionChildren, footerCenter: true }], font, size, styleRules, footnoteCollector);
   }
 
   // ─── Standard (non-final) export: single section, simple footer ───
@@ -1024,7 +1062,7 @@ async function buildDocx(
         spacing: { before: 240, after: 240 },
       }));
       const figs = figuresByChapter.get(ch.id) || new Map();
-      sectionChildren.push(...markdownToDocxParagraphs(body, font, size, figs, styleRules));
+      sectionChildren.push(...markdownToDocxParagraphs(body, font, size, figs, styleRules, footnoteCollector));
     }
     // Append a consolidated reference list at the end ONLY if the body
     // doesn't already contain its own References / Bibliography section.
@@ -1049,7 +1087,7 @@ async function buildDocx(
         }));
       }
     }
-    return await packDoc([{ children: sectionChildren, footerCenter: true }], font, size, styleRules);
+    return await packDoc([{ children: sectionChildren, footerCenter: true }], font, size, styleRules, footnoteCollector);
   }
 
   // ─── FINAL EXPORT — multi-section pipeline ───
@@ -1105,7 +1143,7 @@ async function buildDocx(
       spacing: { before: 240, after: 240 },
     }));
     const figs = figuresByChapter.get(ch.id) || new Map();
-    prelim.push(...markdownToDocxParagraphs(ch._bodyContent, font, size, figs, styleRules));
+    prelim.push(...markdownToDocxParagraphs(ch._bodyContent, font, size, figs, styleRules, footnoteCollector));
     prelim.push(new Paragraph({ children: [new PageBreak()] }));
   }
 
@@ -1156,7 +1194,7 @@ async function buildDocx(
       spacing: { before: 240, after: 240 },
     }));
     const figs = figuresByChapter.get(ch.id) || new Map();
-    main.push(...markdownToDocxParagraphs(ch._bodyContent, font, size, figs, styleRules));
+    main.push(...markdownToDocxParagraphs(ch._bodyContent, font, size, figs, styleRules, footnoteCollector));
     main.push(new Paragraph({ children: [new PageBreak()] }));
   }
 
@@ -1198,7 +1236,7 @@ async function buildDocx(
         spacing: { before: 240, after: 240 },
       }));
       const figs = figuresByChapter.get(ch.id) || new Map();
-      main.push(...markdownToDocxParagraphs(ch._bodyContent, font, size, figs, styleRules));
+      main.push(...markdownToDocxParagraphs(ch._bodyContent, font, size, figs, styleRules, footnoteCollector));
       if (idx < appendixChapters.length - 1) {
         main.push(new Paragraph({ children: [new PageBreak()] }));
       }
@@ -1210,7 +1248,7 @@ async function buildDocx(
     { children: titleSection, footerCenter: false, pageNumberFormat: NumberFormat.LOWER_ROMAN, hideFooter: true, sectionType: SectionType.NEXT_PAGE },
     { children: prelim, footerCenter: true, pageNumberFormat: NumberFormat.LOWER_ROMAN, sectionType: SectionType.NEXT_PAGE },
     { children: main, footerCenter: true, pageNumberFormat: NumberFormat.DECIMAL, restartPageNumber: 1, sectionType: SectionType.NEXT_PAGE },
-  ], font, size, styleRules);
+  ], font, size, styleRules, footnoteCollector);
 }
 
 interface SectionSpec {
@@ -1229,6 +1267,7 @@ async function packDoc(
   font: string,
   size: number,
   styleRules?: DocxStyleRules,
+  footnoteMap?: Map<number, Paragraph[]>,
 ): Promise<Uint8Array> {
   const rules = styleRules ?? getCitationStyleDocx("Harvard");
   const pageNumTopRight = rules.pageNumberPosition === "top-right";
@@ -1307,8 +1346,11 @@ async function packDoc(
       }],
     },
     features: { updateFields: true } as any,
+    footnotes: (footnoteMap && footnoteMap.size > 0)
+      ? Object.fromEntries(Array.from(footnoteMap.entries()).map(([n, children]) => [n, { children }]))
+      : undefined,
     sections: docSections,
-  });
+  } as any);
 
   const buffer = await Packer.toBuffer(doc);
   return new Uint8Array(buffer);
