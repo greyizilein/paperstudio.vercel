@@ -62,13 +62,9 @@ const ALLOWED_MODELS: Record<string, string> = {
   "gpt-5-flagship": "gemini-2.5-pro",
   "gemini-2.5-flash": "gemini-2.5-flash",
   "gemini-2.5-pro": "gemini-2.5-pro",
-  "gemini-3-flash": "gemini-2.0-flash",
-  "gemini-3-pro": "gemini-2.0-flash",
-  "llama-3.3-70b":   "llama-3.3-70b-versatile",
-  "llama-3.1-8b":    "llama-3.1-8b-instant",
-  "deepseek-r1-groq":"deepseek-r1-distill-llama-70b",
-  "gemma2-9b":       "gemma2-9b-it",
-  "llama-3.2-3b":    "llama-3.2-3b-preview",
+  "gemini-3-flash":  "gemini-2.0-flash",
+  "gemini-3-pro":    "gemini-2.0-flash",
+  "gpt-oss-120b":    "openai/gpt-oss-120b",
 };
 
 // Models reserved for SYSTEM use only (never user-selectable in PaperStudio).
@@ -88,11 +84,7 @@ const TIER_ACCESS: Record<string, string[]> = {
   "claude-sonnet-4-5":["masters", "phd", "custom"],
   "gemini-3-pro":     ["phd", "custom"],
   "gpt-5-flagship":   ["phd", "custom"],
-  "llama-3.3-70b":    ["undergraduate", "masters", "phd", "custom"],
-  "llama-3.1-8b":     ["free", "undergraduate", "masters", "phd", "custom"],
-  "deepseek-r1-groq": ["undergraduate", "masters", "phd", "custom"],
-  "gemma2-9b":        ["free", "undergraduate", "masters", "phd", "custom"],
-  "llama-3.2-3b":     ["free", "undergraduate", "masters", "phd", "custom"],
+  "gpt-oss-120b":     ["undergraduate", "masters", "phd", "custom"],
 };
 
 function resolveModel(modelId?: string): string {
@@ -1103,7 +1095,7 @@ REMEMBER (the system prompt is the contract; this is just a checklist):
     const upstreamAbortGw = new AbortController();
     async function callGateway(modelToTry: string): Promise<Response> {
       const isQ = modelToTry.startsWith("qwen");
-      const isGroq = modelToTry.startsWith("llama");
+      const isGroq = modelToTry.startsWith("openai/gpt-oss");
       const url = isQ
         ? "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions"
         : isGroq
