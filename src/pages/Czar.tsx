@@ -747,10 +747,10 @@ export default function Czar() {
     if (!czarHumanise || isCzarHumanising) return;
     setIsCzarHumanising(true);
     setCzarHumaniseStages([
-      { stage: 1, label: "Structure Break", status: "pending" },
-      { stage: 2, label: "Citation Texture", status: "pending" },
-      { stage: 3, label: "Human Fingerprints", status: "pending" },
-      { stage: 4, label: "Paragraph Rhythm", status: "pending" },
+      { stage: 1, label: "Vocabulary Purge", status: "pending" },
+      { stage: 2, label: "Structure Break", status: "pending" },
+      { stage: 3, label: "Citation Texture", status: "pending" },
+      { stage: 4, label: "Human Depth", status: "pending" },
       { stage: 5, label: "Surface Polish", status: "pending" },
     ]);
     setCzarHumanisedText(null);
