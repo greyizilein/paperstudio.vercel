@@ -4,7 +4,7 @@ const FUNCTIONS_BASE = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1`;
 const GENERATE_URL = `${FUNCTIONS_BASE}/generate-chapter`;
 const PLAN_URL = `${FUNCTIONS_BASE}/plan-chapter-section`;
 const POLISH_URL = `${FUNCTIONS_BASE}/polish-chapter`;
-const HUMANISE_URL = `${FUNCTIONS_BASE}/czar-humanise`;
+
 const ANON_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string;
 
 interface StreamGenerateOptions {
@@ -96,57 +96,6 @@ async function polishChapter(content: string, signal?: AbortSignal): Promise<str
   }
 }
 
-// Humaniser pipeline — 7-stage Academic Humaniser v2.
-// Runs against the SAME model the user wrote the chapter with so the
-// finished work stays consistent in voice. Falls back to Claude inside
-// the edge function if the requested model errors on a stage.
-async function humaniseChapter(
-  content: string,
-  modelId: string | undefined,
-  signal?: AbortSignal,
-): Promise<string> {
-  try {
-    const headers = await authedHeaders();
-    const resp = await fetch(HUMANISE_URL, {
-      method: "POST",
-      headers,
-      body: JSON.stringify({ text: content, model: modelId }),
-      signal,
-    });
-    if (!resp.ok || !resp.body) return content;
-    // Stream the SSE; we only care about the final "done" event payload.
-    const reader = resp.body.getReader();
-    const decoder = new TextDecoder();
-    let buf = "";
-    let currentEvent = "message";
-    let humanised = "";
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buf += decoder.decode(value, { stream: true });
-      let nl: number;
-      while ((nl = buf.indexOf("\n")) !== -1) {
-        let line = buf.slice(0, nl);
-        buf = buf.slice(nl + 1);
-        if (line.endsWith("\r")) line = line.slice(0, -1);
-        if (!line) { currentEvent = "message"; continue; }
-        if (line.startsWith("event:")) { currentEvent = line.slice(6).trim(); continue; }
-        if (!line.startsWith("data:")) continue;
-        const payload = line.slice(5).trim();
-        if (!payload) continue;
-        try {
-          const parsed = JSON.parse(payload);
-          if (currentEvent === "done") {
-            humanised = parsed?.humanised || "";
-          }
-        } catch { /* skip partial line */ }
-      }
-    }
-    return humanised && humanised.trim().length > 50 ? humanised : content;
-  } catch {
-    return content;
-  }
-}
 
 async function doStream(
   options: StreamGenerateOptions,
