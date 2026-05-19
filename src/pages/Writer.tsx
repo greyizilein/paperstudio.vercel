@@ -1501,18 +1501,18 @@ ${thesisArea}`);
     setIsHumanising(true);
     setHumanisedText(null);
     setHumaniseStages([
-      { stage: 1, label: "Rewriting word choices", status: "pending" },
+      { stage: 1, label: "Rewriting chapter...", status: "pending" },
     ]);
 
     const abort = new AbortController();
     humaniseAbortRef.current = abort;
 
-    // Hard 30s timeout — Gemini Flash swap identification should finish in <10s
+    // Hard 120s timeout — Claude Sonnet full rewrite of a long chapter can take 60-90s
     const hardTimeout = setTimeout(() => {
       abort.abort();
       toast.error("Humaniser timed out. Please try again.");
       setIsHumanising(false);
-    }, 30_000);
+    }, 120_000);
 
     try {
       const headers = await authedHeaders();
