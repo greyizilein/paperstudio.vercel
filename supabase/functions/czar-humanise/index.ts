@@ -26,6 +26,7 @@ Your task: rewrite the academic text below so that NO TWO consecutive sentences 
 Rules:
 - Vary sentence openings: mix prepositional phrases ("In care settings..."), participial phrases ("Drawing on..."), subordinate clauses ("Where practitioners fail..."), short declarators ("This matters."), mid-sentence pivots.
 - Break up any sentence longer than 45 words into two — but never make two short sentences in a row without a longer one following.
+- For methodology and procedure sentences: avoid the AI pattern of clean sequential narration ("Data collection ran from X to Y. Participants were recruited via Z. Ethics approval was granted on..."). Vary the rhythm — combine two short procedure facts into one sentence, then let a more reflective sentence follow.
 - Do NOT change any facts, citations, arguments or academic terminology.
 - Preserve all references exactly.
 - Target word count: within ±3% of input.
@@ -99,11 +100,16 @@ Remove these AI patterns if present:
 - Formulaic transitions: "Furthermore,", "Moreover,", "In addition,", "It is important to note that", "It is worth noting", "In conclusion, it is clear that"
 - Repeated sentence-opening words across consecutive sentences
 - Any phrase that sounds like a checklist item being ticked off
-- Overly balanced three-part lists (AI loves: "X, Y, and Z" in that exact triple form — break one up)
+- Overly balanced three-part lists (AI loves: "X, Y, and Z" in that exact triple form — break one up or recast one item)
 - Any summary sentence at the end of a section that simply restates the opening point
+- "operated as follows:" / "structured as follows:" / "proceeded as follows:" — replace with a direct statement of what happened
+- Passive parallel chains: "X was tested, Y was applied, Z was employed when..." — break the chain; make one clause active or add a brief evaluative aside mid-chain
+- Clean date-range procedural openings: "From [date] through [date], X ran continuously" — rephrase to name the duration or shift to narrative order: "Data collection ran for eight weeks, concluding in June 2024"
+- Overly smooth elaboration after em-dash that simply amplifies the same point: "X—[a slightly more detailed restatement of X]" — cut or replace with a genuine implication
+- Closing justification sentences of the form "This [noun phrase] justifies [gerund]..." — rephrase as a direct claim
 
 Add if missing:
-- At least one place where the writer's own perspective comes through mildly — not as "I think" but as a framing choice: "The concern here is not simply procedural.", "What emerges is a picture of..."
+- At least one place where the writer's own perspective comes through mildly — not as "I think" but as a framing choice: "The concern here is not simply procedural.", "What emerges is a picture of...", "This was not a trivial constraint."
 
 Final checks:
 - Word count must be within ±5% of the original input word count.
