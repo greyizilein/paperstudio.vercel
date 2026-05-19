@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, memo } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
-import { Copy, RotateCw, Download, ChevronDown, Brain, FileDown, Eye } from "lucide-react";
+import { Copy, RotateCw, Download, ChevronDown, Brain, FileDown, Eye, Wand2 } from "lucide-react";
 import type { CzarAttachment } from "./CzarComposer";
 import type { CzarMessage } from "@/pages/Czar";
 import { toast } from "@/hooks/use-toast";
@@ -89,6 +89,8 @@ interface Props {
   onDownloadCorrected?: (documentId: string, fmt: "docx" | "pdf") => void;
   /** Called when the user clicks "Open preview" on a correction message. */
   onOpenPreview?: (documentId: string, filename?: string) => void;
+  /** Called when the user clicks the Humanise button on an assistant message. */
+  onHumanise?: (msgId: string, content: string) => void;
 }
 
 function countWords(s: string): number {
@@ -277,6 +279,7 @@ export function CzarThread({
   showQuillCaret = true,
   onDownloadCorrected,
   onOpenPreview,
+  onHumanise,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
@@ -530,6 +533,16 @@ export function CzarThread({
                 >
                   <RotateCw size={12} /> Regenerate
                 </button>
+                {onHumanise && (
+                  <button
+                    onClick={() => onHumanise(m.id, m.content)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium hover:opacity-80"
+                    style={{ background: "var(--czar-surface)", border: "1px solid var(--czar-border)" }}
+                    title="Humanise this response to reduce AI detection score"
+                  >
+                    <Wand2 size={12} /> Humanise
+                  </button>
+                )}
                 {showWordCount && (
                   <span className="text-[11px] ml-auto" style={{ color: "var(--czar-text-faint)" }}>
                     {countWords(m.content).toLocaleString()} words
@@ -644,6 +657,15 @@ export function CzarThread({
                       >
                         <RotateCw size={11} /> Retry
                       </button>
+                      {onHumanise && (
+                        <button
+                          onClick={() => onHumanise(m.id, m.content)}
+                          className="inline-flex items-center gap-1 text-[11px] hover:opacity-80"
+                          title="Humanise this response"
+                        >
+                          <Wand2 size={11} /> Humanise
+                        </button>
+                      )}
                     </div>
                   )}
                   {m.followups && m.followups.length > 0 && !m.streaming && onFollowupPick && (
