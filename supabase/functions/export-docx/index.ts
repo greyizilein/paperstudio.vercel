@@ -2,9 +2,10 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import {
   Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType,
   TableRow, TableCell, Table, WidthType, BorderStyle, ShadingType,
-  LevelFormat, PageBreak, Footer, PageNumber, ImageRun, TableOfContents,
+  LevelFormat, PageBreak, Footer, Header, PageNumber, ImageRun, TableOfContents,
   SectionType, NumberFormat,
 } from "https://esm.sh/docx@8.5.0";
+import { getCitationStyleDocx } from "../generate-chapter/citationStyles.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -221,9 +222,14 @@ function markdownToDocxParagraphs(
   font = "Times New Roman",
   size = 24,
   figures: FigureMap = new Map(),
+  styleRules?: DocxStyleRules,
 ): (Paragraph | Table)[] {
+  const rules = styleRules ?? getCitationStyleDocx("Harvard");
+  const bodyLineSpacing = rules.lineSpacing;
+  // Strip footnote definitions (e.g. [^1]: text) — they are handled separately
+  const mdClean = md.replace(/^\[\^\d+\]:.+$/gm, "").replace(/\[\^(\d+)\]/g, "[$1]");
   // Replace chart blocks with text tables first
-  const content = md.replace(CHART_BLOCK_RE, (_, json) => chartBlockToText(json));
+  const content = mdClean.replace(CHART_BLOCK_RE, (_, json) => chartBlockToText(json));
   const lines = content.split("\n");
   const paragraphs: (Paragraph | Table)[] = [];
   let i = 0;
@@ -407,17 +413,29 @@ function markdownToDocxParagraphs(
     // Empty line
     if (!line.trim()) { i++; continue; }
 
+    // Block quote: lines starting with ">"
+    const blockMatch = line.match(/^>\s*(.+)$/);
+    if (blockMatch) {
+      paragraphs.push(new Paragraph({
+        children: parseInlineItalic(blockMatch[1], font, size),
+        spacing: { before: 120, after: 120, line: bodyLineSpacing },
+        indent: { left: rules.blockQuoteIndentTwips, right: rules.blockQuoteIndentTwips },
+        alignment: AlignmentType.JUSTIFIED,
+      }));
+      i++; continue;
+    }
+
     if (inReferences) {
       paragraphs.push(new Paragraph({
         children: parseInline(line, font, size),
-        spacing: { before: 0, after: 120, line: 480 },
+        spacing: { before: 0, after: 120, line: bodyLineSpacing },
         indent: { left: 720, hanging: 720 },
         alignment: AlignmentType.JUSTIFIED,
       }));
     } else {
       paragraphs.push(new Paragraph({
         children: parseInline(line, font, size),
-        spacing: { before: 0, after: 120, line: 480 },
+        spacing: { before: 0, after: 120, line: bodyLineSpacing },
         alignment: AlignmentType.JUSTIFIED,
       }));
     }
@@ -451,6 +469,33 @@ function parseInline(text: string, font = "Times New Roman", size = 24): TextRun
   }
   if (runs.length === 0) {
     runs.push(new TextRun({ text: text, font, size }));
+  }
+  return runs;
+}
+
+function parseInlineItalic(text: string, font = "Times New Roman", size = 24): TextRun[] {
+  const runs: TextRun[] = [];
+  const regex = /(\*\*(.+?)\*\*|\*(.+?)\*|`(.+?)`)/g;
+  let lastIdx = 0;
+  let match: RegExpExecArray | null;
+  while ((match = regex.exec(text)) !== null) {
+    if (match.index > lastIdx) {
+      runs.push(new TextRun({ text: text.slice(lastIdx, match.index), font, size, italics: true }));
+    }
+    if (match[2]) {
+      runs.push(new TextRun({ text: match[2], bold: true, italics: true, font, size }));
+    } else if (match[3]) {
+      runs.push(new TextRun({ text: match[3], italics: true, font, size }));
+    } else if (match[4]) {
+      runs.push(new TextRun({ text: match[4], font: "Courier New", size: Math.max(size - 2, 18), italics: true }));
+    }
+    lastIdx = match.index + match[0].length;
+  }
+  if (lastIdx < text.length) {
+    runs.push(new TextRun({ text: text.slice(lastIdx), font, size, italics: true }));
+  }
+  if (runs.length === 0) {
+    runs.push(new TextRun({ text, font, size, italics: true }));
   }
   return runs;
 }
@@ -902,6 +947,7 @@ interface BuildDocxOpts {
   fontFamily: string;
   fontSize: number;
   figuresByChapter: Map<string, FigureMap>;
+  citationStyle?: string;
 }
 
 /** Detect whether the body already includes its own References / Bibliography heading. */
@@ -914,8 +960,9 @@ async function buildDocx(
   projectTitle: string,
   opts: BuildDocxOpts,
 ): Promise<Uint8Array> {
-  const { isFinalExport, singleDocument, czarCoverPage, authorName, submissionDetails, fontFamily: font, fontSize: size, figuresByChapter } = opts;
+  const { isFinalExport, singleDocument, czarCoverPage, authorName, submissionDetails, fontFamily: font, fontSize: size, figuresByChapter, citationStyle } = opts;
   const sd = submissionDetails || {};
+  const styleRules = getCitationStyleDocx(citationStyle || sd.citationStyle || "Harvard");
 
   // Pre-strip any leading "# Chapter N" heading the model emitted
   const cleanChapters = chapters.map(ch => ({ ...ch, content: stripLeadingChapterHeading(ch.content || "") }));
@@ -930,7 +977,7 @@ async function buildDocx(
     for (const m of figuresByChapter.values()) {
       for (const [k, v] of m.entries()) mergedFigs.set(k, v);
     }
-    const bodyChildren: (Paragraph | Table)[] = markdownToDocxParagraphs(joined, font, size, mergedFigs);
+    const bodyChildren: (Paragraph | Table)[] = markdownToDocxParagraphs(joined, font, size, mergedFigs, styleRules);
 
     if (czarCoverPage) {
       // Proper Word title page (centered, with page break) followed by the body
@@ -944,7 +991,7 @@ async function buildDocx(
       return await packDoc([
         { children: titlePageParas, footerCenter: false, hideFooter: true, sectionType: SectionType.NEXT_PAGE },
         { children: bodyChildren, footerCenter: true, pageNumberFormat: NumberFormat.DECIMAL, restartPageNumber: 1, sectionType: SectionType.NEXT_PAGE },
-      ], font, size);
+      ], font, size, styleRules);
     }
 
     // No cover page: flat single section with optional inline title heading.
@@ -959,7 +1006,7 @@ async function buildDocx(
       }));
     }
     sectionChildren.push(...bodyChildren);
-    return await packDoc([{ children: sectionChildren, footerCenter: true }], font, size);
+    return await packDoc([{ children: sectionChildren, footerCenter: true }], font, size, styleRules);
   }
 
   // ─── Standard (non-final) export: single section, simple footer ───
@@ -977,7 +1024,7 @@ async function buildDocx(
         spacing: { before: 240, after: 240 },
       }));
       const figs = figuresByChapter.get(ch.id) || new Map();
-      sectionChildren.push(...markdownToDocxParagraphs(body, font, size, figs));
+      sectionChildren.push(...markdownToDocxParagraphs(body, font, size, figs, styleRules));
     }
     // Append a consolidated reference list at the end ONLY if the body
     // doesn't already contain its own References / Bibliography section.
@@ -1002,7 +1049,7 @@ async function buildDocx(
         }));
       }
     }
-    return await packDoc([{ children: sectionChildren, footerCenter: true }], font, size);
+    return await packDoc([{ children: sectionChildren, footerCenter: true }], font, size, styleRules);
   }
 
   // ─── FINAL EXPORT — multi-section pipeline ───
@@ -1058,7 +1105,7 @@ async function buildDocx(
       spacing: { before: 240, after: 240 },
     }));
     const figs = figuresByChapter.get(ch.id) || new Map();
-    prelim.push(...markdownToDocxParagraphs(ch._bodyContent, font, size, figs));
+    prelim.push(...markdownToDocxParagraphs(ch._bodyContent, font, size, figs, styleRules));
     prelim.push(new Paragraph({ children: [new PageBreak()] }));
   }
 
@@ -1109,7 +1156,7 @@ async function buildDocx(
       spacing: { before: 240, after: 240 },
     }));
     const figs = figuresByChapter.get(ch.id) || new Map();
-    main.push(...markdownToDocxParagraphs(ch._bodyContent, font, size, figs));
+    main.push(...markdownToDocxParagraphs(ch._bodyContent, font, size, figs, styleRules));
     main.push(new Paragraph({ children: [new PageBreak()] }));
   }
 
@@ -1151,7 +1198,7 @@ async function buildDocx(
         spacing: { before: 240, after: 240 },
       }));
       const figs = figuresByChapter.get(ch.id) || new Map();
-      main.push(...markdownToDocxParagraphs(ch._bodyContent, font, size, figs));
+      main.push(...markdownToDocxParagraphs(ch._bodyContent, font, size, figs, styleRules));
       if (idx < appendixChapters.length - 1) {
         main.push(new Paragraph({ children: [new PageBreak()] }));
       }
@@ -1163,7 +1210,7 @@ async function buildDocx(
     { children: titleSection, footerCenter: false, pageNumberFormat: NumberFormat.LOWER_ROMAN, hideFooter: true, sectionType: SectionType.NEXT_PAGE },
     { children: prelim, footerCenter: true, pageNumberFormat: NumberFormat.LOWER_ROMAN, sectionType: SectionType.NEXT_PAGE },
     { children: main, footerCenter: true, pageNumberFormat: NumberFormat.DECIMAL, restartPageNumber: 1, sectionType: SectionType.NEXT_PAGE },
-  ], font, size);
+  ], font, size, styleRules);
 }
 
 interface SectionSpec {
@@ -1175,9 +1222,19 @@ interface SectionSpec {
   sectionType?: any;
 }
 
-async function packDoc(sections: SectionSpec[], font: string, size: number): Promise<Uint8Array> {
+import type { DocxStyleRules } from "../generate-chapter/citationStyles.ts";
+
+async function packDoc(
+  sections: SectionSpec[],
+  font: string,
+  size: number,
+  styleRules?: DocxStyleRules,
+): Promise<Uint8Array> {
+  const rules = styleRules ?? getCitationStyleDocx("Harvard");
+  const pageNumTopRight = rules.pageNumberPosition === "top-right";
+
   const docSections = sections.map((s) => {
-    const footer = s.hideFooter
+    const footer = (s.hideFooter || pageNumTopRight)
       ? undefined
       : new Footer({
           children: [
@@ -1188,11 +1245,27 @@ async function packDoc(sections: SectionSpec[], font: string, size: number): Pro
           ],
         });
 
+    const header = pageNumTopRight
+      ? new Header({
+          children: [
+            new Paragraph({
+              alignment: AlignmentType.RIGHT,
+              children: [new TextRun({ children: [PageNumber.CURRENT], font, size: Math.max(size - 4, 18), color: "888888" })],
+            }),
+          ],
+        })
+      : undefined;
+
     return {
       properties: {
         page: {
           size: { width: 11906, height: 16838 },
-          margin: { top: 1440, right: 1440, bottom: 1440, left: 1440 },
+          margin: {
+            top: rules.marginTop,
+            right: rules.marginRight,
+            bottom: rules.marginBottom,
+            left: rules.marginLeft,
+          },
           pageNumbers: {
             ...(s.pageNumberFormat ? { formatType: s.pageNumberFormat } : {}),
             ...(s.restartPageNumber !== undefined ? { start: s.restartPageNumber } : {}),
@@ -1200,23 +1273,26 @@ async function packDoc(sections: SectionSpec[], font: string, size: number): Pro
         },
         type: s.sectionType,
       },
+      headers: header ? { default: header } : undefined,
       footers: footer ? { default: footer } : undefined,
       children: s.children,
     } as any;
   });
+
+  const h1Alignment = rules.h1Alignment === "center" ? AlignmentType.CENTER : AlignmentType.LEFT;
 
   const doc = new Document({
     styles: {
       default: { document: { run: { font, size } } },
       paragraphStyles: [
         { id: "Heading1", name: "Heading 1", basedOn: "Normal", next: "Normal", quickFormat: true,
-          run: { size: Math.round(size * 1.33), bold: true, font },
-          paragraph: { spacing: { before: 240, after: 240 }, outlineLevel: 0 } },
+          run: { size: Math.round(size * 1.33), bold: rules.h1Bold, font },
+          paragraph: { spacing: { before: 240, after: 240 }, alignment: h1Alignment, outlineLevel: 0 } },
         { id: "Heading2", name: "Heading 2", basedOn: "Normal", next: "Normal", quickFormat: true,
-          run: { size: Math.round(size * 1.17), bold: true, font },
+          run: { size: Math.round(size * 1.17), bold: true, italics: rules.h2Italic, font },
           paragraph: { spacing: { before: 200, after: 100 }, outlineLevel: 1 } },
         { id: "Heading3", name: "Heading 3", basedOn: "Normal", next: "Normal", quickFormat: true,
-          run: { size: Math.round(size * 1.08), bold: true, font },
+          run: { size: Math.round(size * 1.08), bold: true, italics: rules.h3Italic, font },
           paragraph: { spacing: { before: 160, after: 80 }, outlineLevel: 2 } },
         { id: "Heading4", name: "Heading 4", basedOn: "Normal", next: "Normal", quickFormat: true,
           run: { size, bold: true, italics: true, font },
@@ -1376,7 +1452,7 @@ serve(async (req) => {
 
   try {
     const body = await req.json();
-    let { chapters, projectTitle, format, isFinalExport, singleDocument, submissionDetails, fontFamily, fontSize } = body;
+    let { chapters, projectTitle, format, isFinalExport, singleDocument, submissionDetails, fontFamily, fontSize, citationStyle } = body;
 
     // CZAR single-document shape: { content, title } → adapt into ONE chapter.
     // When `singleDocument: true` is set, do NOT split on ## (would create
@@ -1480,6 +1556,7 @@ serve(async (req) => {
       fontFamily: docFont,
       fontSize: docSize,
       figuresByChapter,
+      citationStyle: citationStyle || submissionDetails?.citationStyle || submissionDetails?.citation_style,
     });
     const base64 = toBase64(docxBytes);
 

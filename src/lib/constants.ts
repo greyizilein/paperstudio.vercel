@@ -1,4 +1,5 @@
 import { type Methodology, type ChapterConfig } from "@/types/project";
+import { CITATION_STYLE_METADATA } from "./citationStylesMeta";
 
 export const VISUALIZATION_OPTIONS = [
   "Frequency / descriptive table", "Cross-tabulation table", "Regression output table",
@@ -108,11 +109,7 @@ export const METHODOLOGY_DEPTH_OPTIONS = [
   "Extended + Critical realist position (PhD)"
 ];
 
-export const CITATION_STYLES = [
-  "Harvard", "APA 7th", "APA 6th", "MLA 9th",
-  "Chicago (Author-Date)", "Chicago (Notes-Bibliography)",
-  "Vancouver", "IEEE", "OSCOLA", "AGLC 4", "AMA", "Turabian"
-];
+export const CITATION_STYLES = CITATION_STYLE_METADATA.map(s => s.id);
 
 export const LANGUAGE_STYLES = [
   "English (UK)", "English (US)", "English (Nigeria / West Africa)",
