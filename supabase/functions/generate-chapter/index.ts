@@ -32,6 +32,7 @@ import {
   getHumanWritingMandate,
 } from "./writerIdentity.ts";
 import { getQualityExemplars } from "./qualityExemplars.ts";
+import { getCitationStylePrompt } from "./citationStyles.ts";
 import { teeAndPersistChapterStream } from "../_shared/chapter-stream-persist.ts";
 
 const corsHeaders = {
@@ -490,91 +491,15 @@ ${objectivesFormat}
 ## ══════════════════════════════════════════════════════
 ## CITATION STYLE: ${project.citation_style} — READ THIS FIRST
 ## ══════════════════════════════════════════════════════
-${isNoCite ? `This is a ${chapter.type} chapter. Do not include citations, author names, years, or a reference list. Write in prose only.` : isReuseOnly ? `This is the Findings chapter. Do not introduce new citations. You may reference authors already cited in Chapters 1 & 2 when synthesising findings. Do not generate a reference list for this chapter.` : `${project.citation_style === "Harvard" ? `
-## HARVARD REFERENCING — follow these rules precisely
+${isNoCite ? `This is a ${chapter.type} chapter. Do not include citations, author names, years, or a reference list. Write in prose only.` : isReuseOnly ? `This is the Findings chapter. Do not introduce new citations. You may reference authors already cited in Chapters 1 & 2 when synthesising findings. Do not generate a reference list for this chapter.` : `${getCitationStylePrompt(project.citation_style, currentDate)}
 
-### In-text citation format:
-- PARENTHETICAL (author not named in sentence): (Smith & Jones, 2021)
-  ✅ CORRECT: "…this has been shown to be effective (Smith & Jones, 2021)."
-  ❌ WRONG: "…this has been shown to be effective (Smith and Jones, 2021)." ← "and" not allowed in brackets
-- NARRATIVE (author named in sentence): Smith and Jones (2021) argue that…
-  ✅ CORRECT: "Smith and Jones (2021) argue that X is Y."
-  ❌ WRONG: "Smith & Jones (2021) argue that X is Y." ← "&" not allowed outside brackets
-- 1 author: (Smith, 2021) or Smith (2021)
-- 2 authors: (Smith & Jones, 2021) or Smith and Jones (2021)
-- 3+ authors: (Smith et al., 2021) or Smith et al. (2021)
-- Multiple citations in one bracket: (Jones, 2019; Smith, 2021; Brown, 2023) — chronological, semicolons
-- Direct quotes: (Smith, 2021, p. 45) or Smith (2021, p. 45) states "…"
-
-### Reference list format (Harvard):
-Author, A.B. (Year) *Title of article*. *Journal Name*, Volume(Issue), pp. XX–XX.
-For books: Author, A.B. (Year) *Title of Book*. Edition. Place: Publisher.
-For websites: Author, A.B. (Year) *Title of page*. Available at: https://specific-url [Accessed: ${currentDate}].
-- List alphabetically by first author surname
-- Do NOT number the references
-- Year immediately after author name in brackets
-- Do NOT use "Retrieved from" — use "Available at:"` : ""}
-${project.citation_style === "APA 7th" ? `
-## APA 7th REFERENCING — STRICT RULES
-- In-text: (Author, Year) or Author (Year). Two authors: (Smith & Jones, 2021) in brackets, "Smith and Jones (2021)" in text.
-- 3+ authors: (Smith et al., 2021) from first citation.
-- Multiple sources: (Brown, 2020; Smith, 2021) — alphabetical by first author.
-- Quotes: (Author, Year, p. XX).
-- Reference list — alphabetical, hanging indent:
-  Author, A. B. (Year). Title of article. *Journal Name*, *Volume*(Issue), pp–pp. https://doi.org/xxxxx
-  For no DOI: Retrieved from https://specific-page-url` : ""}
-${project.citation_style === "Vancouver" ? `
-## VANCOUVER REFERENCING — STRICT RULES
-- Number all citations in ORDER OF FIRST APPEARANCE: [1], [2], [3]…
-- Use superscript OR square brackets — pick one style and be CONSISTENT
-- Same source = same number throughout.
-- Reference list NUMBERED in order of appearance:
-  1. Author AB, Author CD. Title of article. Journal Abbrev. Year;Volume(Issue):pages.
-  2. Author EF. Title of Book. Place: Publisher; Year.
-  For websites: [Accessed ${currentDate}]. Available from: https://specific-url` : ""}
-${project.citation_style === "IEEE" ? `
-## IEEE REFERENCING — STRICT RULES
-- Number all citations in ORDER OF FIRST APPEARANCE using square brackets: [1], [2], [3]
-- Same source = same number throughout.
-- Reference list NUMBERED in order of first citation:
-  [1] A. Author, "Title of article," *Journal Name*, vol. X, no. Y, pp. ZZ–ZZ, Month Year.
-  [2] A. Author, *Title of Book*. City: Publisher, Year.
-  [3] A. Author. (Year). Title. [Online]. Available: https://specific-url. [Accessed: ${currentDate}]` : ""}
-${project.citation_style === "MLA 9th" ? `
-## MLA 9th REFERENCING — STRICT RULES
-- In-text: (Author Page) — e.g., (Smith 45) or Smith argues (45)
-- No year in in-text citation
-- Works Cited list — alphabetical:
-  Author, First. "Article Title." *Journal*, vol. X, no. Y, Year, pp. ZZ–ZZ, DOI or URL. Accessed ${currentDate}.` : ""}
-${project.citation_style === "Chicago (Author-Date)" ? `
-## CHICAGO AUTHOR-DATE REFERENCING — STRICT RULES
-- In-text: (Author Year, page) — e.g., (Smith 2021, 45) or Smith (2021) argues…
-- Two authors: (Smith and Jones 2021) — use "and" NOT "&"
-- 3+ authors: (Smith et al. 2021)
-- Reference list — alphabetical:
-  Author, First. Year. "Article Title." *Journal* Volume (Issue): pages. https://doi-or-url.` : ""}
-${project.citation_style === "OSCOLA" ? `
-## OSCOLA REFERENCING — STRICT RULES
-- Footnote citations (numbered superscripts in text, full citation in footnote)
-- Subsequent references to same source: ibid. or short-form (Author, Short Title (Year) page)
-- Cases: *Case Name* [Year] Court Abbreviation Report page.
-- Legislation: Legislation Title Year (jurisdiction).
-- Journal articles: Author, 'Title' (Year) Volume(Issue) Journal Abbreviation First page.
-- Books: Author, *Title* (Edition, Publisher Year) page.` : ""}
-
-### Citation Integrity Rules (ALL styles):
-1. Every in-text citation MUST have a matching reference list entry.
-2. Every reference entry MUST be cited in-text.
-3. NEVER fabricate DOI numbers — only include https://doi.org/xxxxx if you are confident the DOI exists.
-4. For websites: use the SPECIFIC PAGE URL, not the homepage.
-5. Add "Accessed: ${currentDate}" or equivalent for all online sources.
-6. Total sources: EXACTLY ${p.totalSources || 18} (±2). Count before finishing.
-7. Citation density: ${p.minPerThousand && p.minPerThousand !== "System default" ? p.minPerThousand : "2–4"} per 1,000 words.
-${sourceTypeDistribution.length > 0 ? `8. Source type distribution:\n${sourceTypeDistribution.map((s: string) => `   • ${s}`).join("\n")}` : ""}
+### Additional source controls:
+- Total sources: EXACTLY ${p.totalSources || 18} (±2). Count before finishing.
+- Citation density: ${p.minPerThousand && p.minPerThousand !== "System default" ? p.minPerThousand : "2–4"} per 1,000 words.
+${sourceTypeDistribution.length > 0 ? `- Source type distribution:\n${sourceTypeDistribution.map((s: string) => `   • ${s}`).join("\n")}` : ""}
 - Empirical evidence level: ${empiricalLevel}
 - Seminal works: ${seminalWorks}
-- Year range: ${yearStart}–${yearEnd}
-- FINAL SELF-CHECK: (1) citation↔reference parity, (2) ${project.citation_style} format correct, (3) online sources have specific URLs + access date.`}
+- Year range: ${yearStart}–${yearEnd}`}
 
 ${!includeHypotheses ? `## Hypotheses — disabled for this project
 The user has not enabled hypotheses. By default, do not include H1/H2/H3 numbered hypotheses. If the user explicitly requests them in their instructions, use judgment.` : ""}

@@ -1765,6 +1765,7 @@ ${thesisArea}`);
           format,
           isFinalExport: !!extras.isFinalExport,
           submissionDetails: extras.submissionDetails || null,
+          citationStyle: project?.citation_style || null,
         }),
       });
       if (!resp.ok) { const err = await resp.json(); toast.error(err.error || "Export failed"); return; }

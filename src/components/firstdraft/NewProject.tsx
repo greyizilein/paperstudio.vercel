@@ -20,6 +20,7 @@ import {
   LANGUAGE_LEVEL_DESCRIPTIONS,
   guessField,
 } from "@/lib/constants";
+import { CITATION_STYLE_METADATA, inferCitationStyle } from "@/lib/citationStylesMeta";
 import { Slider } from "@/components/ui/slider";
 
 type WizardStep = 0 | 1 | 2 | 3 | 4;
@@ -176,6 +177,13 @@ export function NewProject({ onBack, onCreate }: { onBack: () => void; onCreate:
       }
     }
   }, [form.title, showAdvanced]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Auto-suggest citation style when field of study changes (only if user hasn't picked one yet)
+  useEffect(() => {
+    if (form.citation_style) return; // user already chose — don't override
+    const suggested = inferCitationStyle(form.field_of_study);
+    if (suggested) setForm(prev => ({ ...prev, citation_style: suggested }));
+  }, [form.field_of_study]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleInstructionsUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -680,12 +688,36 @@ export function NewProject({ onBack, onCreate }: { onBack: () => void; onCreate:
                   </p>
                 </div>
 
-                <TickGroup
-                  label="Citation Style"
-                  options={CITATION_STYLES.slice(0, 6)}
-                  value={form.citation_style}
-                  onChange={(v) => updateForm("citation_style", v)}
-                />
+                {/* Citation Style — all 12 styles with descriptions */}
+                <div>
+                  <label className="block text-[11px] font-bold text-foreground mb-1.5">Citation Style</label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {CITATION_STYLE_METADATA.map((style) => {
+                      const active = form.citation_style === style.id;
+                      return (
+                        <button
+                          key={style.id}
+                          type="button"
+                          onClick={() => updateForm("citation_style", style.id)}
+                          title={style.description}
+                          className={cn(
+                            "rounded-full px-2.5 py-1 text-[11px] font-medium border transition-all cursor-pointer",
+                            active
+                              ? "bg-primary text-primary-foreground border-primary"
+                              : "bg-background text-muted-foreground border-border hover:border-primary/40 hover:text-foreground"
+                          )}
+                        >
+                          {style.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {form.citation_style && (
+                    <p className="text-[10px] text-muted-foreground mt-1">
+                      {CITATION_STYLE_METADATA.find(s => s.id === form.citation_style)?.description}
+                    </p>
+                  )}
+                </div>
 
                 <TickGroup
                   label="Language Style"

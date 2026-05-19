@@ -161,6 +161,7 @@ export function FinalExport({ project }: FinalExportProps) {
             submissionDetails: details,
             fontFamily: selectedFont.family,
             fontSize: selectedFont.size,
+            citationStyle: project.citation_style || null,
           }),
         }
       );
