@@ -1,33 +1,18 @@
-import { Check, Sun, Moon, Sparkles } from "lucide-react";
+import { Check, Sparkles } from "lucide-react";
 import { usePsTheme } from "@/contexts/PsThemeContext";
 import { PS_THEMES, getPsTheme, type PsThemeId, type PsMode, type PsSidebarVariant } from "@/lib/psThemes";
 
 /**
  * Settings → Appearance picker.
- * - 5 theme cards with native previews: each shows its real sidebar layout,
- *   display font, accent colour, and a "Premium" flag where applicable.
- * - Light/Dark mode toggle that applies to whichever theme is active.
+ * 5 theme cards with native previews: sidebar layout, display font, accent colour, Premium flag.
  * Selected theme + mode persist to localStorage AND profile.settings_json.
+ * Light/Dark quick-toggle lives in the topbar only.
  */
 export function PsThemePicker() {
-  const { themeId, mode, setTheme, setMode } = usePsTheme();
+  const { themeId, mode, setTheme } = usePsTheme();
 
   return (
     <div className="space-y-5">
-      {/* Mode toggle */}
-      <div>
-        <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">
-          Appearance mode
-        </label>
-        <div className="mt-2 inline-flex rounded-lg border border-border p-0.5 bg-secondary/40">
-          <ModeButton active={mode === "light"} onClick={() => setMode("light")} icon={<Sun size={13} />} label="Light" />
-          <ModeButton active={mode === "dark"}  onClick={() => setMode("dark")}  icon={<Moon size={13} />} label="Dark"  />
-        </div>
-        <p className="mt-1.5 text-[10.5px] text-muted-foreground">
-          Switches the active theme between its light and dark variants. Quick-toggle also lives in the topbar.
-        </p>
-      </div>
-
       {/* Theme cards */}
       <div>
         <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">
@@ -50,22 +35,6 @@ export function PsThemePicker() {
         </p>
       </div>
     </div>
-  );
-}
-
-function ModeButton({
-  active, onClick, icon, label,
-}: { active: boolean; onClick: () => void; icon: React.ReactNode; label: string }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[11.5px] font-semibold transition-colors cursor-pointer ${
-        active ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
-      }`}
-    >
-      {icon} {label}
-    </button>
   );
 }
 
