@@ -18,8 +18,8 @@ const corsHeaders = {
 };
 
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY") || "";
-const HAIKU_MODEL = "claude-haiku-4-5";
-const SONNET_MODEL = "claude-sonnet-4-5";
+const HAIKU_MODEL = "claude-haiku-4-5-20251001";   // Stages 1-4: fast, rule-following
+const SONNET_MODEL = "claude-sonnet-4-6";           // Stage 5: creative voice pass
 
 const STAGES = [
   // ─────────────────────────────────────────────────────────────────────
