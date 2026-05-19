@@ -406,21 +406,80 @@ export default function WriterPage() {
     } catch { /* quota / private mode */ }
   }, [user?.id]);
 
-  // Restore personalise from chapter draft_config when switching chapters
+  // Restore personalise from chapter draft_config when switching chapters.
+  // When no saved personalise exists for the chapter, auto-detect settings
+  // from project metadata and previous chapters' draft_config so the AI
+  // has the right context without the user having to manually configure anything.
   useEffect(() => {
     if (!project) return;
     const ch = project.chapters.find(c => c.order_index === activeChapterIndex);
     if (ch?.draft_config && (ch.draft_config as any).personalise) {
       setPersonalise(prev => ({ ...prev, ...(ch.draft_config as any).personalise }));
     } else {
-      // Pre-populate hypotheses from project creation only if user opted in
       const dc = ch?.draft_config as any;
+      const methodology = project.research_methodology as string;
+      const autoFill: Record<string, any> = {};
+
+      // Hypotheses from project creation
       if (dc?.includeHypotheses === true && dc.hypotheses?.length > 0) {
-        setPersonalise(prev => ({
-          ...prev,
-          includeHypotheses: true,
-          hypothesesText: dc.hypotheses.map((h: string, i: number) => `H${i + 1}: ${h}`).join("\n"),
-        }));
+        autoFill.includeHypotheses = true;
+        autoFill.hypothesesText = dc.hypotheses.map((h: string, i: number) => `H${i + 1}: ${h}`).join("\n");
+      }
+
+      // ── Methodology chapter ──
+      // Pre-populate analysis methods based on project methodology selection.
+      if (ch?.type === "methodology") {
+        if (methodology === "Quantitative") {
+          autoFill.analysisMethods = ["Descriptive statistics (mean, SD, frequencies)", "Inferential statistics (t-test, ANOVA, chi-square)"];
+          autoFill.qualMethods = [];
+        } else if (methodology === "Qualitative") {
+          autoFill.analysisMethods = [];
+          autoFill.qualMethods = ["Thematic analysis", "Content analysis"];
+        } else if (methodology === "Mixed Methods") {
+          autoFill.analysisMethods = ["Descriptive statistics (mean, SD, frequencies)"];
+          autoFill.qualMethods = ["Thematic analysis"];
+        }
+      }
+
+      // ── Findings chapter ──
+      // Mirror analysis methods from the methodology chapter's saved personalise
+      // or draft_config, then fall back to project-level methodology.
+      if (ch?.type === "findings") {
+        const methChapter = project.chapters.find(c => c.type === "methodology");
+        const methCfg = methChapter?.draft_config as any;
+        const methPersonalise = methCfg?.personalise;
+
+        if (methPersonalise?.analysisMethods?.length > 0) {
+          autoFill.analysisMethods = methPersonalise.analysisMethods;
+        } else if (methCfg?.analysis_types?.length > 0) {
+          autoFill.analysisMethods = methCfg.analysis_types;
+        } else if (methodology === "Quantitative") {
+          autoFill.analysisMethods = ["Descriptive statistics (mean, SD, frequencies)"];
+        } else if (methodology === "Mixed Methods") {
+          autoFill.analysisMethods = ["Descriptive statistics (mean, SD, frequencies)"];
+        }
+
+        if (methPersonalise?.qualMethods?.length > 0) {
+          autoFill.qualMethods = methPersonalise.qualMethods;
+        } else if (methodology === "Qualitative") {
+          autoFill.qualMethods = ["Thematic analysis"];
+        }
+
+        if (methPersonalise?.visualizations?.length > 0) {
+          autoFill.visualizations = methPersonalise.visualizations;
+        } else if (methCfg?.visualizations?.length > 0) {
+          autoFill.visualizations = methCfg.visualizations;
+        }
+
+        // Carry over uploaded data if already on the methodology chapter
+        if (methPersonalise?.uploadedData) {
+          autoFill.uploadedData = methPersonalise.uploadedData;
+          autoFill.uploadedDataFilename = methPersonalise.uploadedDataFilename || "";
+        }
+      }
+
+      if (Object.keys(autoFill).length > 0) {
+        setPersonalise(prev => ({ ...prev, ...autoFill }));
       }
     }
   }, [activeChapterIndex, project?.id]);
@@ -2082,7 +2141,7 @@ ${thesisArea}`);
   return (
     <div className="h-[100dvh] flex flex-col bg-background overflow-hidden">
       {/* Top Nav */}
-      <nav className="relative h-11 border-b border-border flex items-center px-2 sm:px-4 gap-1.5 sm:gap-2.5 flex-shrink-0 bg-background">
+      <nav className="relative h-11 border-b border-transparent flex items-center px-2 sm:px-4 gap-1.5 sm:gap-2.5 flex-shrink-0 bg-background">
         <button
           onClick={() => navigate("/")}
           aria-label="Back to home"
@@ -2361,7 +2420,7 @@ ${thesisArea}`);
       {/* Shell */}
       <div className="flex flex-1 overflow-hidden min-h-0">
         {/* Left Nav — toggled via showSidebar */}
-        {showSidebar && <nav className="w-[192px] flex-shrink-0 border-r border-border bg-background flex-col overflow-y-auto py-2 flex animate-in slide-in-from-left duration-200">
+        {showSidebar && <nav className="w-[192px] flex-shrink-0 border-r border-transparent bg-background flex-col overflow-y-auto py-2 flex animate-in slide-in-from-left duration-200">
           <div className="text-[10px] font-extrabold tracking-[0.08em] uppercase text-muted-foreground px-3.5 pt-2.5 pb-1">Chapters</div>
           {project.chapters.sort((a, b) => a.order_index - b.order_index).map(ch => {
             const locked = isChapterLocked(ch);
@@ -2396,9 +2455,9 @@ ${thesisArea}`);
             <b className="text-foreground">{subscription.words_used.toLocaleString()} / {subscription.word_limit.toLocaleString()}</b> words<br />
             {completedCount} of {project.chapters.length} done · {subscription.tier} tier
           </div>
-          <div className="mt-auto px-3 py-2 border-t border-border">
+          <div className="mt-auto px-3 py-2 border-t border-transparent">
             <button onClick={() => setShowExportModal(true)}
-              className="w-full py-1.5 rounded-md text-xs font-bold border border-border text-foreground hover:border-primary hover:text-primary transition-all">
+              className="w-full py-1.5 rounded-md text-xs font-bold border border-border/30 text-foreground hover:border-primary hover:text-primary transition-all">
               Download ALL
             </button>
           </div>
@@ -2407,7 +2466,7 @@ ${thesisArea}`);
         {/* Editor */}
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
           {/* Chapter strip — compact numbered dots + correction button at far right */}
-          <div className="h-10 border-b border-border flex items-center flex-shrink-0 bg-background">
+          <div className="h-10 border-b border-transparent flex items-center flex-shrink-0 bg-background">
             {/* Scrollable dots */}
             <div className="flex items-center px-3 gap-2 overflow-x-auto flex-1 min-w-0 scrollbar-hide">
               {(() => {
@@ -2446,7 +2505,7 @@ ${thesisArea}`);
               })()}
             </div>
             {/* Correction slot + Humanise buttons — always pinned right */}
-            <div className="flex-shrink-0 flex items-center border-l border-border px-2 gap-1">
+            <div className="flex-shrink-0 flex items-center border-l border-transparent px-2 gap-1">
               <button
                 onClick={() => {
                   if (!currentChapter?.content) { toast.error("Complete this chapter first."); return; }
@@ -2726,17 +2785,52 @@ ${thesisArea}`);
                   <h1 className="text-xl sm:text-2xl font-bold text-foreground leading-snug flex-1">{currentChapter?.title}</h1>
                   <button
                     onClick={() => setShowGuide(s => !s)}
-                    title="Chapter guide"
-                    className="mt-1 flex-shrink-0 text-[11px] font-bold text-muted-foreground hover:text-foreground transition-colors w-5 h-5 rounded-full border border-border flex items-center justify-center hover:border-foreground/40"
-                  >?</button>
+                    title="Chapter guide — what to include, how to structure it"
+                    className="relative mt-1 flex-shrink-0 text-[11px] font-bold text-muted-foreground hover:text-foreground transition-colors w-6 h-6 rounded-full border border-border flex items-center justify-center hover:border-primary hover:text-primary hover:bg-primary/5 group"
+                  >
+                    {!currentChapter?.content && (
+                      <span className="absolute inset-0 rounded-full border border-primary/50 animate-[ping_1.8s_cubic-bezier(0,0,0.2,1)_4] pointer-events-none" />
+                    )}
+                    ?
+                  </button>
                 </div>
                 {/* Alert banners at top of canvas */}
-                {(chType === "methodology" || chType === "findings") && (
+                {chType === "methodology" && (
                   <div className="mx-4 sm:mx-10 mt-4 flex items-center gap-3 rounded-lg bg-amber-50 border border-amber-200 px-4 py-2.5 text-sm">
                     <span className="text-amber-700 font-medium flex-1 text-left text-[12px]">
-                      ⚠️ Tip: open <strong>Settings</strong> to configure methodology details before drafting.
+                      Settings auto-configured from your project. Open <strong>Settings</strong> to fine-tune analysis methods, study design, and more before drafting.
                     </span>
                     <button onClick={() => setShowPersonalise(true)} className="px-2.5 py-1 rounded bg-amber-600 text-white text-xs font-bold hover:bg-amber-700 flex-shrink-0">Settings</button>
+                  </div>
+                )}
+                {chType === "findings" && (
+                  <div className="mx-4 sm:mx-10 mt-4 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-[12px] text-blue-800 space-y-2">
+                    <p className="font-bold text-[13px] flex items-center gap-1.5">📊 Chapter 4 needs your data</p>
+                    <p className="leading-relaxed">
+                      <strong>What is data?</strong> In your dissertation, data is the evidence you collected — survey responses, interview transcripts, experiment results, or records from sources like government databases. Chapter 4 analyses this evidence and reports what it shows.
+                    </p>
+                    <p className="leading-relaxed">
+                      <strong>Why upload it?</strong> Without real data, the AI generates plausible-sounding but fictional numbers. Real data makes your findings accurate, specific, and defensible in a viva. Examiners can detect fabricated results.
+                    </p>
+                    <p className="leading-relaxed">
+                      <strong>Accepted file types:</strong> <span className="font-mono bg-blue-100 px-1 rounded">.xlsx</span> (Excel) · <span className="font-mono bg-blue-100 px-1 rounded">.csv</span> (comma-separated) · <span className="font-mono bg-blue-100 px-1 rounded">.tsv</span> · <span className="font-mono bg-blue-100 px-1 rounded">.json</span> · <span className="font-mono bg-blue-100 px-1 rounded">.txt</span>
+                      {" "}— up to 10 MB, multiple files allowed. Export from Excel, SPSS, Google Sheets, or NVivo before uploading.
+                    </p>
+                    <div className="flex items-center gap-2 pt-1">
+                      {personalise.uploadedDataFilename ? (
+                        <span className="text-emerald-700 font-bold text-[11px]">✓ Data uploaded: {personalise.uploadedDataFilename}</span>
+                      ) : (
+                        <button
+                          onClick={() => { setShowPersonalise(true); }}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-bold hover:bg-blue-700 transition-colors"
+                        >
+                          Upload data in Settings →
+                        </button>
+                      )}
+                      <button onClick={() => setShowPersonalise(true)} className="text-[11px] text-blue-600 hover:underline">
+                        {personalise.uploadedDataFilename ? "Manage in Settings" : "Open Settings"}
+                      </button>
+                    </div>
                   </div>
                 )}
                 {showRecovery && recoveryContent && (
@@ -2768,26 +2862,29 @@ ${thesisArea}`);
           </div>
 
           {/* Bottom bar */}
-          <div className="border-t border-border flex-shrink-0 bg-background">
+          <div className="border-t border-transparent flex-shrink-0 bg-background">
 
             {/* ── EMPTY STATE: bare icon pair ── */}
             {!currentChapter?.content && !isGenerating && !currentLocked && (
               <div className="flex items-center gap-4 px-4 py-2.5">
                 <button
                   onClick={() => setShowPersonalise(true)}
-                  title="Settings"
+                  title="Customise chapter settings before drafting"
                   aria-label="Settings"
-                  className="p-1 text-muted-foreground hover:text-foreground transition-colors"
+                  className="relative p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/8 transition-all group"
                 >
-                  <Settings size={14} />
+                  <span className="absolute inset-0 rounded-lg bg-primary/10 animate-[ping_2.2s_cubic-bezier(0,0,0.2,1)_4] pointer-events-none" />
+                  <Settings size={14} className="group-hover:rotate-45 transition-transform duration-300" />
                 </button>
                 <button
                   onClick={() => setShowOutlineModal(true)}
-                  title="Draft chapter"
+                  title="Generate this chapter with AI"
                   aria-label="Draft chapter"
-                  className="inline-flex items-center gap-1 p-1 text-muted-foreground hover:text-foreground transition-colors"
+                  className="relative inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-primary/8 text-primary hover:bg-primary hover:text-primary-foreground transition-all overflow-hidden group"
                 >
-                  <PenLine size={14} /><span className="text-xs font-medium">Draft</span>
+                  <span className="absolute inset-0 bg-primary/10 animate-[ping_2.8s_cubic-bezier(0,0,0.2,1)_3] pointer-events-none" />
+                  <PenLine size={13} className="group-hover:scale-110 transition-transform" />
+                  Draft
                 </button>
               </div>
             )}
@@ -2816,7 +2913,7 @@ ${thesisArea}`);
             {/* ── COMPLETED: notes + actions ── */}
             {currentChapter?.content && !isGenerating && (
               <>
-                <div className="flex items-center gap-2 px-4 py-1.5 border-b border-border">
+                <div className="flex items-center gap-2 px-4 py-1.5 border-b border-transparent">
                   <span className="text-[11px] font-mono text-muted-foreground">
                     <b className={currentWC >= targetWC ? "text-green" : ""}>{currentWC.toLocaleString()}</b> / {targetWC.toLocaleString()}w
                   </span>
@@ -2826,7 +2923,7 @@ ${thesisArea}`);
                   <span className="text-[11px] font-mono text-muted-foreground">{wcPct}%</span>
                 </div>
                 {currentChapter?.status === "completed" && (
-                  <div className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-4 py-1.5 border-t border-border flex-wrap">
+                  <div className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-4 py-1.5 border-t border-transparent flex-wrap">
                     {currentChapter.word_count_actual && currentChapter.word_count_target && currentChapter.word_count_actual < currentChapter.word_count_target && (
                       <button onClick={() => handleContinueWriting(currentChapter.content || "", (currentChapter.word_count_target || 0) - (currentChapter.word_count_actual || 0))}
                         className="inline-flex items-center justify-center gap-1 w-full sm:w-auto px-2.5 py-1.5 sm:py-1 rounded-md text-xs font-bold bg-aqua/10 text-aqua border border-aqua/20 hover:bg-aqua/20 transition-all">
