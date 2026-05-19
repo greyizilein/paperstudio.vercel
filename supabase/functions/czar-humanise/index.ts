@@ -1,12 +1,11 @@
-// czar-humanise v10 — Claude Sonnet full academic rewrite
+// czar-humanise v12 — 5-stage sequential pipeline (original pipeline, 5–13% AI scores)
 //
-// Implements the academic_humanizer.py approach:
-//   model: claude-sonnet-4-5, temperature: 0.95, top_p: 0.90, max_tokens: 8000
-//   Full text rewrite (not word swap) for maximum burstiness + perplexity.
-//
-// Architecture:
-//   1. Stream from Claude API (collecting tokens + sending progress events)
-//   2. Emit SSE: pipeline_start → stage_start → progress* → stage_done → done
+// Each stage has ONE specific job, run sequentially. Output of stage N → input of stage N+1.
+// Stage 1: Structure Break    — varies sentence syntax openings
+// Stage 2: Citation Texture   — varies how citations are integrated
+// Stage 3: Human Fingerprints — adds hedges, concessions, punchy short sentences
+// Stage 4: Paragraph Rhythm   — varies paragraph length and topic-sentence moves
+// Stage 5: Surface Polish     — removes remaining AI tells, adds mild writer voice
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -15,73 +14,134 @@ const corsHeaders = {
 };
 
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY") || "";
-const CLAUDE_MODEL = "claude-opus-4-5";
+const CLAUDE_MODEL = "claude-sonnet-4-5";
 
-const SYSTEM_PROMPT = `You are an expert academic ghostwriter. Your sole function is to rewrite the user's text so it scores 0% on AI detection tools, while preserving every citation, statistic, technical term, and heading exactly.
+const STAGES = [
+  {
+    label: "Structure Break",
+    prompt: `You are a humanisation engine — Stage 1: STRUCTURE BREAK.
 
-## YOUR QUALITY BAR — Real 0%-Detected Academic Writing
+Your task: rewrite the academic text below so that NO TWO consecutive sentences share the same syntactic structure at their opening.
 
-Study these three paragraphs. They were written by humans and score 0% on every AI detector. Your rewrite must match their register, sentence rhythm, and argumentative moves — not their topic or wording.
+Rules:
+- Vary sentence openings: mix prepositional phrases ("In care settings..."), participial phrases ("Drawing on..."), subordinate clauses ("Where practitioners fail..."), short declarators ("This matters."), mid-sentence pivots.
+- Break up any sentence longer than 45 words into two — but never make two short sentences in a row without a longer one following.
+- Do NOT change any facts, citations, arguments or academic terminology.
+- Preserve all references exactly.
+- Target word count: within ±3% of input.
+- UK academic English.
+- Output the rewritten text only. No explanation.`,
+  },
+  {
+    label: "Citation Texture",
+    prompt: `You are a humanisation engine — Stage 2: CITATION TEXTURE.
 
----
+Your task: vary how all citations and references are integrated into the text.
 
-**Exemplar 1 — Background/Introduction (what makes it human: argument-first opening with no preamble; "But," at sentence start; mixed lengths; no closing summation; subject-verb informality):**
+Rules:
+- AI citation pattern to eliminate: 'Author (year) verb that [claim]' — this structure must NOT appear more than once per paragraph.
+- Use these alternative patterns instead:
+  a) Claim first, then source: "...the quality of handover affects outcomes (Smith, 2021)."
+  b) Study summary: "A 2019 Cochrane review found that..."
+  c) Named without verb: "As Jones and Ali (2020) noted, the evidence points to..."
+  d) Mid-sentence insertion: "...care models — which Rietman et al. (2022) found to be structurally inadequate — continue to..."
+  e) Passive attribution: "It has been argued (Thompson, 2016) that..."
+- Do NOT change any arguments, facts, or citation content — only the syntactic integration.
+- Preserve all citations. Preserve word count ±3%.
+- Output the rewritten text only. No explanation.`,
+  },
+  {
+    label: "Human Fingerprints",
+    prompt: `You are a humanisation engine — Stage 3: HUMAN FINGERPRINTS.
 
-Nigeria have suffered so much misrule since independence that the question of good governance is no longer merely academic. The expectation, articulated by Nkrumah (1965) and echoed by subsequent pan-African theorists, was that political independence would yield developmental sovereignty — yet the record of the first six decades is largely one of borrowed frameworks and failed delivery. Corruption at the executive level alone costs the Nigerian economy an estimated $18 billion annually (Transparency International, 2022), a figure that acquires meaning only when set against the 133 million Nigerians living in multidimensional poverty (NBS, 2022). But, experiences since independence show that the problem is not merely fiscal. Leadership failure in Nigeria is structural: a pattern of post-colonial governance in which the extractive logic of colonialism has been reproduced by indigenous political elites rather than dismantled (Ake, 1996). Transformational leadership theory, developed primarily in Western organisational contexts, must therefore be interrogated before it can be transplanted.
+Your task: insert the following human writing traits into the text. Each trait should appear at least twice across the full text.
 
----
+Traits to add:
+1. HEDGES: Replace confident assertions with qualified ones: "may", "tends to", "in many cases", "often", "can".
+2. SELF-COMMENTARY: Add brief meta-beats where the writer reflects on the argument: "This matters because...", "The implication is significant:", "What this reveals is..."
+3. CONCESSIONS: Add at least two concessive phrases: "Even so,", "This does not mean...", "Even well-intentioned practitioners...", "It would be wrong to suggest..."
+4. SHORT PUNCHY INTERRUPTIONS: Insert 1-2 very short sentences (under 10 words) among long dense paragraphs. These should land like a judgment: "This is not a minor concern.", "The stakes are real.", "Timing, in other words, is structural."
+5. SLIGHTLY OVERSTUFFED PHRASE: Leave one or two phrases that use a clause more than strictly needed — this reads as a human writing quickly through an argument.
 
-**Exemplar 2 — Literature Review (what makes it human: hinge move mid-paragraph "The contrast matters"; specific data woven into reasoning not appended; interpretive landing in writer's voice; named study with n= and year):**
+Rules:
+- Do NOT change any arguments, facts, or citation content.
+- These additions should feel woven in, not bolted on.
+- Preserve word count ±5%.
+- UK academic English.
+- Output the rewritten text only. No explanation.`,
+  },
+  {
+    label: "Paragraph Rhythm",
+    prompt: `You are a humanisation engine — Stage 4: PARAGRAPH RHYTHM.
 
-Burns's (1978) distinction between transactional and transformational leadership remains foundational, yet its application to post-colonial African governance exposes assumptions the original framework does not acknowledge. Burns theorised transformation as a process in which leaders and followers jointly raise one another toward higher moral purpose — a vision premised on a relatively stable civil society in which followers can credibly hold leaders to account. Ake (1996) identified precisely why this condition is absent across much of sub-Saharan Africa: where institutions are weak and patronage networks substitute for formal accountability, the transformational leader's "moral purpose" is easily captured by elite interests. The contrast matters. Atkinson and Mwenda (2011, n = 24 African states, 1990–2008) found that leadership style explained less than 12% of variance in developmental outcomes, with institutional strength accounting for the remainder — a finding Chemers (2014) confirmed in a separate meta-analysis of 47 leadership studies conducted in low-income economies. What the literature reveals, collectively, is that transformational leadership is not an inherently portable construct: its effects are conditional on precisely the institutional architecture that post-colonial states have most consistently failed to build.
+Your task: vary the paragraph structure and opening moves so the text has uneven, human rhythm.
 
----
+Rules:
+1. PARAGRAPH LENGTH: Ensure at least one paragraph is noticeably short (2-3 sentences). At least one should be long and dense. Do not let all paragraphs be the same length.
+2. TOPIC SENTENCES: Not every paragraph should open with a preview of what follows. At least 2 paragraphs should open with one of these alternatives:
+   - A challenging claim: "This assumption deserves scrutiny."
+   - A pivot from the last idea: "Yet the structural problem runs deeper."
+   - A concession: "It would be wrong to overstate the case."
+   - A short judgment: "The evidence here is unambiguous."
+3. DENSITY CONTRAST: If two consecutive paragraphs feel equally dense in argumentation, lighten one by removing a sub-clause or splitting a sentence.
+4. Do NOT change any arguments, facts, citations, or academic terminology.
+5. Preserve word count ±5%.
+6. UK academic English.
+7. Output the rewritten text only. No explanation.`,
+  },
+  {
+    label: "Surface Polish",
+    prompt: `You are a humanisation engine — Stage 5: SURFACE POLISH (final pass).
 
-**Exemplar 3 — Methodology (what makes it human: design choice explained with a "why"; sample size justified through named technique with exact figures; honest limitation named; interpretive close rather than boilerplate):**
+Your task: read the text as a whole and remove any remaining AI tells. This is a light editorial pass — do not restructure arguments.
 
-A positivist, deductive, quantitative design was adopted. The choice was deliberate: the research questions concerned the strength and direction of relationships between price perception, perceived quality, and consumer preference — questions best answered through measurement rather than interpretation. A cross-sectional survey was administered to 312 adult shoppers across three Lagos markets (Yaba, Balogun, and Aswani), selected because they represent the densest concentrations of Okrika trade in the metropolitan area. Sample size was determined through G*Power analysis, which indicated that detecting a medium effect (f² = 0.15) at α = 0.05 with 80% power required a minimum of 153 respondents; the achieved sample exceeds this threshold and supports robust subgroup analysis. The instrument, adapted from Sweeney and Soutar's (2001) PERVAL scale, demonstrated acceptable internal consistency across all four subscales (Cronbach's α between 0.78 and 0.87). Transferability to non-urban or non-Nigerian second-hand contexts remains uncertain — a limitation discussed in §3.10 — but the design supports defensible inference within the studied population.
+Remove these AI patterns if present:
+- Formulaic transitions: "Furthermore,", "Moreover,", "In addition,", "It is important to note that", "It is worth noting", "In conclusion, it is clear that"
+- Repeated sentence-opening words across consecutive sentences
+- Any phrase that sounds like a checklist item being ticked off
+- Overly balanced three-part lists (AI loves: "X, Y, and Z" in that exact triple form — break one up)
+- Any summary sentence at the end of a section that simply restates the opening point
 
----
+Add if missing:
+- At least one place where the writer's own perspective comes through mildly — not as "I think" but as a framing choice: "The concern here is not simply procedural.", "What emerges is a picture of..."
 
-## Rules Your Rewrite Must Follow
-
-**SENTENCE RHYTHM — enforce within every paragraph:**
-- Minimum one sentence under 10 words and one sentence over 30 words per paragraph
-- Never two consecutive sentences of similar length
-- Vary how sentences open: subordinate clause, concessive opener, evidence-first, claim-first, "But," or "Yet," to start a sentence
-
-**BANNED OPENERS (AI fingerprints — never use):**
-- "Furthermore," / "Moreover," / "Additionally," / "In addition,"
-- "This demonstrates" / "This highlights" / "This underscores" / "This suggests"
-- "It is important to note" / "It is worth noting"
-- "This study/investigation/research aims to / seeks to / endeavours to"
-- Any sentence beginning with "This [noun]" that summarises what just came before
-
-**BANNED CLOSERS (paragraph-ending AI fingerprints):**
-- "...remains essential/crucial/fundamental to X"
-- "...is therefore of great importance"
-- Any sentence that restates the paragraph's opening claim
-
-**ARGUMENT MOVES — at least one per section:**
-- A hinge sentence that turns description into argument: "The contrast matters." / "What this reveals is..." / "That said," / "Yet the data do not support..."
-- A concessive opener: "Burns's distinction remains foundational, yet..."
-- A short declarative landing after a long analytical sentence
-
-**EVIDENCE:**
-- Every citation must have a named finding, not just an author-year tag
-- Named statistics anchor to their source AND their implication
-- No trailing citations: "(Smith, 2023)." alone at the end of a sentence is an AI move
-
-**BANNED WORDS:** delve, tapestry, robust, testament, crucial, underscore, pivotal, seamless, landscape, realm, beacon, myriad, facilitate, utilize, multifaceted, nuanced
-
-**ACADEMIC INTEGRITY — non-negotiable:**
-- Every citation reproduced exactly as in the original
-- Every statistic, percentage, p-value, alpha, n= preserved exactly
-- All headings, section numbers, and technical terms unchanged
-- Output ONLY the rewritten text — no preamble, no remarks`;
+Final checks:
+- Word count must be within ±5% of the original input word count.
+- All citations preserved exactly.
+- UK academic English throughout.
+- Output the final polished text only. No explanation.`,
+  },
+];
 
 function wordCount(s: string): number {
   return (s || "").trim().split(/\s+/).filter(Boolean).length;
+}
+
+async function callClaude(systemPrompt: string, userText: string, signal: AbortSignal): Promise<string> {
+  const resp = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    signal,
+    headers: {
+      "x-api-key": ANTHROPIC_API_KEY,
+      "anthropic-version": "2023-06-01",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: CLAUDE_MODEL,
+      max_tokens: 8000,
+      system: systemPrompt,
+      messages: [{ role: "user", content: userText }],
+    }),
+  });
+
+  if (!resp.ok) {
+    const err = await resp.text().catch(() => "");
+    throw new Error(`Anthropic ${resp.status}: ${err.slice(0, 200)}`);
+  }
+
+  const data = await resp.json();
+  const blocks = Array.isArray(data.content) ? data.content : [];
+  return blocks.filter((b: any) => b.type === "text").map((b: any) => b.text).join("");
 }
 
 interface Body { text: string; model?: string | null }
@@ -126,90 +186,45 @@ Deno.serve(async (req) => {
         catch { /* closed */ }
       };
 
-      console.log(`[czar-humanise v10] start: ${original_words} words, claude-sonnet full-rewrite`);
-      send("pipeline_start", { stages: 1, provider: "claude-sonnet", original_words, version: "v10" });
-      send("stage_start", { stage: 1, label: "Rewriting chapter..." });
+      console.log(`[czar-humanise v12] start: ${original_words} words, 5-stage pipeline`);
+      send("pipeline_start", { stages: 5, provider: "claude-sonnet", original_words, version: "v12" });
+
+      let current = text;
+      let stagesCompleted = 0;
 
       try {
-        const anthropicResp = await fetch("https://api.anthropic.com/v1/messages", {
-          method: "POST",
-          signal: upstreamSignal,
-          headers: {
-            "x-api-key": ANTHROPIC_API_KEY,
-            "anthropic-version": "2023-06-01",
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            model: CLAUDE_MODEL,
-            max_tokens: 8000,
-            temperature: 0.95,
-            stream: true,
-            system: SYSTEM_PROMPT,
-            messages: [
-              { role: "user", content: `Humanize this academic text:\n\n${text}` },
-            ],
-          }),
-        });
+        for (let i = 0; i < STAGES.length; i++) {
+          const stage = STAGES[i];
+          send("stage_start", { stage: i + 1, label: stage.label });
 
-        if (!anthropicResp.ok) {
-          const errTxt = await anthropicResp.text().catch(() => "");
-          throw new Error(`Anthropic ${anthropicResp.status}: ${errTxt.slice(0, 200)}`);
-        }
-        if (!anthropicResp.body) throw new Error("Anthropic empty body");
+          current = await callClaude(stage.prompt, current, upstreamSignal);
+          stagesCompleted++;
 
-        const reader = anthropicResp.body.getReader();
-        const decoder = new TextDecoder();
-        let buf = "";
-        let accumulated = "";
-        let lastProgressAt = 0;
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buf += decoder.decode(value, { stream: true });
-          let nlIdx: number;
-          while ((nlIdx = buf.indexOf("\n")) !== -1) {
-            const line = buf.slice(0, nlIdx).trim();
-            buf = buf.slice(nlIdx + 1);
-            if (!line.startsWith("data:")) continue;
-            const payload = line.slice(5).trim();
-            if (!payload || payload === "[DONE]") continue;
-            try {
-              const ev = JSON.parse(payload);
-              if (ev.type === "content_block_delta" && ev.delta?.type === "text_delta" && ev.delta?.text) {
-                accumulated += ev.delta.text;
-                // Send progress heartbeat every 500 chars to keep connection alive
-                if (accumulated.length - lastProgressAt >= 500) {
-                  lastProgressAt = accumulated.length;
-                  send("progress", { chars: accumulated.length });
-                }
-              }
-            } catch { /* ignore parse errors */ }
-          }
+          const words = wordCount(current);
+          send("stage_done", { stage: i + 1, label: stage.label, words });
         }
 
-        const final_words = wordCount(accumulated);
-        send("stage_done", { stage: 1, label: "Rewrite complete", words: final_words });
+        const final_words = wordCount(current);
         send("done", {
-          humanised: accumulated,
-          stages_completed: 1,
+          humanised: current,
+          stages_completed: stagesCompleted,
           original_words,
           final_words,
           provider: "claude-sonnet",
-          version: "v10",
+          version: "v12",
         });
       } catch (e: unknown) {
-        const msg = (e instanceof Error ? e.message : String(e));
+        const msg = e instanceof Error ? e.message : String(e);
         if (!msg.includes("abort") && !msg.includes("cancel")) {
-          console.error("[czar-humanise v10] error:", msg);
+          console.error("[czar-humanise v12] error:", msg);
         }
         send("done", {
-          humanised: text,
-          stages_completed: 0,
+          humanised: stagesCompleted > 0 ? current : text,
+          stages_completed: stagesCompleted,
           original_words,
-          final_words: original_words,
+          final_words: wordCount(current),
           provider: "claude-sonnet",
-          version: "v10",
+          version: "v12",
           error: msg.slice(0, 200),
         });
       } finally {
