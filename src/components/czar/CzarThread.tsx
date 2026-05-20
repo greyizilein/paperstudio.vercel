@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, memo } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
-import { Copy, RotateCw, Download, ChevronDown, Brain, FileDown, Eye, Wand2, Pencil, Check, X } from "lucide-react";
+import { Copy, RotateCw, Download, ChevronDown, Brain, Wand2 } from "lucide-react";
 import type { CzarAttachment } from "./CzarComposer";
 import type { CzarMessage } from "@/pages/Czar";
 import { toast } from "@/hooks/use-toast";
@@ -14,10 +14,6 @@ import { CzarFollowups } from "./CzarFollowups";
 import { CzarClarifyCard, extractClarifySpec, type ClarifySpec } from "./CzarClarifyCard";
 import { CzarNoteCard, extractNotes } from "./CzarNoteCard";
 import { CzarPlanCard, extractPlanSpec, type PlanSpec } from "./CzarPlanCard";
-import { FeedbackCard } from "./FeedbackCard";
-import type { FeedbackItem } from "./FeedbackCard";
-import { DiffCard } from "./DiffCard";
-import { computeParaDiff } from "@/lib/diffUtils";
 
 /** Extracts `[CZAR_FIGPICK]{json}[/CZAR_FIGPICK]` blocks. JSON shape:
  *  { title?: string, tables?: {id,label}[], figures?: {id,label}[] }
@@ -89,18 +85,8 @@ interface Props {
   onApprovePlan?: (content: string) => void;
   /** Show inline animated quill caret while streaming deliverables. */
   showQuillCaret?: boolean;
-  /** Called when the user downloads a corrected doc from the pipeline. */
-  onDownloadCorrected?: (documentId: string, fmt: "docx" | "pdf") => void;
-  /** Called when the user clicks "Open preview" on a correction message. */
-  onOpenPreview?: (documentId: string, filename?: string) => void;
   /** Called when the user clicks the Humanise button on an assistant message. */
   onHumanise?: (msgId: string, content: string) => void;
-  /** Called when the user clicks Apply in a FeedbackCard. */
-  onApplyFeedback?: (msgId: string, selected: FeedbackItem[], sourcePath?: string) => void;
-  /** Called when the user accepts a DiffCard. */
-  onAcceptDiff?: (msgId: string) => void;
-  /** Called when the user dismisses a DiffCard. */
-  onDismissDiff?: (msgId: string) => void;
 }
 
 function countWords(s: string): number {
@@ -287,24 +273,12 @@ export function CzarThread({
   mode,
   onApprovePlan,
   showQuillCaret = true,
-  onDownloadCorrected,
-  onOpenPreview,
   onHumanise,
-  onApplyFeedback,
-  onAcceptDiff,
-  onDismissDiff,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const lastIdRef = useRef<string | null>(null);
   const [pinnedToBottom, setPinnedToBottom] = useState(true);
-  // Inline edit state: which message is being edited, and the current edit text.
-  const [editingMsgId, setEditingMsgId] = useState<string | null>(null);
-  const [editText, setEditText] = useState("");
-  const [editDiff, setEditDiff] = useState<ReturnType<typeof computeParaDiff> | null>(null);
-  const [editOriginal, setEditOriginal] = useState<string>("");
-  // Track which FeedbackCard messages are in "applying" state.
-  const [applyingMsgIds, setApplyingMsgIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     const el = containerRef.current;
@@ -502,40 +476,14 @@ export function CzarThread({
                     </>
                   )}
                 </Menu>
-                {/* Corrected document download — only on correction-pipeline messages.
-                    Single one-click .docx download with highlighted changes baked in. */}
-                {m.correctionDocId && onDownloadCorrected && (
-                  <>
-                    {onOpenPreview && (
-                      <button
-                        onClick={() => onOpenPreview(m.correctionDocId!, m.correctionFilename)}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium hover:opacity-90 transition-opacity"
-                        style={{ background: "var(--czar-surface)", border: "1px solid var(--czar-border)", color: "var(--czar-text-dim)" }}
-                        title="Open the live document preview with highlighted edits"
-                      >
-                        <Eye size={12} /> Open preview
-                      </button>
-                    )}
-                    <button
-                      onClick={() => onDownloadCorrected(m.correctionDocId!, "docx")}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold hover:opacity-90 transition-opacity"
-                      style={{ background: "var(--czar-accent)", color: "var(--czar-accent-fg)" }}
-                      title="Download the corrected document (.docx) with highlighted changes"
-                    >
-                      <FileDown size={12} /> Download corrected .docx
-                    </button>
-                  </>
-                )}
-                {!m.correctionDocId && (
-                  <button
-                    onClick={() => onDownload?.(m.content, "docx")}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium hover:opacity-90 transition-opacity"
-                    style={{ background: mode === "plan" && deliverable && onApprovePlan ? "var(--czar-surface)" : "var(--czar-accent)", border: mode === "plan" && deliverable && onApprovePlan ? "1px solid var(--czar-border)" : undefined, color: mode === "plan" && deliverable && onApprovePlan ? "var(--czar-text-dim)" : "var(--czar-accent-fg)" }}
-                    title="Download as Word document"
-                  >
-                    <Download size={12} /> Download
-                  </button>
-                )}
+                <button
+                  onClick={() => onDownload?.(m.content, "docx")}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium hover:opacity-90 transition-opacity"
+                  style={{ background: mode === "plan" && deliverable && onApprovePlan ? "var(--czar-surface)" : "var(--czar-accent)", border: mode === "plan" && deliverable && onApprovePlan ? "1px solid var(--czar-border)" : undefined, color: mode === "plan" && deliverable && onApprovePlan ? "var(--czar-text-dim)" : "var(--czar-accent-fg)" }}
+                  title="Download as Word document"
+                >
+                  <Download size={12} /> Download
+                </button>
                 {onReattach && (
                   <button
                     onClick={onReattach}
@@ -592,37 +540,13 @@ export function CzarThread({
                       ))}
                     </div>
                   )}
-                  {m.feedbackItems && !m.diffData && (
-                    <div className="px-2 sm:px-3 lg:px-4">
-                      <FeedbackCard
-                        items={m.feedbackItems}
-                        applying={applyingMsgIds.has(m.id)}
-                        onApply={(selected) => {
-                          if (!onApplyFeedback) return;
-                          setApplyingMsgIds((prev) => new Set(prev).add(m.id));
-                          onApplyFeedback(m.id, selected, m.feedbackSourcePath);
-                        }}
-                      />
-                    </div>
-                  )}
-                  {m.diffData && (
-                    <div className="px-2 sm:px-3 lg:px-4">
-                      <DiffCard
-                        diff={m.diffData}
-                        onAccept={() => onAcceptDiff?.(m.id)}
-                        onDismiss={() => onDismissDiff?.(m.id)}
-                      />
-                    </div>
-                  )}
-                  {!m.feedbackItems && !m.diffData && (
-                    <div className="czar-paper px-4 sm:px-6 lg:px-8 py-2">
-                      <article className={`czar-prose czar-paper-prose max-w-none ${m.streaming ? (showQuillCaret ? "czar-stream-quill" : "czar-stream-caret") : ""}`}>
-                        <LiveMarkdown content={rest || m.content} streaming={m.streaming} />
-                        {m.streaming && showQuillCaret && <CzarQuillCaret streaming size={18} />}
-                      </article>
-                    </div>
-                  )}
-                  {!m.feedbackItems && !m.diffData && largeActionBar && (
+                  <div className="czar-paper px-4 sm:px-6 lg:px-8 py-2">
+                    <article className={`czar-prose czar-paper-prose max-w-none ${m.streaming ? (showQuillCaret ? "czar-stream-quill" : "czar-stream-caret") : ""}`}>
+                      <LiveMarkdown content={rest || m.content} streaming={m.streaming} />
+                      {m.streaming && showQuillCaret && <CzarQuillCaret streaming size={18} />}
+                    </article>
+                  </div>
+                  {largeActionBar && (
                     <div className="px-2 sm:px-3 lg:px-4">{largeActionBar}</div>
                   )}
                   {m.followups && m.followups.length > 0 && !m.streaming && onFollowupPick && (
@@ -637,8 +561,6 @@ export function CzarThread({
             // ── Non-deliverable: bubble-less Google-style flow with a thin
             // accent rail in the left gutter. No avatar, no bubble — the AI
             // text reads as a quiet column on the page. User bubbles unchanged. ──
-            const isEditing = editingMsgId === m.id;
-
             return (
               <div key={m.id} className="czar-msg-in czar-asst-flat flex gap-3 group">
                 <div className="czar-asst-rail shrink-0 mt-1.5" aria-hidden="true" />
@@ -646,23 +568,7 @@ export function CzarThread({
                   <div className="flex items-center gap-1.5 mb-1.5" style={{ color: "var(--czar-text-faint)" }}>
                     <CzarIcon size={12} streaming={m.streaming} />
                     <span className="text-[10.5px] uppercase tracking-[0.12em] font-medium">CZAR</span>
-                    {/* Inline edit trigger — appears on hover for non-streaming messages with content */}
-                    {!m.streaming && m.content && !m.feedbackItems && !m.diffData && (
-                      <button
-                        onClick={() => {
-                          setEditingMsgId(m.id);
-                          setEditText(m.content);
-                          setEditOriginal(m.content);
-                          setEditDiff(null);
-                        }}
-                        className="ml-auto opacity-0 group-hover:opacity-100 transition-opacity inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded hover:opacity-80"
-                        style={{ color: "var(--czar-text-dim)", border: "1px solid var(--czar-border)" }}
-                        title="Edit this message"
-                      >
-                        <Pencil size={9} /> Edit
-                      </button>
-                    )}
-                  </div>
+                    </div>
                   {m.toolCalls && m.toolCalls.length > 0 && (
                     <div className="mb-2">
                       {m.toolCalls.map((c) => <CzarToolCard key={c.id} call={c} />)}
@@ -677,79 +583,7 @@ export function CzarThread({
                     </div>
                   )}
 
-                  {/* FeedbackCard — shown when message has parsed supervisor feedback items */}
-                  {m.feedbackItems && !m.diffData && (
-                    <FeedbackCard
-                      items={m.feedbackItems}
-                      applying={applyingMsgIds.has(m.id)}
-                      onApply={(selected) => {
-                        if (!onApplyFeedback) return;
-                        setApplyingMsgIds((prev) => new Set(prev).add(m.id));
-                        onApplyFeedback(m.id, selected, m.feedbackSourcePath);
-                      }}
-                    />
-                  )}
-
-                  {/* DiffCard — shown when message has computed paragraph diff */}
-                  {m.diffData && (
-                    <DiffCard
-                      diff={m.diffData}
-                      onAccept={() => onAcceptDiff?.(m.id)}
-                      onDismiss={() => onDismissDiff?.(m.id)}
-                    />
-                  )}
-
-                  {/* Inline edit UI */}
-                  {isEditing && !editDiff && (
-                    <div className="mt-1">
-                      <textarea
-                        value={editText}
-                        onChange={(e) => setEditText(e.target.value)}
-                        rows={Math.max(4, editText.split("\n").length)}
-                        className="w-full rounded-lg p-3 text-[13px] leading-relaxed resize-y font-mono"
-                        style={{ background: "var(--czar-bg)", border: "1px solid var(--czar-border)", color: "var(--czar-text)", outline: "none" }}
-                        autoFocus
-                      />
-                      <div className="flex items-center gap-2 mt-2">
-                        <button
-                          onClick={() => {
-                            const diff = computeParaDiff(editOriginal, editText);
-                            setEditDiff(diff);
-                          }}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold hover:opacity-90"
-                          style={{ background: "var(--czar-accent)", color: "var(--czar-accent-fg)" }}
-                        >
-                          <Check size={12} /> Preview changes
-                        </button>
-                        <button
-                          onClick={() => { setEditingMsgId(null); setEditText(""); setEditDiff(null); }}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] hover:opacity-80"
-                          style={{ background: "var(--czar-surface)", border: "1px solid var(--czar-border)", color: "var(--czar-text-dim)" }}
-                        >
-                          <X size={12} /> Cancel
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                  {isEditing && editDiff && (
-                    <DiffCard
-                      diff={editDiff}
-                      onAccept={() => {
-                        // Accepted — fire onAcceptDiff with the new text
-                        onAcceptDiff?.(m.id);
-                        // Locally: replace the message content in the thread via a side-effect
-                        // The parent handles this via onAcceptDiff. Close edit mode.
-                        setEditingMsgId(null);
-                        setEditText("");
-                        setEditDiff(null);
-                        toast({ title: "Edit applied" });
-                      }}
-                      onDismiss={() => { setEditDiff(null); }}
-                    />
-                  )}
-
-                  {/* Regular content — hidden when FeedbackCard or DiffCard or inline edit is active */}
-                  {!m.feedbackItems && !m.diffData && !isEditing && (
+                  {(
                     planSpec ? (
                       <CzarPlanCard
                         spec={planSpec}
@@ -779,8 +613,8 @@ export function CzarThread({
                       </div>
                     ) : null
                   )}
-                  {!m.feedbackItems && !m.diffData && !isEditing && largeActionBar}
-                  {!m.feedbackItems && !m.diffData && !isEditing && m.content && !m.streaming && countWords(m.content) < 40 && (
+                  {largeActionBar}
+                  {m.content && !m.streaming && countWords(m.content) < 40 && (
                     <div className="flex items-center gap-2 mt-2" style={{ color: "var(--czar-text-faint)" }}>
                       <button
                         onClick={() => { navigator.clipboard.writeText(m.content); toast({ title: "Copied" }); }}

@@ -1,5 +1,5 @@
 import { useEffect, useImperativeHandle, useRef, useState, forwardRef } from "react";
-import { Plus, Square, ScrollText, MessageSquare, Hammer, ChevronDown, UserRoundCheck, ArrowUp, FileEdit } from "lucide-react";
+import { Plus, Square, ScrollText, MessageSquare, Hammer, ChevronDown, UserRoundCheck, ArrowUp } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
@@ -20,17 +20,8 @@ export interface CzarAttachment {
 
 export type CzarMode = "chat" | "plan" | "build" | "agent";
 
-// Keywords that suggest the user wants to make edits inside the document.
-const EDIT_KEYWORDS = /\b(fix|correct|revise|edit|change|update|improve|rewrite|modify|amend|adjust|proofread|review|check|correct|grammar|spell|annotate|redline|mark)\b/i;
-
 // Keywords that indicate the attached document contains supervisor/reviewer feedback.
 const FEEDBACK_KEYWORDS = /\b(feedback|correction|tracked.?change|supervisor|comment|annotation|revision|reviewer|mark.?up|redline)\b/i;
-
-// File extensions/mimes that qualify for the doc-correction pipeline.
-function isDocFile(a: CzarAttachment): boolean {
-  const lower = a.filename.toLowerCase();
-  return lower.endsWith(".docx") || lower.endsWith(".pdf") || a.mime.includes("officedocument.wordprocessingml") || a.mime === "application/pdf";
-}
 
 interface Props {
   onSend: (text: string, attachments: CzarAttachment[]) => void;
@@ -43,11 +34,6 @@ interface Props {
   onModeChange?: (m: CzarMode) => void;
   subscription?: any;
   onUpgrade?: () => void;
-  /** True when the user has explicitly toggled "Edit in document". */
-  docEditMode?: boolean;
-  onDocEditModeChange?: (v: boolean) => void;
-  /** Called instead of onSend when smart-detection fires (doc + edit keywords). */
-  onSmartDocEdit?: (text: string, attachments: CzarAttachment[]) => void;
   /** Called when a .docx with feedback/corrections keywords is submitted — triggers supervisor feedback parsing. */
   onSupervisorFeedback?: (text: string, attachments: CzarAttachment[]) => void;
 }
@@ -71,7 +57,7 @@ const MODE_META: Record<CzarMode, { label: string; Icon: typeof ScrollText; hint
 };
 
 export const CzarComposer = forwardRef<CzarComposerHandle, Props>(function CzarComposer(
-  { onSend, onStop, disabled, streaming, thinkingMode, onToggleThinking, mode = "chat", onModeChange, subscription, onUpgrade, docEditMode = false, onDocEditModeChange, onSmartDocEdit, onSupervisorFeedback },
+  { onSend, onStop, disabled, streaming, thinkingMode, onToggleThinking, mode = "chat", onModeChange, subscription, onUpgrade, onSupervisorFeedback },
   ref,
 ) {
   const { user } = useAuth();
@@ -135,21 +121,9 @@ export const CzarComposer = forwardRef<CzarComposerHandle, Props>(function CzarC
     const payloadText = text.trim();
     const payloadAttachments = attachments.filter((a) => a.status === "ready");
 
-    // Supervisor feedback detection: .docx + feedback/corrections keywords → parse inline.
+    // Supervisor feedback detection: .docx + feedback/corrections keywords → open correction modal.
     if (onSupervisorFeedback && payloadAttachments.some((a) => a.filename.toLowerCase().endsWith(".docx") && a.status === "ready") && FEEDBACK_KEYWORDS.test(payloadText)) {
       onSupervisorFeedback(payloadText, payloadAttachments);
-      requestAnimationFrame(() => {
-        setText("");
-        setAttachments([]);
-        if (taRef.current) taRef.current.style.height = "auto";
-      });
-      return;
-    }
-
-    // Smart detection: doc file + edit-like keywords → offer doc correction mode
-    // Only fires when the user hasn't already opted in explicitly (docEditMode).
-    if (!docEditMode && onSmartDocEdit && payloadAttachments.some(isDocFile) && EDIT_KEYWORDS.test(payloadText)) {
-      onSmartDocEdit(payloadText, payloadAttachments);
       requestAnimationFrame(() => {
         setText("");
         setAttachments([]);
@@ -412,34 +386,6 @@ export const CzarComposer = forwardRef<CzarComposerHandle, Props>(function CzarC
                   </button>
                 )}
 
-                {/* Edit in document toggle — always visible; requires a doc file to activate */}
-                {onDocEditModeChange && (
-                  <button
-                    onClick={() => {
-                      if (!attachments.some(isDocFile)) {
-                        toast({ title: "Attach a document first", description: "Upload a .docx or .pdf to enable in-document editing." });
-                        return;
-                      }
-                      onDocEditModeChange(!docEditMode);
-                    }}
-                    className="flex items-center gap-1.5 h-8 px-3 rounded-full text-[11px] font-semibold transition-all shrink-0"
-                    style={{
-                      color: docEditMode ? "var(--czar-accent-fg)" : "var(--czar-text-dim)",
-                      background: docEditMode ? "var(--czar-accent)" : "var(--czar-bg)",
-                      border: docEditMode
-                        ? "1.5px solid var(--czar-accent)"
-                        : "1px solid var(--czar-border)",
-                      boxShadow: docEditMode
-                        ? "0 0 12px color-mix(in srgb, var(--czar-accent) 35%, transparent)"
-                        : undefined,
-                      opacity: attachments.some(isDocFile) ? 1 : 0.45,
-                    }}
-                    title={attachments.some(isDocFile) ? "Apply corrections directly inside the uploaded document" : "Attach a .docx or .pdf to enable in-document editing"}
-                  >
-                    <FileEdit size={12} />
-                    Edit in doc
-                  </button>
-                )}
               </div>
 
               {/* Send / Stop — ✦ dark circle */}

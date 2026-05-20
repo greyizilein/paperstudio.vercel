@@ -28,8 +28,12 @@ interface FeedbackItem {
 interface Props {
   open: boolean;
   onClose: () => void;
-  chapter: Chapter;
-  project: Project;
+  chapter?: Chapter;
+  project?: Project;
+  /** Plain text of the document to edit — replaces chapter.content when provided (CZAR context). */
+  documentText?: string;
+  /** Pre-loaded feedback items — skips to "confirm" step when provided. */
+  initialItems?: FeedbackItem[];
   onApplied: (revisedContent: string, itemsAppliedCount: number) => void;
 }
 
@@ -119,11 +123,13 @@ function StepBar({ step }: { step: Step }) {
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export function SupervisorFeedbackModal({ open, onClose, chapter, project, onApplied }: Props) {
-  const [step, setStep] = useState<Step>("upload");
+export function SupervisorFeedbackModal({ open, onClose, chapter, project, documentText, initialItems, onApplied }: Props) {
+  const [step, setStep] = useState<Step>(() => initialItems && initialItems.length > 0 ? "confirm" : "upload");
   const [parsing, setParsing] = useState(false);
   const [parseProgress, setParseProgress] = useState(0);
-  const [items, setItems] = useState<FeedbackItem[]>([]);
+  const [items, setItems] = useState<FeedbackItem[]>(() =>
+    (initialItems || []).map((it) => ({ ...it, selected: true, override: "", scope: "local" as const }))
+  );
   const [pasted, setPasted] = useState("");
   const [applying, setApplying] = useState(false);
   const [applyProgress, setApplyProgress] = useState(0);
@@ -246,18 +252,18 @@ export function SupervisorFeedbackModal({ open, onClose, chapter, project, onApp
           headers: await authedHeaders(),
           body: JSON.stringify({
             chapter: {
-              title: chapter.title,
-              type: chapter.type,
-              content: chapter.content,
-              word_count_actual: chapter.word_count_actual,
-              word_count_target: chapter.word_count_target,
+              title: chapter?.title ?? "Document",
+              type: chapter?.type ?? "general",
+              content: documentText ?? chapter?.content ?? "",
+              word_count_actual: chapter?.word_count_actual,
+              word_count_target: chapter?.word_count_target,
             },
             project: {
-              title: project.title,
-              degree: project.degree,
-              field_of_study: project.field_of_study,
-              citation_style: project.citation_style,
-              language_style: project.language_style,
+              title: project?.title ?? "",
+              degree: project?.degree ?? "",
+              field_of_study: project?.field_of_study ?? "",
+              citation_style: project?.citation_style ?? "Harvard",
+              language_style: project?.language_style ?? "UK",
             },
             feedbackItems: selected.map((s) => ({
               id: s.id,
@@ -342,7 +348,7 @@ export function SupervisorFeedbackModal({ open, onClose, chapter, project, onApp
             <div className="flex items-start justify-between mb-4">
               <div>
                 <h2 className="text-[15px] font-black text-foreground">Apply supervisor corrections</h2>
-                <p className="text-[11px] text-muted-foreground mt-0.5 truncate max-w-[460px]">{chapter.title}</p>
+                <p className="text-[11px] text-muted-foreground mt-0.5 truncate max-w-[460px]">{chapter?.title || "Uploaded document"}</p>
               </div>
               <button onClick={handleClose} className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-secondary rounded-lg transition-colors ml-2 flex-shrink-0">
                 <X size={15} />
@@ -546,7 +552,7 @@ export function SupervisorFeedbackModal({ open, onClose, chapter, project, onApp
                 <div className="text-center">
                   <p className="text-[14px] font-bold text-foreground">{applyStatus}</p>
                   <p className="text-[12px] text-muted-foreground mt-1">
-                    Applying {selectedCount} correction{selectedCount === 1 ? "" : "s"} to "{chapter.title}"
+                    Applying {selectedCount} correction{selectedCount === 1 ? "" : "s"} to "{chapter?.title || "your document"}"
                   </p>
                 </div>
 
