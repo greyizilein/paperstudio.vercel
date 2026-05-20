@@ -21,7 +21,6 @@ import { CzarAttachModal, type AttachSelection } from "@/components/czar/CzarAtt
 import { CzarAgentRunCard } from "@/components/czar/CzarAgentRunCard";
 import type { CzarToolCallState } from "@/components/czar/CzarToolCard";
 import { toolEventToState } from "@/components/czar/CzarToolCard";
-import { authedHeaders } from "@/lib/edgeFetch";
 
 export interface CzarMessage {
   id: string;
@@ -107,8 +106,6 @@ export default function Czar() {
   const [mode, setMode] = useState<"chat" | "plan" | "build" | "agent">("chat");
   // Supervisor feedback modal state
   const [showSupervisorModal, setShowSupervisorModal] = useState(false);
-  const [supervisorItems, setSupervisorItems] = useState<any[]>([]);
-  const [supervisorDocText, setSupervisorDocText] = useState<string>("");
   const [settings, setSettings] = useState<Record<string, any>>(DEFAULT_SETTINGS);
   const [subscription, setSubscription] = useState<any>(null);
   const [showImageAck, setShowImageAck] = useState(false);
@@ -539,75 +536,6 @@ export default function Czar() {
     abortRef.current?.abort();
     setStreaming(false);
   };
-
-  // ── Supervisor feedback flow (CZAR) ──────────────────────────────────────
-  const handleSupervisorFeedback = useCallback(async (text: string, attachments: CzarAttachment[]) => {
-    const docAtt = attachments.find((a) => a.filename.toLowerCase().endsWith(".docx") && a.status === "ready");
-    if (!docAtt) return;
-
-    const userTempId = crypto.randomUUID();
-    const asstTempId = crypto.randomUUID();
-    setMessages((prev) => [
-      ...prev,
-      { id: userTempId, role: "user", content: text, attachments },
-      { id: asstTempId, role: "assistant", content: "Parsing supervisor feedback…", streaming: true },
-    ]);
-    setStreaming(true);
-
-    try {
-      const { data: fileData, error: dlErr } = await supabase.storage.from("czar-uploads").download(docAtt.path);
-      if (dlErr || !fileData) throw new Error("Could not read the uploaded file.");
-
-      const buf = await fileData.arrayBuffer();
-      const bytes = new Uint8Array(buf);
-      let bin = "";
-      for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
-      const docxBase64 = btoa(bin);
-
-      const resp = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/parse-supervisor-feedback`,
-        {
-          method: "POST",
-          headers: await authedHeaders(),
-          body: JSON.stringify({ docxBase64, filename: docAtt.filename }),
-        }
-      );
-      const data = await resp.json();
-      if (!resp.ok) throw new Error(data.error || "Could not parse feedback");
-
-      const items = (data.items || []).map((it: any) => ({
-        ...it, selected: true, override: "", scope: "local" as const,
-      }));
-      const cleanText: string = data.cleanText || "";
-
-      if (items.length === 0) {
-        setMessages((prev) => prev.map((m) =>
-          m.id === asstTempId
-            ? { ...m, streaming: false, content: "No tracked changes or comments were found in this document. Paste feedback comments below and I'll apply them." }
-            : m
-        ));
-        return;
-      }
-
-      setMessages((prev) => prev.map((m) =>
-        m.id === asstTempId
-          ? { ...m, streaming: false, content: `Found ${items.length} feedback item${items.length === 1 ? "" : "s"} — opening correction panel…` }
-          : m
-      ));
-      setSupervisorItems(items);
-      setSupervisorDocText(cleanText);
-      setShowSupervisorModal(true);
-    } catch (e: any) {
-      toast({ title: "Feedback parse failed", description: e?.message || "Unknown error", variant: "destructive" });
-      setMessages((prev) => prev.map((m) =>
-        m.id === asstTempId
-          ? { ...m, streaming: false, content: `⚠️ ${e?.message || "Could not parse feedback"}` }
-          : m
-      ));
-    } finally {
-      setStreaming(false);
-    }
-  }, []);
 
   // Remove old apply/download handlers — handled by SupervisorFeedbackModal.
   const handleCzarHumanise = (msgId: string, content: string) => {
@@ -1136,7 +1064,7 @@ export default function Czar() {
               onModeChange={setMode}
               subscription={isAdmin ? { unlimited: true } : subscription}
               onUpgrade={isAdmin ? undefined : () => setShowUpgrade(true)}
-              onSupervisorFeedback={handleSupervisorFeedback}
+              onOpenCorrections={() => setShowSupervisorModal(true)}
             />
           </div>
         </div>
@@ -1146,8 +1074,6 @@ export default function Czar() {
         <SupervisorFeedbackModal
           open={showSupervisorModal}
           onClose={() => setShowSupervisorModal(false)}
-          documentText={supervisorDocText || undefined}
-          initialItems={supervisorItems}
           onApplied={(revisedContent, count) => {
             setShowSupervisorModal(false);
             const msgId = crypto.randomUUID();
