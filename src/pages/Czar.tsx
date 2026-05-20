@@ -1,10 +1,10 @@
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { saveAs } from "file-saver";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { CzarSidebar } from "@/components/czar/CzarSidebar";
 import { CzarTabBar } from "@/components/czar/CzarTabBar";
-import { CzarThread } from "@/components/czar/CzarThread";
+import { CzarDocumentView } from "@/components/czar/CzarDocumentView";
 import { CzarComposer, CzarComposerHandle, CzarAttachment } from "@/components/czar/CzarComposer";
 import { CzarSettingsDrawer } from "@/components/czar/CzarSettingsDrawer";
 import { CzarUpgradeModal } from "@/components/czar/CzarUpgradeModal";
@@ -12,7 +12,7 @@ import { streamCzarChat } from "@/lib/czarStream";
 import { SupervisorFeedbackModal } from "@/components/writer/SupervisorFeedbackModal";
 import { applyTheme, DEFAULT_THEME_ID } from "@/lib/czarThemes";
 import { toast } from "@/hooks/use-toast";
-import { Settings, Pencil, Wand2, X, Check, StopCircle, Loader2 } from "lucide-react";
+import { Settings, Pencil, Wand2, X, Check, StopCircle, Loader2, FileEdit, Download } from "lucide-react";
 import { computeParaDiff, type DiffParagraph } from "@/lib/diffUtils";
 import { cn } from "@/lib/utils";
 import { CzarIcon } from "@/components/icons/CzarIcon";
@@ -21,6 +21,7 @@ import { CzarAttachModal, type AttachSelection } from "@/components/czar/CzarAtt
 import { CzarAgentRunCard } from "@/components/czar/CzarAgentRunCard";
 import type { CzarToolCallState } from "@/components/czar/CzarToolCard";
 import { toolEventToState } from "@/components/czar/CzarToolCard";
+import { authedHeaders } from "@/lib/edgeFetch";
 
 export interface CzarMessage {
   id: string;
@@ -106,6 +107,11 @@ export default function Czar() {
   const [mode, setMode] = useState<"chat" | "plan" | "build" | "agent">("chat");
   // Supervisor feedback modal state
   const [showSupervisorModal, setShowSupervisorModal] = useState(false);
+  // Document-view state
+  const [documentDiff, setDocumentDiff] = useState<DiffParagraph[] | null>(null);
+  const [isDocEditing, setIsDocEditing] = useState(false);
+  const [inlineEditAction, setInlineEditAction] = useState<string | null>(null);
+  const docSnapshotRef = useRef("");
   const [settings, setSettings] = useState<Record<string, any>>(DEFAULT_SETTINGS);
   const [subscription, setSubscription] = useState<any>(null);
   const [showImageAck, setShowImageAck] = useState(false);
@@ -134,6 +140,21 @@ export default function Czar() {
   const abortRef = useRef<AbortController | null>(null);
   const composerRef = useRef<CzarComposerHandle>(null);
   const isAdmin = (user?.email || "").toLowerCase() === "grey.izilein@gmail.com";
+
+  // Document content = last assistant message (document-centric view)
+  const documentContent = useMemo(() => {
+    const last = [...messages].reverse().find((m) => m.role === "assistant");
+    return last?.content ?? "";
+  }, [messages]);
+
+  const activeAssistant = useMemo(() => {
+    return [...messages].reverse().find((m) => m.role === "assistant");
+  }, [messages]);
+
+  const wordCount = useMemo(() => {
+    if (!documentContent.trim()) return 0;
+    return documentContent.trim().split(/\s+/).filter(Boolean).length;
+  }, [documentContent]);
 
   // Derive a friendly first name from display name → email prefix
   const displayName: string = (() => {
@@ -331,6 +352,11 @@ export default function Czar() {
     if (!user || streaming) return;
     const ready = attachments.filter((a) => a.status === "ready");
 
+    // Snapshot current document for diff computation after stream ends
+    docSnapshotRef.current = [...messages].reverse().find((m) => m.role === "assistant")?.content ?? "";
+    // Clear any existing diff when starting a new request
+    setDocumentDiff(null);
+
     // Optimistic user bubble
     const userTempId = `u-${Date.now()}`;
     const asstTempId = `a-${Date.now()}`;
@@ -360,7 +386,7 @@ export default function Czar() {
     }
 
     try {
-      await streamCzarChat(
+      const fullStreamText = await streamCzarChat(
         {
           conversation_id: conversationId,
           user_message: text,
@@ -521,6 +547,15 @@ export default function Czar() {
         abortRef.current.signal,
       );
 
+      // Compute tracked-changes diff when the AI modified an existing document
+      if (docSnapshotRef.current && fullStreamText && docSnapshotRef.current !== fullStreamText) {
+        const diff = computeParaDiff(docSnapshotRef.current, fullStreamText);
+        if (diff.some((p) => p.type !== "unchanged")) {
+          setDocumentDiff(diff);
+        }
+      }
+      docSnapshotRef.current = "";
+
     } catch (e: any) {
       if (e?.name !== "AbortError") {
         toast({ title: "Send failed", description: e?.message || "Unknown error", variant: "destructive" });
@@ -530,16 +565,69 @@ export default function Czar() {
       setStreaming(false);
       abortRef.current = null;
     }
-  }, [user, streaming, conversationId, thinkingMode, mode, settings, loadSubscription, loadConversations, isAdmin]);
+  }, [user, streaming, conversationId, thinkingMode, mode, settings, loadSubscription, loadConversations, isAdmin, messages]);
 
   const stopStream = () => {
     abortRef.current?.abort();
     setStreaming(false);
   };
 
+  // ── Inline edit (ContextualToolbar action) ────────────────────────────────
+  const handleInlineEdit = useCallback(async (action: string, selectedText: string) => {
+    if (!selectedText.trim() || inlineEditAction) return;
+    setInlineEditAction(action);
+    try {
+      const resp = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/inline-edit`,
+        {
+          method: "POST",
+          headers: await authedHeaders(),
+          body: JSON.stringify({ text: selectedText, action }),
+        }
+      );
+      if (!resp.ok || !resp.body) throw new Error(`inline-edit failed (${resp.status})`);
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = "";
+      let replacement = "";
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const lines = buf.split("\n");
+        buf = lines.pop() || "";
+        for (const line of lines) {
+          if (!line.startsWith("data:")) continue;
+          const data = line.slice(5).trim();
+          if (data === "[DONE]") continue;
+          try {
+            const json = JSON.parse(data);
+            replacement += json.choices?.[0]?.delta?.content || "";
+          } catch { /* skip */ }
+        }
+      }
+      if (replacement.trim()) {
+        setMessages((prev) => {
+          const idx = [...prev].findLastIndex((m) => m.role === "assistant");
+          if (idx < 0) return prev;
+          return prev.map((m, i) =>
+            i === idx ? { ...m, content: m.content.replace(selectedText, replacement.trim()) } : m
+          );
+        });
+      }
+    } catch (e: any) {
+      toast({ title: "Edit failed", description: e?.message || "Unknown error", variant: "destructive" });
+    } finally {
+      setInlineEditAction(null);
+    }
+  }, [inlineEditAction]);
+
   // Remove old apply/download handlers — handled by SupervisorFeedbackModal.
-  const handleCzarHumanise = (msgId: string, content: string) => {
-    setCzarHumanise({ msgId, original: content });
+  const handleCzarHumanise = (msgId?: string, content?: string) => {
+    const id = msgId ?? activeAssistant?.id ?? "";
+    const text = content ?? documentContent;
+    if (!text) return;
+    setCzarHumanise({ msgId: id, original: text });
     setCzarHumanisedText(null);
     setCzarHumaniseDiff(null);
     setCzarHumaniseStages([]);
@@ -655,12 +743,19 @@ export default function Czar() {
 
   const handleApplyCzarHumanised = () => {
     if (!czarHumanisedText || !czarHumanise) return;
-    setMessages(prev => prev.map(m => m.id === czarHumanise.msgId ? { ...m, content: czarHumanisedText } : m));
+    setMessages((prev) => {
+      // Try to find by msgId first; fall back to updating the last assistant message
+      const byId = prev.findIndex((m) => m.id === czarHumanise.msgId);
+      if (byId >= 0) return prev.map((m, i) => i === byId ? { ...m, content: czarHumanisedText } : m);
+      const lastIdx = prev.findLastIndex((m) => m.role === "assistant");
+      if (lastIdx >= 0) return prev.map((m, i) => i === lastIdx ? { ...m, content: czarHumanisedText } : m);
+      return prev;
+    });
     setCzarHumanise(null);
     setCzarHumanisedText(null);
     setCzarHumaniseDiff(null);
     setCzarHumaniseStages([]);
-    toast({ title: "Message humanised and applied." });
+    toast({ title: "Document humanised and applied." });
   };
 
   const regenerate = (msgId: string) => {
@@ -942,9 +1037,12 @@ export default function Czar() {
           onNew={newChat}
         />
 
-        {/* Minimal floating header */}
-        <div className="relative flex items-center justify-between px-5 py-4 shrink-0">
-          {/* Left: avatar (mobile opens drawer; desktop toggles collapse) */}
+        {/* ── Top header bar ── */}
+        <div
+          className="h-11 flex items-center justify-between px-4 shrink-0"
+          style={{ borderBottom: `1px solid var(--czar-border)`, background: "var(--czar-bg)" }}
+        >
+          {/* Left: avatar/menu */}
           <button
             onClick={() => {
               if (window.matchMedia("(min-width: 1024px)").matches) {
@@ -953,120 +1051,204 @@ export default function Czar() {
                 setShowSidebar((v) => !v);
               }
             }}
-            className="w-9 h-9 rounded-full flex items-center justify-center font-semibold text-[13px] hover:opacity-90 transition-opacity shrink-0"
+            className="w-8 h-8 rounded-full flex items-center justify-center font-semibold text-[12px] hover:opacity-90 transition-opacity shrink-0"
             style={{ background: "var(--czar-accent)", color: "var(--czar-accent-fg)" }}
             title="Menu"
             aria-label="Open menu"
           >
-            {displayName ? displayName[0].toUpperCase() : <CzarIcon size={15} />}
+            {displayName ? displayName[0].toUpperCase() : <CzarIcon size={14} />}
           </button>
 
-          {/* Right: new chat + settings */}
-          <div className="flex items-center gap-2">
+          {/* Centre: document title */}
+          <span
+            className="text-[13px] font-semibold truncate max-w-[45%] select-none"
+            style={{ color: "var(--czar-text)" }}
+          >
+            {activeConversation?.title || (messages.length === 0 ? `Hi ${displayName}` : "New document")}
+          </span>
+
+          {/* Right: new + settings */}
+          <div className="flex items-center gap-1.5">
             <button
               onClick={newChat}
-              className="w-9 h-9 rounded-full flex items-center justify-center hover:opacity-90 transition-opacity"
+              className="w-8 h-8 rounded-full flex items-center justify-center hover:opacity-90 transition-opacity"
               style={{ background: "color-mix(in srgb, var(--czar-text) 8%, transparent)", color: "var(--czar-text-dim)" }}
-              title="New chat"
-              aria-label="New chat"
+              title="New document"
+              aria-label="New document"
             >
-              <Pencil size={15} />
+              <Pencil size={14} />
             </button>
             <button
               onClick={() => setShowSettings(true)}
-              className="w-9 h-9 rounded-xl flex items-center justify-center hover:opacity-90 transition-opacity"
+              className="w-8 h-8 rounded-xl flex items-center justify-center hover:opacity-90 transition-opacity"
               style={{ background: "color-mix(in srgb, var(--czar-text) 8%, transparent)", color: "var(--czar-text-dim)" }}
               title="Settings"
               aria-label="Settings"
             >
-              <Settings size={16} />
+              <Settings size={15} />
             </button>
           </div>
         </div>
 
-        {/* Main content area */}
-        <div className="flex-1 min-w-0 min-h-0 flex flex-col">
-          {/* Chat column */}
-          <div className="flex-1 flex flex-col min-w-0 min-h-0">
-            <div className="flex-1 flex flex-col min-h-0 mx-auto w-full max-w-[820px]">
-
-              {/* Agent run card */}
-              {agentMsgId && (
-                <CzarAgentRunCard
-                  active={streaming}
-                  words={(() => {
-                    const m = messages.find((mm) => mm.id === agentMsgId);
-                    if (!m?.content) return 0;
-                    return m.content.trim().split(/\s+/).filter(Boolean).length;
-                  })()}
-                  files={(() => {
-                    const m = messages.find((mm) => mm.id !== agentMsgId && messages.indexOf(mm) === messages.findIndex((x) => x.id === agentMsgId) - 1);
-                    return m?.attachments?.length || 0;
-                  })()}
-                  imageJobs={Object.values(imageJobs).filter((s) => s === "loading").length}
-                  downloaded={agentDownloaded}
-                  onRedownload={() => {
-                    if (!attachContent) return;
-                    const sel = attachLastSel ?? { cover: true, references: true, appendix: false, images: true };
-                    void downloadContent(buildAugmentedContent(attachContent, sel));
-                  }}
-                />
-              )}
-
-              {/* Welcome state — shown when no messages and not streaming */}
-              {messages.length === 0 && !streaming ? (
-                <div className="flex-1 flex flex-col px-5 sm:px-7 pt-2 select-none animate-fade-in">
-                  <p className="text-[13px] sm:text-sm font-medium opacity-60 mb-1" style={{ color: "var(--czar-text)" }}>
-                    Hi {displayName}
-                  </p>
-                  <h1 className="text-[28px] sm:text-4xl font-bold leading-[1.1] tracking-tight max-w-[14ch]" style={{ color: "var(--czar-text)" }}>
-                    What's been on your mind lately?
-                  </h1>
-                </div>
-              ) : (
-                <CzarThread
-                  messages={messages}
-                  onRegenerate={regenerate}
-                  onDownload={requestDownload}
-                  onReattach={attachLastSel ? reopenAttach : undefined}
-                  showWordCount={!!settings.show_word_count}
-                  onFollowupPick={handleFollowupPick}
-                  onClarifyConfirm={handleClarifyConfirm}
-                  onClarifyReview={(_msgId, values) => {
-                    if (streaming) return;
-                    const summary = Object.entries(values)
-                      .filter(([, v]) => v !== "" && v != null && !(Array.isArray(v) && v.length === 0))
-                      .map(([k, v]) => `- ${k}: ${Array.isArray(v) ? v.join(", ") : v}`)
-                      .join("\n");
-                    sendMessage(
-                      `I'd like to review/adjust before approving. Current selections:\n${summary || "(none)"}\n\nWhat are my options here, and what do you recommend?`,
-                      [],
-                    );
-                  }}
-                  userName={displayName}
-                  mode={mode}
-                  onApprovePlan={handleApprovePlan}
-                  showQuillCaret={settings.show_quill_caret !== false}
-                  onHumanise={handleCzarHumanise}
-                />
+        {/* ── Document action strip ── */}
+        {documentContent && (
+          <div
+            className="h-10 flex items-center justify-between px-3 shrink-0"
+            style={{ borderBottom: `1px solid var(--czar-border)` }}
+          >
+            {/* Left: mode label + word count */}
+            <div className="flex items-center gap-3">
+              <span
+                className="text-[10px] font-bold uppercase tracking-widest select-none"
+                style={{ color: "var(--czar-text-faint)" }}
+              >
+                {mode === "agent" ? "Agent" : mode === "build" ? "Build" : mode === "plan" ? "Plan" : "Document"}
+              </span>
+              {settings.show_word_count && wordCount > 0 && (
+                <span
+                  className="text-[11px] tabular-nums select-none"
+                  style={{ color: "var(--czar-text-faint)" }}
+                >
+                  {wordCount.toLocaleString()} words
+                </span>
               )}
             </div>
 
-            <CzarComposer
-              ref={composerRef}
-              onSend={sendMessage}
-              onStop={stopStream}
-              disabled={streaming || Object.values(imageJobs).some((s) => s === "loading")}
-              streaming={streaming}
-              thinkingMode={thinkingMode}
-              onToggleThinking={() => setThinkingMode((t) => !t)}
-              mode={mode}
-              onModeChange={setMode}
-              subscription={isAdmin ? { unlimited: true } : subscription}
-              onUpgrade={isAdmin ? undefined : () => setShowUpgrade(true)}
-              onOpenCorrections={() => setShowSupervisorModal(true)}
-            />
+            {/* Right: edit, humanise, corrections, download */}
+            <div className="flex items-center gap-0.5">
+              <button
+                onClick={() => setIsDocEditing((v) => !v)}
+                className="w-7 h-7 rounded-md flex items-center justify-center hover:opacity-80 transition-opacity"
+                style={{
+                  background: isDocEditing ? "var(--czar-accent)" : "transparent",
+                  color: isDocEditing ? "var(--czar-accent-fg)" : "var(--czar-text-dim)",
+                }}
+                title={isDocEditing ? "View document" : "Edit document directly"}
+              >
+                <Pencil size={13} />
+              </button>
+              <button
+                onClick={() => handleCzarHumanise()}
+                disabled={!documentContent || streaming}
+                className="w-7 h-7 rounded-md flex items-center justify-center hover:opacity-80 transition-opacity disabled:opacity-30"
+                style={{ color: "var(--czar-text-dim)" }}
+                title="AI Humaniser"
+              >
+                <Wand2 size={13} />
+              </button>
+              <button
+                onClick={() => setShowSupervisorModal(true)}
+                className="w-7 h-7 rounded-md flex items-center justify-center hover:opacity-80 transition-opacity"
+                style={{ color: "var(--czar-text-dim)" }}
+                title="Apply supervisor corrections"
+              >
+                <FileEdit size={13} />
+              </button>
+              <button
+                onClick={() => requestDownload(documentContent)}
+                disabled={!documentContent}
+                className="w-7 h-7 rounded-md flex items-center justify-center hover:opacity-80 transition-opacity disabled:opacity-30"
+                style={{ color: "var(--czar-text-dim)" }}
+                title="Download document"
+              >
+                <Download size={13} />
+              </button>
+            </div>
           </div>
+        )}
+
+        {/* ── Main content area: document view + composer ── */}
+        <div className="flex-1 min-w-0 min-h-0 flex flex-col">
+
+          {/* Agent run card — overlaid at top when agent mode active */}
+          {agentMsgId && (
+            <div className="px-4 pt-2 shrink-0">
+              <CzarAgentRunCard
+                active={streaming}
+                words={wordCount}
+                files={(() => {
+                  const m = messages.find((mm) => mm.id !== agentMsgId && messages.indexOf(mm) === messages.findIndex((x) => x.id === agentMsgId) - 1);
+                  return m?.attachments?.length || 0;
+                })()}
+                imageJobs={Object.values(imageJobs).filter((s) => s === "loading").length}
+                downloaded={agentDownloaded}
+                onRedownload={() => {
+                  if (!attachContent) return;
+                  const sel = attachLastSel ?? { cover: true, references: true, appendix: false, images: true };
+                  void downloadContent(buildAugmentedContent(attachContent, sel));
+                }}
+              />
+            </div>
+          )}
+
+          {/* Document view (replaces chat thread) */}
+          <CzarDocumentView
+            content={documentContent}
+            streaming={streaming}
+            showQuillCaret={settings.show_quill_caret !== false}
+            isEditing={isDocEditing}
+            diff={documentDiff}
+            onAcceptDiff={() => setDocumentDiff(null)}
+            onRejectDiff={() => {
+              setDocumentDiff(null);
+              // Revert last assistant message to the pre-AI snapshot
+              if (docSnapshotRef.current) {
+                const snap = docSnapshotRef.current;
+                setMessages((prev) => {
+                  const lastIdx = prev.findLastIndex((m) => m.role === "assistant");
+                  if (lastIdx < 0) return prev;
+                  return prev.map((m, i) => i === lastIdx ? { ...m, content: snap } : m);
+                });
+              }
+            }}
+            onDirectEdit={(text) => {
+              setMessages((prev) => {
+                const lastIdx = prev.findLastIndex((m) => m.role === "assistant");
+                if (lastIdx < 0) return prev;
+                return prev.map((m, i) => i === lastIdx ? { ...m, content: text } : m);
+              });
+            }}
+            onAction={handleInlineEdit}
+            inlineAction={inlineEditAction}
+            clarifySpec={activeAssistant?.clarifySpec}
+            onClarifyConfirm={(values) => {
+              if (activeAssistant) handleClarifyConfirm(activeAssistant.id, values);
+            }}
+            onClarifyReview={(values) => {
+              if (streaming) return;
+              const summary = Object.entries(values)
+                .filter(([, v]) => v !== "" && v != null && !(Array.isArray(v) && v.length === 0))
+                .map(([k, v]) => `- ${k}: ${Array.isArray(v) ? v.join(", ") : v}`)
+                .join("\n");
+              sendMessage(
+                `I'd like to review/adjust before approving. Current selections:\n${summary || "(none)"}\n\nWhat are my options here, and what do you recommend?`,
+                [],
+              );
+            }}
+            followups={activeAssistant?.followups}
+            onFollowupPick={handleFollowupPick}
+            toolCalls={activeAssistant?.toolCalls}
+            isBuild={activeAssistant?.isBuild}
+            delivery={activeAssistant?.delivery}
+            onApprovePlan={handleApprovePlan}
+            mode={mode}
+            thinking={activeAssistant?.thinking}
+          />
+
+          <CzarComposer
+            ref={composerRef}
+            onSend={sendMessage}
+            onStop={stopStream}
+            disabled={streaming || Object.values(imageJobs).some((s) => s === "loading")}
+            streaming={streaming}
+            thinkingMode={thinkingMode}
+            onToggleThinking={() => setThinkingMode((t) => !t)}
+            mode={mode}
+            onModeChange={setMode}
+            subscription={isAdmin ? { unlimited: true } : subscription}
+            onUpgrade={isAdmin ? undefined : () => setShowUpgrade(true)}
+            onOpenCorrections={() => setShowSupervisorModal(true)}
+          />
         </div>
       </div>
 
@@ -1074,13 +1256,22 @@ export default function Czar() {
         <SupervisorFeedbackModal
           open={showSupervisorModal}
           onClose={() => setShowSupervisorModal(false)}
+          documentText={documentContent || undefined}
+          documentTitle={activeConversation?.title || undefined}
+          documentWords={wordCount || undefined}
           onApplied={(revisedContent, count) => {
             setShowSupervisorModal(false);
-            const msgId = crypto.randomUUID();
-            setMessages((prev) => [
-              ...prev,
-              { id: msgId, role: "assistant", content: revisedContent, streaming: false },
-            ]);
+            // Show tracked-changes diff between old and corrected document
+            if (documentContent && documentContent !== revisedContent) {
+              const diff = computeParaDiff(documentContent, revisedContent);
+              if (diff.some((p) => p.type !== "unchanged")) setDocumentDiff(diff);
+            }
+            // Update last assistant message (or add new one)
+            setMessages((prev) => {
+              const lastIdx = prev.findLastIndex((m) => m.role === "assistant");
+              if (lastIdx >= 0) return prev.map((m, i) => i === lastIdx ? { ...m, content: revisedContent } : m);
+              return [...prev, { id: crypto.randomUUID(), role: "assistant", content: revisedContent, streaming: false }];
+            });
             toast({ title: `Applied ${count} correction${count === 1 ? "" : "s"}` });
           }}
         />
