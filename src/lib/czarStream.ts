@@ -1,4 +1,4 @@
-// Single SSE reader for czar-chat and the doc-correction-pipeline.
+// SSE reader for czar-chat.
 import { supabase } from "@/integrations/supabase/client";
 
 const FUNCTIONS_BASE = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1`;
@@ -38,122 +38,7 @@ async function authHeaders() {
 
 export type CzarMode = "chat" | "plan" | "build" | "agent";
 
-// ─── Doc Correction Pipeline ──────────────────────────────────────────────
-
-export interface DocCorrectionHandlers {
-  onMeta?: (meta: { document_id: string; filename: string; conversation_id?: string; assistant_id?: string }) => void;
-  onDelta?: (text: string) => void;
-  onTool?: (ev: CzarToolEvent) => void;
-  onStatus?: (s: { state: "processing" | "retrying" | "done" | "failed"; message?: string }) => void;
-  onCorrectionDone?: (data: { document_id: string; filename: string; correction_count: number }) => void;
-  onError?: (msg: string) => void;
-  onDone?: (data: { document_id?: string }) => void;
-}
-
-export async function streamDocCorrection(
-  body: {
-    storage_path: string;
-    filename: string;
-    mime: string;
-    user_message: string;
-    conversation_id?: string | null;
-    model_id?: string | null;
-  },
-  handlers: DocCorrectionHandlers,
-  signal?: AbortSignal,
-): Promise<void> {
-  let headers: Record<string, string>;
-  try {
-    headers = await authHeaders();
-  } catch (e: any) {
-    handlers.onError?.(e?.message || "Authentication failed — please refresh and try again.");
-    return;
-  }
-  let res: Response;
-  try {
-    res = await fetch(`${FUNCTIONS_BASE}/doc-correction-pipeline`, {
-      method: "POST", headers, body: JSON.stringify(body), signal,
-    });
-  } catch (e: any) {
-    if (e?.name === "AbortError" || signal?.aborted) return;
-    handlers.onError?.(e?.message || "Network error — could not reach correction service.");
-    return;
-  }
-  if (!res.ok || !res.body) {
-    const txt = await res.text().catch(() => "");
-    handlers.onError?.(`Correction pipeline failed (${res.status}): ${txt || res.statusText}`);
-    return;
-  }
-
-  const reader = res.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
-  let currentEvent = "message";
-
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      let nl: number;
-      while ((nl = buffer.indexOf("\n")) !== -1) {
-        let line = buffer.slice(0, nl);
-        buffer = buffer.slice(nl + 1);
-        if (line.endsWith("\r")) line = line.slice(0, -1);
-        if (!line) { currentEvent = "message"; continue; }
-        if (line.startsWith("event:")) { currentEvent = line.slice(6).trim(); continue; }
-        if (!line.startsWith("data:")) continue;
-        const payload = line.slice(5).trim();
-        if (!payload || payload === "[DONE]") continue;
-        try {
-          const parsed = JSON.parse(payload);
-          if (currentEvent === "meta") {
-            handlers.onMeta?.(parsed);
-          } else if (currentEvent === "message" && typeof parsed.delta === "string") {
-            handlers.onDelta?.(parsed.delta);
-          } else if (currentEvent === "tool") {
-            handlers.onTool?.(parsed as CzarToolEvent);
-          } else if (currentEvent === "status") {
-            handlers.onStatus?.(parsed);
-          } else if (currentEvent === "correction_done") {
-            handlers.onCorrectionDone?.(parsed);
-          } else if (currentEvent === "error") {
-            handlers.onError?.(parsed.message || "Unknown error");
-          } else if (currentEvent === "done") {
-            handlers.onDone?.(parsed);
-          }
-        } catch {
-          buffer = line + "\n" + buffer;
-          break;
-        }
-      }
-    }
-  } catch (err: any) {
-    if (err?.name === "AbortError" || signal?.aborted) return;
-    handlers.onError?.(err?.message || "Stream failed");
-  }
-}
-
-// ─── Export corrected document ─────────────────────────────────────────────
-
-export async function exportCorrectedDoc(
-  document_id: string,
-  format: "docx" | "pdf",
-): Promise<{ content: string; filename: string; encoding: string; mimeType: string; renderAsPdf?: boolean }> {
-  const headers = await authHeaders();
-  const res = await fetch(`${FUNCTIONS_BASE}/export-corrected-doc`, {
-    method: "POST",
-    headers,
-    body: JSON.stringify({ document_id, format }),
-  });
-  if (!res.ok) {
-    const txt = await res.text().catch(() => "");
-    throw new Error(`Export failed (${res.status}): ${txt}`);
-  }
-  return res.json();
-}
-
-// ─── Original czar-chat stream ─────────────────────────────────────────────
+// ─── czar-chat stream ─────────────────────────────────────────────
 
 export async function streamCzarChat(
   body: {

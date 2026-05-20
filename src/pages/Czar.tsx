@@ -8,21 +8,19 @@ import { CzarThread } from "@/components/czar/CzarThread";
 import { CzarComposer, CzarComposerHandle, CzarAttachment } from "@/components/czar/CzarComposer";
 import { CzarSettingsDrawer } from "@/components/czar/CzarSettingsDrawer";
 import { CzarUpgradeModal } from "@/components/czar/CzarUpgradeModal";
-import { streamCzarChat, streamDocCorrection, exportCorrectedDoc } from "@/lib/czarStream";
-import { CzarDocCorrectModal } from "@/components/czar/CzarDocCorrectModal";
+import { streamCzarChat } from "@/lib/czarStream";
+import { SupervisorFeedbackModal } from "@/components/writer/SupervisorFeedbackModal";
 import { applyTheme, DEFAULT_THEME_ID } from "@/lib/czarThemes";
 import { toast } from "@/hooks/use-toast";
-import { Settings, Pencil, FileText, Wand2, X, Check, StopCircle, Loader2 } from "lucide-react";
+import { Settings, Pencil, Wand2, X, Check, StopCircle, Loader2 } from "lucide-react";
 import { computeParaDiff, type DiffParagraph } from "@/lib/diffUtils";
 import { cn } from "@/lib/utils";
 import { CzarIcon } from "@/components/icons/CzarIcon";
 import { ImageAckModal, ImageProgressModal, hasAckedImageNotice, ackImageNotice } from "@/components/ImageNoticeModal";
 import { CzarAttachModal, type AttachSelection } from "@/components/czar/CzarAttachModal";
 import { CzarAgentRunCard } from "@/components/czar/CzarAgentRunCard";
-import { CzarPreviewPanel, type PreviewActivityItem } from "@/components/czar/CzarPreviewPanel";
 import type { CzarToolCallState } from "@/components/czar/CzarToolCard";
 import { toolEventToState } from "@/components/czar/CzarToolCard";
-import type { FeedbackItem } from "@/components/czar/FeedbackCard";
 import { authedHeaders } from "@/lib/edgeFetch";
 
 export interface CzarMessage {
@@ -39,20 +37,6 @@ export interface CzarMessage {
   /** Server-decided delivery pacing for this turn — drives stable layout while streaming. */
   delivery?: string | null;
   isBuild?: boolean;
-  /** Set when this message was produced by the doc-correction pipeline. */
-  correctionDocId?: string;
-  /** Original filename of the corrected document. */
-  correctionFilename?: string;
-  /** Parsed supervisor feedback items — renders as FeedbackCard in thread. */
-  feedbackItems?: import("@/components/czar/FeedbackCard").FeedbackItem[];
-  /** Diff paragraphs — renders as DiffCard in thread. */
-  diffData?: import("@/lib/diffUtils").DiffParagraph[];
-  /** Original text before corrections, used by DiffCard accept/dismiss. */
-  diffOriginal?: string;
-  /** Revised text accepted by DiffCard — replaces diffData with plain content. */
-  diffAccepted?: boolean;
-  /** Storage path of the source file this feedback was parsed from. */
-  feedbackSourcePath?: string;
 }
 
 const DEFAULT_SETTINGS: Record<string, any> = {
@@ -121,10 +105,10 @@ export default function Czar() {
   });
   const [thinkingMode, setThinkingMode] = useState(false);
   const [mode, setMode] = useState<"chat" | "plan" | "build" | "agent">("chat");
-  // Doc correction pipeline state
-  const [docEditMode, setDocEditMode] = useState(false);
-  const [showDocCorrectModal, setShowDocCorrectModal] = useState(false);
-  const [pendingDocEdit, setPendingDocEdit] = useState<{ text: string; attachments: CzarAttachment[] } | null>(null);
+  // Supervisor feedback modal state
+  const [showSupervisorModal, setShowSupervisorModal] = useState(false);
+  const [supervisorItems, setSupervisorItems] = useState<any[]>([]);
+  const [supervisorDocText, setSupervisorDocText] = useState<string>("");
   const [settings, setSettings] = useState<Record<string, any>>(DEFAULT_SETTINGS);
   const [subscription, setSubscription] = useState<any>(null);
   const [showImageAck, setShowImageAck] = useState(false);
@@ -143,22 +127,6 @@ export default function Czar() {
   // agent run, and whether the auto-download has already fired.
   const [agentMsgId, setAgentMsgId] = useState<string | null>(null);
   const [agentDownloaded, setAgentDownloaded] = useState(false);
-  // Live preview panel (Claude-artifact style) for doc corrections.
-  const [previewOpen, setPreviewOpen] = useState(false);
-  const [previewDocId, setPreviewDocId] = useState<string | null>(null);
-  const [previewFilename, setPreviewFilename] = useState<string | null>(null);
-  const [previewActivity, setPreviewActivity] = useState<PreviewActivityItem[]>([]);
-  const [previewStreaming, setPreviewStreaming] = useState(false);
-  // Resizable split — desktop only. Persisted across sessions.
-  const [previewWidth, setPreviewWidth] = useState<number>(() => {
-    if (typeof window === "undefined") return 560;
-    const v = parseInt(localStorage.getItem("czar:preview-width") || "", 10);
-    return Number.isFinite(v) ? Math.min(900, Math.max(360, v)) : 560;
-  });
-  const draggingRef = useRef(false);
-  useEffect(() => {
-    if (typeof window !== "undefined") localStorage.setItem("czar:preview-width", String(previewWidth));
-  }, [previewWidth]);
   // Humaniser panel state
   const [czarHumanise, setCzarHumanise] = useState<{ msgId: string; original: string } | null>(null);
   const [czarHumanisedText, setCzarHumanisedText] = useState<string | null>(null);
@@ -304,23 +272,11 @@ export default function Czar() {
           content,
           attachments: m.metadata?.attachments,
           clarifySpec,
-          // Restore corrected-doc download button after reload.
-          correctionDocId: m.metadata?.document_id,
-          correctionFilename: m.metadata?.filename,
         };
       }));
     })();
     return () => { cancelled = true; };
   }, [conversationId, streaming]);
-
-  // Reset the doc preview panel — call on chat switch / new chat / tab close.
-  const resetPreview = useCallback(() => {
-    setPreviewOpen(false);
-    setPreviewDocId(null);
-    setPreviewFilename(null);
-    setPreviewActivity([]);
-    setPreviewStreaming(false);
-  }, []);
 
   const newChat = () => {
     if (streaming) abortRef.current?.abort();
@@ -329,7 +285,6 @@ export default function Czar() {
     setAgentMsgId(null);
     setAgentDownloaded(false);
     setShowSidebar(false);
-    resetPreview();
     composerRef.current?.focus();
   };
 
@@ -354,8 +309,7 @@ export default function Czar() {
     setAgentMsgId(null);
     setAgentDownloaded(false);
     setShowSidebar(false);
-    resetPreview();
-  }, [resetPreview]);
+  }, []);
 
   const closeTab = useCallback((id: string) => {
     setOpenTabs((prev) => {
@@ -365,7 +319,6 @@ export default function Czar() {
       if (id === conversationId) {
         const fallback = next[idx] || next[idx - 1] || null;
         setConversationId(fallback);
-        resetPreview();
         if (!fallback) {
           setMessages([]);
           setAgentMsgId(null);
@@ -374,7 +327,7 @@ export default function Czar() {
       }
       return next;
     });
-  }, [conversationId, resetPreview]);
+  }, [conversationId]);
 
 
   const sendMessage = useCallback(async (text: string, attachments: CzarAttachment[], modeOverride?: "chat" | "plan" | "build" | "agent") => {
@@ -587,150 +540,7 @@ export default function Czar() {
     setStreaming(false);
   };
 
-  // ── Doc correction pipeline ───────────────────────────────────────────────
-  const sendDocCorrection = useCallback(async (text: string, attachments: CzarAttachment[]) => {
-    if (!user || streaming) return;
-    const docAtt = attachments.find((a) => {
-      const lower = a.filename.toLowerCase();
-      return lower.endsWith(".docx") || lower.endsWith(".pdf") || a.mime.includes("officedocument.wordprocessingml") || a.mime === "application/pdf";
-    });
-    if (!docAtt) { sendMessage(text, attachments); return; }
-
-    const userTempId = `u-${Date.now()}`;
-    const asstTempId = `a-${Date.now()}`;
-    setMessages((prev) => [
-      ...prev,
-      { id: userTempId, role: "user", content: text, attachments },
-      { id: asstTempId, role: "assistant", content: "", streaming: true, thinking: "" },
-    ]);
-    setStreaming(true);
-    abortRef.current = new AbortController();
-    setDocEditMode(false);
-
-    // Reset + open the live preview panel for this correction.
-    setPreviewActivity([]);
-    setPreviewDocId(null);
-    setPreviewFilename(docAtt.filename);
-    setPreviewStreaming(true);
-    setPreviewOpen(true);
-
-    let correctionDocId: string | undefined;
-
-    try {
-      await streamDocCorrection(
-        {
-          storage_path: docAtt.path,
-          filename: docAtt.filename,
-          mime: docAtt.mime,
-          user_message: text,
-          conversation_id: conversationId,
-          model_id: settings?.model_id ?? null,
-        },
-        {
-          onMeta: (meta) => {
-            correctionDocId = meta.document_id;
-            setPreviewDocId(meta.document_id);
-            setPreviewFilename(meta.filename);
-            // Adopt server-assigned conversation_id so the chat persists in the sidebar
-            // and a subsequent reload finds the assistant message + doc id.
-            const serverConvId = (meta as any).conversation_id;
-            if (serverConvId && serverConvId !== conversationId) {
-              setConversationId(serverConvId);
-              lastLoadedConvIdRef.current = serverConvId;
-            }
-            setMessages((prev) => prev.map((m) =>
-              m.id === asstTempId
-                ? { ...m, correctionDocId: meta.document_id, correctionFilename: meta.filename }
-                : m,
-            ));
-          },
-          onDelta: (chunk) => {
-            // Stream reasoning/status into the chat thread (no document
-            // contents — those go to the preview panel).
-            setMessages((prev) => prev.map((m) =>
-              m.id === asstTempId ? { ...m, content: m.content + chunk } : m,
-            ));
-          },
-          onTool: (ev) => {
-            // Translate every tool event into a friendly activity-log item
-            // for the preview panel. We hide tool cards from the chat thread
-            // because the panel is the source of truth.
-            const evId = (ev as any)?.id || "";
-            const phase = (ev as any)?.phase || "";
-            const name = ((ev as any)?.name || "").toString();
-            const input = (ev as any)?.input || {};
-            const friendly =
-              name === "apply_targeted_correction"
-                ? `Editing: "${(input.original_text || "").slice(0, 60)}"`
-                : name === "read_document_with_annotations"
-                  ? "Reading document"
-                  : name === "web_search"
-                    ? `Searching: ${(input.query || "").slice(0, 60)}`
-                    : name.replace(/_/g, " ");
-            setPreviewActivity((prev) => {
-              const existing = prev.find((p) => p.id === evId);
-              if (existing) {
-                return prev.map((p) =>
-                  p.id === evId
-                    ? {
-                        ...p,
-                        status: phase === "result" ? "done" : phase === "error" ? "error" : p.status,
-                        detail: phase === "error" ? (ev as any).error : p.detail,
-                      }
-                    : p,
-                );
-              }
-              return [
-                ...prev.slice(-40),
-                { id: evId, label: friendly, status: phase === "error" ? "error" : phase === "result" ? "done" : "running" },
-              ];
-            });
-          },
-          onCorrectionDone: (data) => {
-            correctionDocId = data.document_id;
-            setPreviewDocId(data.document_id);
-            setPreviewFilename(data.filename);
-            setMessages((prev) => prev.map((m) =>
-              m.id === asstTempId
-                ? { ...m, correctionDocId: data.document_id, correctionFilename: data.filename }
-                : m,
-            ));
-          },
-          onError: (msg) => {
-            toast({ title: "Correction error", description: msg, variant: "destructive" });
-            setMessages((prev) => prev.map((m) =>
-              m.id === asstTempId ? { ...m, streaming: false, content: m.content || `⚠️ ${msg}` } : m,
-            ));
-          },
-          onDone: () => {
-            setMessages((prev) => prev.map((m) =>
-              m.id === asstTempId
-                ? { ...m, streaming: false, correctionDocId: correctionDocId || m.correctionDocId }
-                : m,
-            ));
-            setPreviewStreaming(false);
-          },
-        },
-        abortRef.current.signal,
-      );
-    } catch (e: any) {
-      if (e?.name !== "AbortError") {
-        toast({ title: "Correction failed", description: e?.message || "Unknown error", variant: "destructive" });
-      }
-      setMessages((prev) => prev.map((m) => m.id === asstTempId ? { ...m, streaming: false } : m));
-    } finally {
-      setStreaming(false);
-      setPreviewStreaming(false);
-      abortRef.current = null;
-    }
-  }, [user, streaming, conversationId, sendMessage]);
-
-  const handleSmartDocEdit = useCallback((text: string, attachments: CzarAttachment[]) => {
-    setPendingDocEdit({ text, attachments });
-    setShowDocCorrectModal(true);
-  }, []);
-
-  // Supervisor feedback flow: parse a DOCX attachment and inject a FeedbackCard message.
+  // ── Supervisor feedback flow (CZAR) ──────────────────────────────────────
   const handleSupervisorFeedback = useCallback(async (text: string, attachments: CzarAttachment[]) => {
     const docAtt = attachments.find((a) => a.filename.toLowerCase().endsWith(".docx") && a.status === "ready");
     if (!docAtt) return;
@@ -745,7 +555,6 @@ export default function Czar() {
     setStreaming(true);
 
     try {
-      // Download the file from storage and convert to base64 for the edge function.
       const { data: fileData, error: dlErr } = await supabase.storage.from("czar-uploads").download(docAtt.path);
       if (dlErr || !fileData) throw new Error("Could not read the uploaded file.");
 
@@ -766,14 +575,15 @@ export default function Czar() {
       const data = await resp.json();
       if (!resp.ok) throw new Error(data.error || "Could not parse feedback");
 
-      const items: FeedbackItem[] = (data.items || []).map((it: FeedbackItem) => ({
+      const items = (data.items || []).map((it: any) => ({
         ...it, selected: true, override: "", scope: "local" as const,
       }));
+      const cleanText: string = data.cleanText || "";
 
       if (items.length === 0) {
         setMessages((prev) => prev.map((m) =>
           m.id === asstTempId
-            ? { ...m, streaming: false, content: "No tracked changes or comments were found in this document. If you have comments embedded as text, paste them below and I'll help apply the corrections." }
+            ? { ...m, streaming: false, content: "No tracked changes or comments were found in this document. Paste feedback comments below and I'll apply them." }
             : m
         ));
         return;
@@ -781,9 +591,12 @@ export default function Czar() {
 
       setMessages((prev) => prev.map((m) =>
         m.id === asstTempId
-          ? { ...m, streaming: false, content: "", feedbackItems: items, feedbackSourcePath: docAtt.path }
+          ? { ...m, streaming: false, content: `Found ${items.length} feedback item${items.length === 1 ? "" : "s"} — opening correction panel…` }
           : m
       ));
+      setSupervisorItems(items);
+      setSupervisorDocText(cleanText);
+      setShowSupervisorModal(true);
     } catch (e: any) {
       toast({ title: "Feedback parse failed", description: e?.message || "Unknown error", variant: "destructive" });
       setMessages((prev) => prev.map((m) =>
@@ -796,142 +609,7 @@ export default function Czar() {
     }
   }, []);
 
-  // Apply selected feedback items using apply-supervisor-corrections.
-  const handleApplyFeedback = useCallback(async (msgId: string, selected: FeedbackItem[], sourcePath?: string) => {
-    // First mark the FeedbackCard as applying.
-    setMessages((prev) => prev.map((m) => m.id === msgId ? { ...m, streaming: true } : m));
-    setStreaming(true);
-
-    const asstTempId = crypto.randomUUID();
-    setMessages((prev) => [
-      ...prev,
-      { id: asstTempId, role: "assistant", content: "", streaming: true },
-    ]);
-
-    try {
-      // We need the original document text. Download from storage and extract text.
-      let originalText = "";
-      if (sourcePath) {
-        const { data: fileData } = await supabase.storage.from("czar-uploads").download(sourcePath);
-        if (fileData) {
-          const buf = await fileData.arrayBuffer();
-          const bytes = new Uint8Array(buf);
-          let bin = "";
-          for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
-          const b64 = btoa(bin);
-          // Extract plain text via a lightweight XML strip (same approach as
-          // parse-supervisor-feedback reads document.xml).
-          try {
-            const resp2 = await fetch(
-              `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/parse-supervisor-feedback`,
-              {
-                method: "POST",
-                headers: await authedHeaders(),
-                body: JSON.stringify({ docxBase64: b64, filename: "doc.docx", extractTextOnly: true }),
-              }
-            );
-            const d2 = await resp2.json();
-            originalText = d2.plainText || d2.text || "";
-          } catch { /* fall through — apply without diff */ }
-        }
-      }
-
-      const headers = await authedHeaders();
-      const resp = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/apply-supervisor-corrections`,
-        {
-          method: "POST",
-          headers,
-          body: JSON.stringify({
-            chapter: { content: originalText, title: "Document", chapter_type: "general" },
-            project: {
-              citation_style: settings?.citation_style || "Harvard",
-              language_style: settings?.language || "UK",
-            },
-            feedbackItems: selected,
-          }),
-        }
-      );
-
-      if (!resp.ok || !resp.body) {
-        const err = await resp.json().catch(() => ({}));
-        throw new Error((err as any).error || "Apply corrections failed");
-      }
-
-      const reader = resp.body.getReader();
-      const decoder = new TextDecoder();
-      let buf = "";
-      let revisedText = "";
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buf += decoder.decode(value, { stream: true });
-        let idx: number;
-        while ((idx = buf.indexOf("\n")) !== -1) {
-          const line = buf.slice(0, idx).trim();
-          buf = buf.slice(idx + 1);
-          if (!line.startsWith("data: ")) continue;
-          const json = line.slice(6).trim();
-          if (json === "[DONE]") break;
-          try {
-            const parsed = JSON.parse(json);
-            const chunk = parsed.choices?.[0]?.delta?.content as string | undefined;
-            if (chunk) {
-              revisedText += chunk;
-              setMessages((prev) => prev.map((m) =>
-                m.id === asstTempId ? { ...m, content: revisedText } : m
-              ));
-            }
-          } catch { /* ignore parse error */ }
-        }
-      }
-
-      // Compute diff and convert to DiffCard.
-      let diffData: DiffParagraph[] | undefined;
-      if (originalText && revisedText) {
-        const { computeParaDiff } = await import("@/lib/diffUtils");
-        diffData = computeParaDiff(originalText, revisedText);
-      }
-
-      setMessages((prev) => prev.map((m) => {
-        if (m.id === msgId) return { ...m, streaming: false };
-        if (m.id === asstTempId) {
-          return diffData
-            ? { ...m, streaming: false, content: "", diffData, diffOriginal: originalText }
-            : { ...m, streaming: false };
-        }
-        return m;
-      }));
-    } catch (e: any) {
-      toast({ title: "Apply failed", description: e?.message || "Unknown error", variant: "destructive" });
-      setMessages((prev) => prev.map((m) =>
-        m.id === asstTempId
-          ? { ...m, streaming: false, content: `⚠️ ${e?.message || "Could not apply corrections"}` }
-          : m.id === msgId ? { ...m, streaming: false } : m
-      ));
-    } finally {
-      setStreaming(false);
-    }
-  }, [settings]);
-
-  const handleDownloadCorrected = useCallback(async (documentId: string, fmt: "docx" | "pdf") => {
-    toast({ title: "Preparing corrected document…" });
-    try {
-      const data = await exportCorrectedDoc(documentId, fmt);
-      if (data.encoding !== "base64") throw new Error("Unexpected export response");
-      const binary = atob(data.content);
-      const bytes = new Uint8Array(binary.length);
-      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-      const mimeType = fmt === "pdf" ? "text/html" : data.mimeType;
-      const blob = new Blob([bytes], { type: mimeType });
-      saveAs(blob, data.filename);
-      toast({ title: "Downloaded", description: data.filename });
-    } catch (e: any) {
-      toast({ title: "Download failed", description: e?.message || "Unknown error", variant: "destructive" });
-    }
-  }, []);
-
+  // Remove old apply/download handlers — handled by SupervisorFeedbackModal.
   const handleCzarHumanise = (msgId: string, content: string) => {
     setCzarHumanise({ msgId, original: content });
     setCzarHumanisedText(null);
@@ -1378,15 +1056,11 @@ export default function Czar() {
           </div>
         </div>
 
-        {/* Main content area. When the preview is closed, the chat takes the
-            full width with no extra wrappers — closing fully restores the
-            original Czar shell. When open on desktop, the chat shrinks and a
-            draggable divider sits between it and the preview panel. On mobile
-            the preview self-renders as a bottom sheet (see end of return). */}
-        <div className={`flex-1 min-w-0 min-h-0 ${previewOpen ? "lg:flex lg:flex-row flex flex-col" : "flex flex-col"}`}>
+        {/* Main content area */}
+        <div className="flex-1 min-w-0 min-h-0 flex flex-col">
           {/* Chat column */}
           <div className="flex-1 flex flex-col min-w-0 min-h-0">
-            <div className={`flex-1 flex flex-col min-h-0 mx-auto w-full ${previewOpen ? "lg:max-w-none max-w-[820px]" : "max-w-[820px]"}`}>
+            <div className="flex-1 flex flex-col min-h-0 mx-auto w-full max-w-[820px]">
 
               {/* Agent run card */}
               {agentMsgId && (
@@ -1430,14 +1104,6 @@ export default function Czar() {
                   showWordCount={!!settings.show_word_count}
                   onFollowupPick={handleFollowupPick}
                   onClarifyConfirm={handleClarifyConfirm}
-                  onDownloadCorrected={handleDownloadCorrected}
-                  onOpenPreview={(documentId, filename) => {
-                    setPreviewDocId(documentId);
-                    setPreviewFilename(filename || null);
-                    setPreviewActivity([]);
-                    setPreviewStreaming(false);
-                    setPreviewOpen(true);
-                  }}
                   onClarifyReview={(_msgId, values) => {
                     if (streaming) return;
                     const summary = Object.entries(values)
@@ -1454,26 +1120,13 @@ export default function Czar() {
                   onApprovePlan={handleApprovePlan}
                   showQuillCaret={settings.show_quill_caret !== false}
                   onHumanise={handleCzarHumanise}
-                  onApplyFeedback={handleApplyFeedback}
-                  onAcceptDiff={(msgId) => {
-                    setMessages((prev) => prev.map((m) =>
-                      m.id === msgId
-                        ? { ...m, content: m.diffData?.map((p) => p.type === "deleted" ? "" : (p.type === "added" || p.type === "modified" ? p.text : p.text)).filter(Boolean).join("\n\n") || m.content, diffData: undefined, diffOriginal: undefined, diffAccepted: true }
-                        : m
-                    ));
-                  }}
-                  onDismissDiff={(msgId) => {
-                    setMessages((prev) => prev.map((m) =>
-                      m.id === msgId ? { ...m, diffData: undefined, diffOriginal: undefined } : m
-                    ));
-                  }}
                 />
               )}
             </div>
 
             <CzarComposer
               ref={composerRef}
-              onSend={docEditMode ? sendDocCorrection : sendMessage}
+              onSend={sendMessage}
               onStop={stopStream}
               disabled={streaming || Object.values(imageJobs).some((s) => s === "loading")}
               streaming={streaming}
@@ -1483,113 +1136,26 @@ export default function Czar() {
               onModeChange={setMode}
               subscription={isAdmin ? { unlimited: true } : subscription}
               onUpgrade={isAdmin ? undefined : () => setShowUpgrade(true)}
-              docEditMode={docEditMode}
-              onDocEditModeChange={setDocEditMode}
-              onSmartDocEdit={handleSmartDocEdit}
               onSupervisorFeedback={handleSupervisorFeedback}
             />
           </div>
-
-          {/* Desktop split — draggable divider + sized preview column */}
-          {previewOpen && (
-            <>
-              <div
-                role="separator"
-                aria-orientation="vertical"
-                aria-label="Resize document preview"
-                className="hidden lg:block shrink-0 cursor-col-resize group"
-                style={{ width: 6, background: "transparent" }}
-                onPointerDown={(e) => {
-                  draggingRef.current = true;
-                  (e.target as HTMLElement).setPointerCapture(e.pointerId);
-                  document.body.style.cursor = "col-resize";
-                  document.body.style.userSelect = "none";
-                }}
-                onPointerMove={(e) => {
-                  if (!draggingRef.current) return;
-                  const next = Math.min(900, Math.max(360, window.innerWidth - e.clientX));
-                  setPreviewWidth(next);
-                }}
-                onPointerUp={(e) => {
-                  draggingRef.current = false;
-                  try { (e.target as HTMLElement).releasePointerCapture(e.pointerId); } catch { /* noop */ }
-                  document.body.style.cursor = "";
-                  document.body.style.userSelect = "";
-                }}
-              >
-                <div
-                  className="w-full h-full transition-colors group-hover:bg-[color-mix(in_srgb,var(--czar-text)_18%,transparent)]"
-                  style={{ background: "color-mix(in srgb, var(--czar-text) 8%, transparent)" }}
-                />
-              </div>
-              <div className="hidden lg:flex shrink-0" style={{ width: previewWidth }}>
-                <CzarPreviewPanel
-                  open={previewOpen}
-                  documentId={previewDocId}
-                  filename={previewFilename}
-                  activity={previewActivity}
-                  streaming={previewStreaming}
-                  onClose={() => setPreviewOpen(false)}
-                  onDownload={() => previewDocId && handleDownloadCorrected(previewDocId, "docx")}
-                  inline
-                />
-              </div>
-            </>
-          )}
         </div>
-
-        {/* Mobile bottom-sheet preview — rendered by the panel itself when isMobile. */}
-        {previewOpen && (
-          <div className="lg:hidden">
-            <CzarPreviewPanel
-              open={previewOpen}
-              documentId={previewDocId}
-              filename={previewFilename}
-              activity={previewActivity}
-              streaming={previewStreaming}
-              onClose={() => setPreviewOpen(false)}
-              onDownload={() => previewDocId && handleDownloadCorrected(previewDocId, "docx")}
-            />
-          </div>
-        )}
-
-        {/* Reopen pill — appears when the preview was closed but a document
-            is still available, so the user can recover the doc panel after
-            an accidental close. */}
-        {!previewOpen && previewDocId && (
-          <button
-            onClick={() => setPreviewOpen(true)}
-            className="fixed bottom-24 right-4 lg:bottom-6 lg:right-6 z-40 flex items-center gap-2 px-3.5 py-2.5 rounded-full shadow-2xl text-[12.5px] font-semibold animate-fade-in hover:scale-[1.03] active:scale-[0.97] transition-transform"
-            style={{
-              background: "var(--czar-accent)",
-              color: "var(--czar-accent-fg)",
-              boxShadow: "0 12px 32px -8px color-mix(in srgb, var(--czar-accent) 60%, transparent)",
-            }}
-            title="Reopen document preview"
-            aria-label="Reopen document preview"
-          >
-            <FileText size={14} />
-            <span className="max-w-[160px] truncate">{previewFilename || "Open document"}</span>
-          </button>
-        )}
       </div>
 
-
-      {showDocCorrectModal && pendingDocEdit && (
-        <CzarDocCorrectModal
-          filename={pendingDocEdit.attachments.find((a) => {
-            const l = a.filename.toLowerCase();
-            return l.endsWith(".docx") || l.endsWith(".pdf");
-          })?.filename || "document"}
-          onEditInDoc={() => {
-            setShowDocCorrectModal(false);
-            sendDocCorrection(pendingDocEdit.text, pendingDocEdit.attachments);
-            setPendingDocEdit(null);
-          }}
-          onContinueAsChat={() => {
-            setShowDocCorrectModal(false);
-            sendMessage(pendingDocEdit.text, pendingDocEdit.attachments);
-            setPendingDocEdit(null);
+      {showSupervisorModal && (
+        <SupervisorFeedbackModal
+          open={showSupervisorModal}
+          onClose={() => setShowSupervisorModal(false)}
+          documentText={supervisorDocText || undefined}
+          initialItems={supervisorItems}
+          onApplied={(revisedContent, count) => {
+            setShowSupervisorModal(false);
+            const msgId = crypto.randomUUID();
+            setMessages((prev) => [
+              ...prev,
+              { id: msgId, role: "assistant", content: revisedContent, streaming: false },
+            ]);
+            toast({ title: `Applied ${count} correction${count === 1 ? "" : "s"}` });
           }}
         />
       )}

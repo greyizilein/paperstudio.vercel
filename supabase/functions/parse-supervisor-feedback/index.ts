@@ -218,6 +218,8 @@ serve(async (req) => {
     const body = await req.json();
     let items: FeedbackItem[] = [];
 
+    let cleanText: string | undefined;
+
     if (body.docxBase64) {
       const entries = await readDocxEntries(body.docxBase64);
       const doc = entries["word/document.xml"];
@@ -226,6 +228,8 @@ serve(async (req) => {
         return new Response(JSON.stringify({ error: "No word/document.xml found in DOCX" }),
           { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
+      // Extract clean document text for CZAR context (before parsing feedback).
+      cleanText = extractParagraphText(doc).join("\n\n");
       items = parseDocxFeedback(doc, comments);
       // If no tracked changes/comments found, fall back to scanning for paragraphs
       // beginning with markers like "[Comment]" or "Note:".
@@ -247,7 +251,7 @@ serve(async (req) => {
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    return new Response(JSON.stringify({ items }), {
+    return new Response(JSON.stringify({ items, cleanText }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {
