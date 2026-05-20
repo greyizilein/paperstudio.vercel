@@ -384,6 +384,24 @@ function buildSettingsManifest(settings: Record<string, any>): string {
   if (settings.allow_online_lookup === false) {
     lines.push("• Online lookup is DISABLED: rely solely on training data. If asked for live figures, say you cannot fetch them right now.");
   }
+  // Reference count
+  if (settings.reference_count && settings.reference_count !== "auto") {
+    const countMap: Record<string, string> = {
+      "5-8": "5–8", "10-12": "10–12", "15-20": "15–20", "20-25": "20–25", "25-30": "25–30",
+    };
+    const label = countMap[settings.reference_count] || settings.reference_count;
+    lines.push(`• Reference count: use exactly ${label} references in the final reference list. Not fewer, not more.`);
+  }
+  // Source preference
+  if (settings.source_preference === "academic_only") {
+    lines.push("• Source constraint: ONLY peer-reviewed academic sources — journal articles, conference papers, academic books, institutional reports. Absolutely no websites, blogs, news outlets, or non-academic content.");
+  } else if (settings.source_preference === "academic_and_news") {
+    lines.push("• Source preference: prefer peer-reviewed academic sources; reputable news outlets and institutional reports are also acceptable where relevant.");
+  }
+  // DOI requirement
+  if (settings.require_dois) {
+    lines.push("• DOI requirement: for every reference in the list, include the DOI as 'https://doi.org/...' when one is available from search results. Never fabricate a DOI.");
+  }
   if (lines.length === 0) return "";
   return [
     "",
@@ -1566,7 +1584,7 @@ async function streamQwen(opts: {
 const TOOL_DEFINITIONS = [
   {
     name: "web_search",
-    description: "Search the live web in real time via Tavily and Google (Serper). Returns a curated answer plus a list of real source URLs you can cite. Use this whenever the user asks about anything time-sensitive (news, prices, current events), recent statistics, or any factual claim you're not 100% sure of. Set focus='academic' for peer-reviewed papers (Google Scholar), 'news' for fresh news (last 14 days), or 'general' for everything else. Use it BEFORE making factual claims you're uncertain about.",
+    description: "Search the live web in real time via Tavily and Google Scholar (Serper). Returns a curated answer plus a list of real, verifiable sources with title, URL, and — for academic results — DOI, year, authors, and journal. ALWAYS use this with focus='academic' before writing any reference list or citing any source in academic work. Do not rely on training memory for citations — only cite sources returned by this tool. Set focus='academic' for peer-reviewed papers (Google Scholar), 'news' for fresh news (last 14 days), or 'general' for everything else.",
     input_schema: {
       type: "object",
       properties: {
@@ -2041,7 +2059,26 @@ async function generateImageNanoBanana(prompt: string, _aspectRatio: string): Pr
 const TAVILY_API_KEY = Deno.env.get("TAVILY_API_KEY");
 const SERPER_API_KEY = Deno.env.get("SERPER_API_KEY");
 
-async function searchTavily(query: string, focus: string): Promise<{ answer: string; sources: { title: string; url: string }[] }> {
+// Extract a DOI string from a URL or text snippet.
+function extractDoi(url: string, snippet?: string): string | undefined {
+  const doiRe = /\b(10\.\d{4,}\/[^\s"<>]+)/;
+  const fromUrl = url.match(doiRe)?.[1];
+  if (fromUrl) return fromUrl;
+  if (snippet) return snippet.match(doiRe)?.[1];
+  return undefined;
+}
+
+interface AcademicSource {
+  title: string;
+  url: string;
+  doi?: string;
+  year?: number;
+  authors?: string;
+  journal?: string;
+  snippet?: string;
+}
+
+async function searchTavily(query: string, focus: string): Promise<{ answer: string; sources: AcademicSource[] }> {
   if (!TAVILY_API_KEY) throw new Error("TAVILY_API_KEY not configured");
   const body: any = {
     api_key: TAVILY_API_KEY,
@@ -2052,6 +2089,15 @@ async function searchTavily(query: string, focus: string): Promise<{ answer: str
     topic: focus === "news" ? "news" : "general",
   };
   if (focus === "news") body.days = 14;
+  // For academic focus bias toward scholarly domains
+  if (focus === "academic") {
+    body.include_domains = [
+      "scholar.google.com", "pubmed.ncbi.nlm.nih.gov", "doi.org", "jstor.org",
+      "springer.com", "wiley.com", "tandfonline.com", "sagepub.com",
+      "sciencedirect.com", "oxfordacademic.com", "cambridge.org",
+      "researchgate.net", "semanticscholar.org", "arxiv.org", "ssrn.com",
+    ];
+  }
   const res = await fetch("https://api.tavily.com/search", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -2059,10 +2105,15 @@ async function searchTavily(query: string, focus: string): Promise<{ answer: str
   });
   if (!res.ok) throw new Error(`Tavily ${res.status}: ${(await res.text().catch(() => "")).slice(0, 200)}`);
   const data = await res.json();
-  const sources = (data.results || []).slice(0, 8).map((r: any) => ({
-    title: r.title || r.url,
-    url: r.url,
-  }));
+  const sources: AcademicSource[] = (data.results || []).slice(0, 8).map((r: any) => {
+    const doi = extractDoi(r.url || "", r.content || "");
+    return {
+      title: r.title || r.url,
+      url: r.url,
+      ...(doi ? { doi } : {}),
+      snippet: (r.content || "").slice(0, 200) || undefined,
+    };
+  });
   let answer: string = data.answer || "";
   if (!answer && data.results?.length) {
     answer = data.results.slice(0, 4).map((r: any) => `• ${r.title}: ${(r.content || "").slice(0, 200)}`).join("\n");
@@ -2070,7 +2121,7 @@ async function searchTavily(query: string, focus: string): Promise<{ answer: str
   return { answer, sources };
 }
 
-async function searchSerper(query: string, focus: string): Promise<{ answer: string; sources: { title: string; url: string }[] }> {
+async function searchSerper(query: string, focus: string): Promise<{ answer: string; sources: AcademicSource[] }> {
   if (!SERPER_API_KEY) throw new Error("SERPER_API_KEY not configured");
   const endpoint =
     focus === "academic" ? "https://google.serper.dev/scholar" :
@@ -2086,7 +2137,38 @@ async function searchSerper(query: string, focus: string): Promise<{ answer: str
   const items: any[] = data.organic || data.news || data.scholar || [];
   const answerBox = data.answerBox?.answer || data.answerBox?.snippet || "";
   const knowledge = data.knowledgeGraph?.description || "";
-  const sources = items.slice(0, 8).map((r: any) => ({ title: r.title || r.link, url: r.link }));
+
+  const sources: AcademicSource[] = items.slice(0, 8).map((r: any) => {
+    const url: string = r.link || "";
+    const doi = extractDoi(url, r.snippet || "");
+    // Serper Scholar returns publicationInfo like "A Smith, B Jones - Journal Name, 2021 - publisher.com"
+    const pubInfo: string = r.publicationInfo || r.publication || "";
+    let year: number | undefined;
+    let journal: string | undefined;
+    let authors: string | undefined;
+    if (pubInfo) {
+      const yearMatch = pubInfo.match(/\b(19|20)\d{2}\b/);
+      if (yearMatch) year = parseInt(yearMatch[0], 10);
+      // "Authors - Journal, Year - domain" — extract journal portion
+      const parts = pubInfo.split(" - ");
+      if (parts.length >= 2) {
+        authors = parts[0].trim() || undefined;
+        const journalPart = parts[1] || "";
+        journal = journalPart.replace(/,?\s*\d{4}/, "").trim() || undefined;
+      }
+    }
+    if (!year && r.year) year = parseInt(String(r.year), 10);
+    return {
+      title: r.title || url,
+      url,
+      ...(doi ? { doi } : {}),
+      ...(year ? { year } : {}),
+      ...(authors ? { authors } : {}),
+      ...(journal ? { journal } : {}),
+      snippet: (r.snippet || "").slice(0, 200) || undefined,
+    };
+  });
+
   let answer = [answerBox, knowledge].filter(Boolean).join("\n\n");
   if (!answer) {
     answer = items.slice(0, 4).map((r: any) => `• ${r.title}: ${r.snippet || ""}`).join("\n");
@@ -2094,18 +2176,23 @@ async function searchSerper(query: string, focus: string): Promise<{ answer: str
   return { answer, sources };
 }
 
-async function webSearchGemini(query: string, focus: string): Promise<{ answer: string; sources: { title: string; url: string }[] }> {
-  // 1) Try Tavily — best for general & news, returns curated answer + clean URLs.
+async function webSearchGemini(query: string, focus: string): Promise<{ answer: string; sources: AcademicSource[] }> {
+  // 1) For academic focus, prefer Serper Scholar (returns year/journal/DOI metadata).
+  if (SERPER_API_KEY && focus === "academic") {
+    try { return await searchSerper(query, focus); }
+    catch (e) { console.warn("[czar web_search] Serper Scholar failed, falling back:", (e as Error).message); }
+  }
+  // 2) Try Tavily — best for general & news, returns curated answer + clean URLs.
   if (TAVILY_API_KEY) {
     try { return await searchTavily(query, focus); }
     catch (e) { console.warn("[czar web_search] Tavily failed, falling back:", (e as Error).message); }
   }
-  // 2) Try Serper — Google Scholar for academic, News for news, Search otherwise.
+  // 3) Try Serper for non-academic focus.
   if (SERPER_API_KEY) {
     try { return await searchSerper(query, focus); }
     catch (e) { console.warn("[czar web_search] Serper failed, falling back:", (e as Error).message); }
   }
-  // 3) Last resort: Gemini grounding via Lovable Gateway.
+  // 4) Last resort: Gemini grounding via Google AI gateway.
   const focusHint =
     focus === "academic" ? "Prioritise peer-reviewed and scholarly sources where available. " :
     focus === "news" ? "Prioritise recent news from reputable outlets. " : "";
@@ -2132,17 +2219,20 @@ async function webSearchGemini(query: string, focus: string): Promise<{ answer: 
     const grounding = data.choices?.[0]?.message?.grounding_metadata
       || data.choices?.[0]?.grounding_metadata
       || data.grounding_metadata;
-    const sources: { title: string; url: string }[] = [];
+    const sources: AcademicSource[] = [];
     if (grounding?.grounding_chunks) {
       for (const c of grounding.grounding_chunks) {
-        if (c.web?.uri) sources.push({ title: c.web.title || c.web.uri, url: c.web.uri });
+        if (c.web?.uri) {
+          const url: string = c.web.uri;
+          sources.push({ title: c.web.title || url, url, doi: extractDoi(url) });
+        }
       }
     }
     if (sources.length === 0) {
       const linkRe = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g;
       let m;
       while ((m = linkRe.exec(answer)) && sources.length < 6) {
-        sources.push({ title: m[1], url: m[2] });
+        sources.push({ title: m[1], url: m[2], doi: extractDoi(m[2]) });
       }
     }
     return { answer, sources: sources.slice(0, 8) };
