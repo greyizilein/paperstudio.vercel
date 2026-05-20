@@ -30,6 +30,7 @@ const TOGGLES = [
   { id: "section_pause",               label: "Section-by-section pause (write one section, wait for 'continue')" },
   { id: "thinking_mode",               label: "Prefer deep thinking over speed" },
   { id: "cite_every_claim",            label: "Cite every evidence-based claim" },
+  { id: "require_dois",                label: "Add DOI to every reference where available" },
   { id: "ban_filler",                  label: "Ban filler phrases (delve, tapestry, in conclusion…)" },
   { id: "vary_sentence_length",        label: "Force varied sentence rhythm" },
   { id: "british_spelling",            label: "Force British spelling" },
@@ -52,11 +53,26 @@ const TOGGLES = [
   { id: "auto_paragraph_break",        label: "Break paragraphs after 4–5 sentences" },
 ];
 
+// Human-readable labels for picker option values that aren't self-describing.
+const PICKER_LABELS: Record<string, string> = {
+  "auto":               "Auto (CZAR decides)",
+  "5-8":                "5–8 sources",
+  "10-12":              "10–12 sources",
+  "15-20":              "15–20 sources",
+  "20-25":              "20–25 sources",
+  "25-30":              "25–30 sources",
+  "any":                "Any credible source",
+  "academic_only":      "Academic only (peer-reviewed)",
+  "academic_and_news":  "Academic + reputable news",
+};
+
 const PICKERS = [
-  { id: "language",       label: "Language variant",        options: ["UK", "US"] },
-  { id: "citation_style", label: "Default citation style",  options: ["Harvard", "APA", "MLA", "OSCOLA", "Chicago", "none"] },
-  { id: "tone",           label: "Default tone",            options: ["academic-postgraduate", "academic-undergraduate", "professional", "neutral", "creative"] },
-  { id: "default_export", label: "Default export format",   options: ["docx", "pdf", "md", "txt"] },
+  { id: "language",          label: "Language variant",        options: ["UK", "US"] },
+  { id: "citation_style",    label: "Default citation style",  options: ["Harvard", "APA", "MLA", "OSCOLA", "Chicago", "none"] },
+  { id: "tone",              label: "Default tone",            options: ["academic-postgraduate", "academic-undergraduate", "professional", "neutral", "creative"] },
+  { id: "default_export",    label: "Default export format",   options: ["docx", "pdf", "md", "txt"] },
+  { id: "reference_count",   label: "References per piece",    options: ["auto", "5-8", "10-12", "15-20", "20-25", "25-30"] },
+  { id: "source_preference", label: "Source preference",       options: ["any", "academic_only", "academic_and_news"] },
 ];
 
 type SectionId = "appearance" | "writing" | "reading" | "models" | "behaviour" | "about";
@@ -136,7 +152,7 @@ export function CzarSettingsDrawer({ open, onClose, settings, onChange, czarTier
   const ROWS: Array<{ id: SectionId; Icon: typeof Palette; title: string; summary: string }> = [
     { id: "appearance", Icon: Palette,  title: "Appearance",       summary: themeName },
     { id: "reading",    Icon: BookOpen, title: "Reading",          summary: readingSummary },
-    { id: "writing",    Icon: FileText, title: "Writing defaults", summary: `${settings.citation_style ?? "Harvard"} · ${settings.language ?? "UK"} · ${settings.tone ?? "Postgraduate"}` },
+    { id: "writing",    Icon: FileText, title: "Writing defaults", summary: `${settings.citation_style ?? "Harvard"} · ${settings.language ?? "UK"} · ${settings.reference_count && settings.reference_count !== "auto" ? settings.reference_count + " refs" : "auto refs"}` },
     { id: "models",     Icon: Cpu,      title: "AI model",         summary: claudeModelLabel },
     { id: "behaviour",  Icon: Sliders,  title: "Behaviour",        summary: `${TOGGLES.filter((t) => settings[t.id]).length} of ${TOGGLES.length} on` },
     { id: "about",      Icon: Info,     title: "About CZAR",       summary: `Tier: ${isAdmin ? "Admin" : czarTier}` },
@@ -259,7 +275,8 @@ export function CzarSettingsDrawer({ open, onClose, settings, onChange, czarTier
                 <div className="text-[10.5px] uppercase tracking-wider mb-2 px-1" style={{ color: "var(--czar-text-faint)" }}>{p.label}</div>
                 <div className="rounded-2xl overflow-hidden" style={{ background: "var(--czar-surface)", border: "1px solid var(--czar-border)" }}>
                   {p.options.map((o, i) => {
-                    const active = settings[p.id] === o;
+                    const active = (settings[p.id] ?? p.options[0]) === o;
+                    const label = PICKER_LABELS[o] ?? o;
                     return (
                       <button
                         key={o}
@@ -268,7 +285,7 @@ export function CzarSettingsDrawer({ open, onClose, settings, onChange, czarTier
                         className="w-full flex items-center justify-between gap-3 py-3 px-4 text-left transition-colors hover:opacity-90"
                         style={{ borderTop: i === 0 ? undefined : "1px solid var(--czar-border)" }}
                       >
-                        <span className="text-[13px]" style={{ color: "var(--czar-text)" }}>{o}</span>
+                        <span className="text-[13px]" style={{ color: "var(--czar-text)" }}>{label}</span>
                         <span
                           className="shrink-0 inline-flex items-center justify-center rounded-full transition-all"
                           style={{
