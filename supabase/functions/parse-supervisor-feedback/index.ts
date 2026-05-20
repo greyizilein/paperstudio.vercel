@@ -1,10 +1,11 @@
 // parse-supervisor-feedback — extract feedback items from supervisor uploads.
 // Inputs (one of):
-//   - { docxBase64: string, filename: string }  → tracked changes + comments
-//   - { pdfText: string, filename: string }     → annotations / highlights as text
-//   - { plainText: string }                     → bullet/line items
-// Output: { items: Array<{ id, type, comment, target_excerpt?, suggested_replacement? }> }
+//   - { docxBase64: string, filename: string }  → tracked changes + comments, then AI scan
+//   - { pdfText: string, filename: string }     → AI scan
+//   - { plainText: string }                     → AI scan
+// Output: { items: Array<{ id, type, comment, target_excerpt?, suggested_replacement? }>, cleanText? }
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { callAnthropicJson } from "../_shared/anthropic.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -21,7 +22,8 @@ interface FeedbackItem {
   author?: string;
 }
 
-// Tiny ZIP reader (DOCX is a ZIP). We only need to extract two text entries.
+// ── ZIP / DOCX reader ─────────────────────────────────────────────────────────
+
 async function readDocxEntries(b64: string): Promise<Record<string, string>> {
   const bin = atob(b64);
   const bytes = new Uint8Array(bin.length);
@@ -30,7 +32,6 @@ async function readDocxEntries(b64: string): Promise<Record<string, string>> {
   const dv = new DataView(bytes.buffer);
   const entries: Record<string, string> = {};
 
-  // Find End of Central Directory
   let eocd = -1;
   for (let i = bytes.length - 22; i >= Math.max(0, bytes.length - 65557); i--) {
     if (dv.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
@@ -63,7 +64,6 @@ async function readDocxEntries(b64: string): Promise<Record<string, string>> {
           if (compMethod === 0) {
             raw = compressed;
           } else if (compMethod === 8) {
-            // deflate via DecompressionStream
             const ds = new DecompressionStream("deflate-raw");
             const stream = new Response(compressed).body!.pipeThrough(ds);
             raw = new Uint8Array(await new Response(stream).arrayBuffer());
@@ -99,12 +99,14 @@ function extractParagraphText(xml: string): string[] {
   return paras;
 }
 
-function parseDocxFeedback(docXml: string, commentsXml: string | undefined): FeedbackItem[] {
+// ── Structural DOCX parser (tracked changes + comments) ───────────────────────
+
+function parseDocxStructural(docXml: string, commentsXml: string | undefined): FeedbackItem[] {
   const items: FeedbackItem[] = [];
   let counter = 0;
   const newId = () => `fb-${++counter}`;
 
-  // ── Comments (word/comments.xml) ──
+  // Comments (word/comments.xml)
   const commentMap = new Map<string, { author: string; text: string }>();
   if (commentsXml) {
     const cRegex = /<w:comment\s+([^>]*)>([\s\S]*?)<\/w:comment>/g;
@@ -118,8 +120,6 @@ function parseDocxFeedback(docXml: string, commentsXml: string | undefined): Fee
       commentMap.set(idMatch[1], { author: authorMatch?.[1] || "Supervisor", text });
     }
   }
-
-  // For each comment, find the marked range in document.xml.
   for (const [cid, c] of commentMap) {
     const startRe = new RegExp(`<w:commentRangeStart\\s+w:id="${cid}"\\s*/>`);
     const endRe = new RegExp(`<w:commentRangeEnd\\s+w:id="${cid}"\\s*/>`);
@@ -133,16 +133,10 @@ function parseDocxFeedback(docXml: string, commentsXml: string | undefined): Fee
       while ((t = tRegex.exec(between)) !== null) txt += t[1];
       excerpt = stripXml(txt).slice(0, 400);
     }
-    items.push({
-      id: newId(),
-      type: "comment",
-      author: c.author,
-      comment: c.text,
-      target_excerpt: excerpt,
-    });
+    items.push({ id: newId(), type: "comment", author: c.author, comment: c.text, target_excerpt: excerpt });
   }
 
-  // ── Tracked insertions ──
+  // Tracked insertions
   const insRegex = /<w:ins\s+([^>]*)>([\s\S]*?)<\/w:ins>/g;
   let m;
   while ((m = insRegex.exec(docXml)) !== null) {
@@ -152,16 +146,10 @@ function parseDocxFeedback(docXml: string, commentsXml: string | undefined): Fee
     while ((t = tRegex.exec(m[2])) !== null) txt += t[1];
     txt = stripXml(txt);
     if (!txt) continue;
-    items.push({
-      id: newId(),
-      type: "insertion",
-      author,
-      comment: `Insert: "${txt}"`,
-      suggested_replacement: txt,
-    });
+    items.push({ id: newId(), type: "insertion", author, comment: `Insert: "${txt}"`, suggested_replacement: txt });
   }
 
-  // ── Tracked deletions ──
+  // Tracked deletions
   const delRegex = /<w:del\s+([^>]*)>([\s\S]*?)<\/w:del>/g;
   while ((m = delRegex.exec(docXml)) !== null) {
     const author = m[1].match(/w:author="([^"]+)"/)?.[1] || "Supervisor";
@@ -170,54 +158,76 @@ function parseDocxFeedback(docXml: string, commentsXml: string | undefined): Fee
     while ((t = tRegex.exec(m[2])) !== null) txt += t[1];
     txt = stripXml(txt);
     if (!txt) continue;
-    items.push({
-      id: newId(),
-      type: "deletion",
-      author,
-      comment: `Delete: "${txt}"`,
-      target_excerpt: txt,
-    });
+    items.push({ id: newId(), type: "deletion", author, comment: `Delete: "${txt}"`, target_excerpt: txt });
   }
 
   return items;
 }
 
-function parsePlainText(text: string): FeedbackItem[] {
-  const items: FeedbackItem[] = [];
-  let counter = 0;
-  const lines = text
-    .split(/\r?\n/)
-    .map((l) => l.trim())
-    .filter(Boolean);
+// ── AI-powered feedback scanner ───────────────────────────────────────────────
+// Detects ALL forms of annotation: freeform notes, inline instructions,
+// editorial directives, questions to the author, margin-style comments
+// written as body text — anything that's "about" the document rather than
+// being document content itself.
 
-  // Group consecutive non-bullet lines into single items; treat each bullet/numbered line as its own item.
-  const bulletRe = /^([-*•]|\d+[\).])\s+(.+)/;
-  let buffer = "";
-  const flush = () => {
-    if (buffer.trim()) {
-      items.push({ id: `fb-${++counter}`, type: "note", comment: buffer.trim() });
-      buffer = "";
-    }
-  };
-  for (const line of lines) {
-    const m = bulletRe.exec(line);
-    if (m) {
-      flush();
-      items.push({ id: `fb-${++counter}`, type: "note", comment: m[2] });
-    } else {
-      buffer += (buffer ? " " : "") + line;
-    }
-  }
-  flush();
-  return items;
+async function aiScanForFeedback(text: string, counter: number): Promise<FeedbackItem[]> {
+  const truncated = text.slice(0, 12000); // stay well within context limits
+  const result = await callAnthropicJson<any[]>({
+    model: "claude-haiku-4-5-20251001",
+    maxTokens: 2000,
+    messages: [
+      {
+        role: "user",
+        content: `You are an editorial assistant. Below is a document that may contain supervisor or reviewer notes, annotations, and corrections mixed in with the actual document content.
+
+Your task: identify EVERY editorial instruction, note, correction, question, or annotation — regardless of how it is formatted. This includes:
+- Notes written as plain text ("Note: this section needs more detail")
+- Inline instructions ("TODO: expand this argument")
+- Editorial questions ("Have you considered X?")
+- Directives mixed into the body ("Cut this to 200 words.", "Add a reference here.")
+- Sentences that read as instructions TO the author rather than as document content
+- Any text that is clearly about the document, not part of it
+- Highlighted or bracketed annotations like "[check this]", "[add citation]", "[rewrite]"
+- Notes at the top, bottom, or margins of the document (written as text paragraphs)
+
+Do NOT extract regular document content (headings, paragraphs, citations, conclusions).
+
+Return a JSON array. Each item:
+{
+  "type": "comment" | "insertion" | "deletion" | "note",
+  "comment": "<the instruction or note, verbatim or very close>",
+  "target_excerpt": "<the text being referred to, if identifiable — omit if not>",
+  "suggested_replacement": "<replacement text if explicitly suggested — omit if not>"
 }
+
+If there are no editorial notes, return [].
+
+DOCUMENT:
+${truncated}`,
+      },
+    ],
+  });
+
+  if (!Array.isArray(result)) return [];
+  let c = counter;
+  return result
+    .filter((item: any) => item && typeof item.comment === "string" && item.comment.trim())
+    .map((item: any): FeedbackItem => ({
+      id: `fb-ai-${++c}`,
+      type: ["comment", "insertion", "deletion", "note"].includes(item.type) ? item.type : "note",
+      comment: item.comment.trim(),
+      target_excerpt: item.target_excerpt?.trim() || undefined,
+      suggested_replacement: item.suggested_replacement?.trim() || undefined,
+    }));
+}
+
+// ── Main handler ──────────────────────────────────────────────────────────────
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   try {
     const body = await req.json();
     let items: FeedbackItem[] = [];
-
     let cleanText: string | undefined;
 
     if (body.docxBase64) {
@@ -228,24 +238,34 @@ serve(async (req) => {
         return new Response(JSON.stringify({ error: "No word/document.xml found in DOCX" }),
           { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
-      // Extract clean document text for CZAR context (before parsing feedback).
-      cleanText = extractParagraphText(doc).join("\n\n");
-      items = parseDocxFeedback(doc, comments);
-      // If no tracked changes/comments found, fall back to scanning for paragraphs
-      // beginning with markers like "[Comment]" or "Note:".
-      if (items.length === 0) {
-        const paras = extractParagraphText(doc);
-        const noteRe = /^(\[?(comment|note|fix|change|reword|rewrite|see also)\]?:?\s*)(.+)/i;
-        let counter = 0;
-        for (const p of paras) {
-          const m = noteRe.exec(p);
-          if (m) items.push({ id: `fb-${++counter}`, type: "note", comment: m[3] });
+
+      const paras = extractParagraphText(doc);
+      cleanText = paras.join("\n\n");
+
+      // 1. Try structural parsing (tracked changes + Word comments)
+      const structural = parseDocxStructural(doc, comments);
+      items = structural;
+
+      // 2. If structural parsing found nothing, use AI to scan all paragraph text
+      //    for any freeform notes/annotations written directly into the document body.
+      if (structural.length === 0 && paras.length > 0) {
+        console.log("[parse-supervisor-feedback] No structural feedback found — running AI scan");
+        try {
+          items = await aiScanForFeedback(cleanText, 0);
+        } catch (e) {
+          console.error("AI scan failed:", e);
+          // Fall back to returning empty rather than crashing
         }
       }
-    } else if (body.pdfText) {
-      items = parsePlainText(body.pdfText);
-    } else if (body.plainText) {
-      items = parsePlainText(body.plainText);
+    } else if (body.pdfText || body.plainText) {
+      const text: string = body.pdfText || body.plainText;
+      // AI scan: handles plain text, PDF text-layer, HTML, CSV, RTF, etc.
+      try {
+        items = await aiScanForFeedback(text, 0);
+      } catch (e) {
+        console.error("AI scan failed:", e);
+        items = [];
+      }
     } else {
       return new Response(JSON.stringify({ error: "Provide docxBase64, pdfText, or plainText" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
