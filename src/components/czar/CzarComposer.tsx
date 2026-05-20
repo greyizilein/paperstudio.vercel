@@ -1,5 +1,5 @@
 import { useEffect, useImperativeHandle, useRef, useState, forwardRef } from "react";
-import { Plus, Square, ScrollText, MessageSquare, Hammer, ChevronDown, UserRoundCheck, ArrowUp } from "lucide-react";
+import { Plus, Square, ScrollText, MessageSquare, Hammer, ChevronDown, UserRoundCheck, ArrowUp, FileEdit } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
@@ -65,8 +65,10 @@ export const CzarComposer = forwardRef<CzarComposerHandle, Props>(function CzarC
   const [attachments, setAttachments] = useState<CzarAttachment[]>([]);
   const [dragOver, setDragOver] = useState(false);
   const [modeOpen, setModeOpen] = useState(false);
+  const [correctionsUploading, setCorrectionsUploading] = useState(false);
   const taRef = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const correctionsRef = useRef<HTMLInputElement>(null);
   const modeBtnRef = useRef<HTMLDivElement>(null);
 
   // Compute remaining words for the live word-count strip.
@@ -190,6 +192,31 @@ export const CzarComposer = forwardRef<CzarComposerHandle, Props>(function CzarC
   const removeAttachment = async (path: string) => {
     setAttachments((prev) => prev.filter((a) => a.path !== path));
     supabase.storage.from("czar-uploads").remove([path]).catch(() => {});
+  };
+
+  const handleCorrectionsFile = async (file: File) => {
+    if (!user || !onSupervisorFeedback) return;
+    if (!file.name.toLowerCase().endsWith(".docx")) {
+      toast({ title: "Only .docx files supported for corrections", variant: "destructive" });
+      return;
+    }
+    setCorrectionsUploading(true);
+    const safe = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+    const path = `${user.id}/${crypto.randomUUID()}-${safe}`;
+    const { error } = await supabase.storage.from("czar-uploads").upload(path, file, {
+      cacheControl: "3600", upsert: false, contentType: file.type || undefined,
+    });
+    setCorrectionsUploading(false);
+    if (error) {
+      toast({ title: "Upload failed", description: error.message, variant: "destructive" });
+      return;
+    }
+    const att: CzarAttachment = {
+      path, filename: file.name, size: file.size,
+      mime: file.type || "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      status: "ready",
+    };
+    onSupervisorFeedback("Apply supervisor corrections", [att]);
   };
 
   const ModeIcon = MODE_META[mode].Icon;
@@ -384,6 +411,37 @@ export const CzarComposer = forwardRef<CzarComposerHandle, Props>(function CzarC
                   >
                     +THINK
                   </button>
+                )}
+
+                {/* Corrections upload — dedicated button for supervisor feedback */}
+                {onSupervisorFeedback && (
+                  <>
+                    <input
+                      ref={correctionsRef}
+                      type="file"
+                      accept=".docx"
+                      className="hidden"
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        if (f) handleCorrectionsFile(f);
+                        e.target.value = "";
+                      }}
+                    />
+                    <button
+                      onClick={() => correctionsRef.current?.click()}
+                      disabled={disabled || correctionsUploading}
+                      className="flex items-center gap-1.5 h-8 px-3 rounded-full text-[11px] font-semibold transition-all shrink-0 disabled:opacity-40"
+                      style={{
+                        background: "var(--czar-bg)",
+                        color: "var(--czar-text-dim)",
+                        border: "1px solid var(--czar-border)",
+                      }}
+                      title="Upload a .docx with supervisor tracked changes or comments"
+                    >
+                      <FileEdit size={12} />
+                      {correctionsUploading ? "Uploading…" : "Corrections"}
+                    </button>
+                  </>
                 )}
 
               </div>
