@@ -32,6 +32,10 @@ interface Props {
   project?: Project;
   /** Plain text of the document to edit — replaces chapter.content when provided (CZAR context). */
   documentText?: string;
+  /** Document title shown in the applying step and header (CZAR context). */
+  documentTitle?: string;
+  /** Actual word count of the document — passed to the correction AI for context. */
+  documentWords?: number;
   /** Pre-loaded feedback items — skips to "confirm" step when provided. */
   initialItems?: FeedbackItem[];
   onApplied: (revisedContent: string, itemsAppliedCount: number) => void;
@@ -123,7 +127,7 @@ function StepBar({ step }: { step: Step }) {
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export function SupervisorFeedbackModal({ open, onClose, chapter, project, documentText, initialItems, onApplied }: Props) {
+export function SupervisorFeedbackModal({ open, onClose, chapter, project, documentText, documentTitle, documentWords, initialItems, onApplied }: Props) {
   const [step, setStep] = useState<Step>(() => initialItems && initialItems.length > 0 ? "confirm" : "upload");
   const [parsing, setParsing] = useState(false);
   const [parseProgress, setParseProgress] = useState(0);
@@ -255,10 +259,12 @@ export function SupervisorFeedbackModal({ open, onClose, chapter, project, docum
           headers: await authedHeaders(),
           body: JSON.stringify({
             chapter: {
-              title: chapter?.title ?? "Document",
+              title: documentTitle ?? chapter?.title ?? "Document",
               type: chapter?.type ?? "general",
-              content: documentText ?? localCleanText || chapter?.content ?? "",
-              word_count_actual: chapter?.word_count_actual,
+              content: documentText ?? localCleanText ?? chapter?.content ?? "",
+              word_count_actual: documentWords ?? chapter?.word_count_actual ?? Math.round(
+                (documentText ?? localCleanText ?? chapter?.content ?? "").split(/\s+/).filter(Boolean).length
+              ),
               word_count_target: chapter?.word_count_target,
             },
             project: {
@@ -351,7 +357,7 @@ export function SupervisorFeedbackModal({ open, onClose, chapter, project, docum
             <div className="flex items-start justify-between mb-4">
               <div>
                 <h2 className="text-[15px] font-black text-foreground">Apply supervisor corrections</h2>
-                <p className="text-[11px] text-muted-foreground mt-0.5 truncate max-w-[460px]">{chapter?.title || "Uploaded document"}</p>
+                <p className="text-[11px] text-muted-foreground mt-0.5 truncate max-w-[460px]">{documentTitle ?? chapter?.title ?? "Uploaded document"}</p>
               </div>
               <button onClick={handleClose} className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-secondary rounded-lg transition-colors ml-2 flex-shrink-0">
                 <X size={15} />
@@ -555,7 +561,7 @@ export function SupervisorFeedbackModal({ open, onClose, chapter, project, docum
                 <div className="text-center">
                   <p className="text-[14px] font-bold text-foreground">{applyStatus}</p>
                   <p className="text-[12px] text-muted-foreground mt-1">
-                    Applying {selectedCount} correction{selectedCount === 1 ? "" : "s"} to "{chapter?.title || "your document"}"
+                    Applying {selectedCount} correction{selectedCount === 1 ? "" : "s"} to "{documentTitle ?? chapter?.title ?? "your document"}"
                   </p>
                 </div>
 

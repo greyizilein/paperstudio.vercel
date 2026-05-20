@@ -265,7 +265,7 @@ export const CzarComposer = forwardRef<CzarComposerHandle, Props>(function CzarC
                 mode === "plan"  ? "Describe what you want planned…" :
                 mode === "build" ? "Describe the artifact to build…" :
                 mode === "agent" ? "Drop your brief or describe the deliverable. Agent will produce and download it." :
-                                   "Ask CZAR anything, or describe what to write…"
+                                   "Describe what to write, or ask CZAR to edit the document…"
               }
               rows={1}
               className="w-full bg-transparent resize-none outline-none text-[14px] px-1 py-1 max-h-[220px] placeholder:opacity-50"
