@@ -110,7 +110,7 @@ serve(async (req) => {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          from: `PaperStudio <noreply@paperstudio.dev>`,
+          from: Deno.env.get("RESEND_FROM_EMAIL") ?? "onboarding@resend.dev",
           to: batch,
           subject,
           html: body.replace(/\n/g, "<br>"),
