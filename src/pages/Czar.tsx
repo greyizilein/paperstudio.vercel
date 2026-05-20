@@ -1187,6 +1187,7 @@ export default function Czar() {
             streaming={streaming}
             showQuillCaret={settings.show_quill_caret !== false}
             isEditing={isDocEditing}
+            displayName={displayName}
             diff={documentDiff}
             onAcceptDiff={() => setDocumentDiff(null)}
             onRejectDiff={() => {
@@ -1260,7 +1261,7 @@ export default function Czar() {
           documentTitle={activeConversation?.title || undefined}
           documentWords={wordCount || undefined}
           onApplied={(revisedContent, count) => {
-            setShowSupervisorModal(false);
+            // Modal closes itself (from the "Close & review diff" button in done step)
             // Show tracked-changes diff between old and corrected document
             if (documentContent && documentContent !== revisedContent) {
               const diff = computeParaDiff(documentContent, revisedContent);

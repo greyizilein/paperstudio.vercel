@@ -11,7 +11,6 @@ import { CzarFollowups } from "./CzarFollowups";
 import { CzarPlanCard, extractPlanSpec } from "./CzarPlanCard";
 import { CzarToolCard } from "./CzarToolCard";
 import { CzarNoteCard } from "./CzarNoteCard";
-import { CzarIcon } from "@/components/icons/CzarIcon";
 import type { CzarToolCallState } from "./CzarToolCard";
 import type { DiffParagraph } from "@/lib/diffUtils";
 
@@ -53,6 +52,7 @@ interface Props {
   streaming: boolean;
   showQuillCaret?: boolean;
   isEditing?: boolean;
+  displayName?: string;
   diff?: DiffParagraph[] | null;
   onAcceptDiff?: () => void;
   onRejectDiff?: () => void;
@@ -83,6 +83,7 @@ export function CzarDocumentView({
   streaming,
   showQuillCaret = true,
   isEditing = false,
+  displayName,
   diff,
   onAcceptDiff,
   onRejectDiff,
@@ -135,18 +136,21 @@ export function CzarDocumentView({
   // ── Empty state ──
   if (!content && !streaming) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center gap-3 px-6 select-none">
-        <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: "var(--czar-accent)", color: "var(--czar-accent-fg)" }}>
-          <CzarIcon size={18} />
-        </div>
-        <div className="text-center">
-          <p className="text-[15px] font-semibold" style={{ color: "var(--czar-text)" }}>
-            Your document will appear here
+      <div className="flex-1 flex flex-col px-5 sm:px-10 pt-10 sm:pt-14 select-none animate-in fade-in duration-300">
+        {displayName && (
+          <p
+            className="text-[13px] sm:text-[14px] font-medium mb-2 opacity-60"
+            style={{ color: "var(--czar-text)" }}
+          >
+            Hi {displayName}
           </p>
-          <p className="text-[12px] mt-1 opacity-50" style={{ color: "var(--czar-text)" }}>
-            Type below to start writing or ask CZAR to create something
-          </p>
-        </div>
+        )}
+        <h1
+          className="text-[28px] sm:text-[38px] font-bold leading-[1.12] tracking-tight max-w-[14ch]"
+          style={{ color: "var(--czar-text)" }}
+        >
+          What's been on your mind lately?
+        </h1>
       </div>
     );
   }
