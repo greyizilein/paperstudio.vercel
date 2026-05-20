@@ -1040,7 +1040,7 @@ export default function Czar() {
         {/* ── Top header bar ── */}
         <div
           className="h-11 flex items-center justify-between px-4 shrink-0"
-          style={{ borderBottom: `1px solid var(--czar-border)`, background: "var(--czar-bg)" }}
+          style={{ background: "var(--czar-bg)" }}
         >
           {/* Left: avatar/menu */}
           <button
@@ -1059,13 +1059,15 @@ export default function Czar() {
             {displayName ? displayName[0].toUpperCase() : <CzarIcon size={14} />}
           </button>
 
-          {/* Centre: document title */}
-          <span
-            className="text-[13px] font-semibold truncate max-w-[45%] select-none"
-            style={{ color: "var(--czar-text)" }}
-          >
-            {activeConversation?.title || (messages.length === 0 ? `Hi ${displayName}` : "New document")}
-          </span>
+          {/* Centre: conversation title (only when one exists) */}
+          {activeConversation?.title && (
+            <span
+              className="text-[13px] font-semibold truncate max-w-[45%] select-none"
+              style={{ color: "var(--czar-text)" }}
+            >
+              {activeConversation.title}
+            </span>
+          )}
 
           {/* Right: new + settings */}
           <div className="flex items-center gap-1.5">
@@ -1094,7 +1096,6 @@ export default function Czar() {
         {documentContent && (
           <div
             className="h-10 flex items-center justify-between px-3 shrink-0"
-            style={{ borderBottom: `1px solid var(--czar-border)` }}
           >
             {/* Left: mode label + word count */}
             <div className="flex items-center gap-3">
