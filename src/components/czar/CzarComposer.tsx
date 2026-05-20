@@ -20,9 +20,6 @@ export interface CzarAttachment {
 
 export type CzarMode = "chat" | "plan" | "build" | "agent";
 
-// Keywords that indicate the attached document contains supervisor/reviewer feedback.
-const FEEDBACK_KEYWORDS = /\b(feedback|correction|tracked.?change|supervisor|comment|annotation|revision|reviewer|mark.?up|redline)\b/i;
-
 interface Props {
   onSend: (text: string, attachments: CzarAttachment[]) => void;
   onStop?: () => void;
@@ -34,8 +31,8 @@ interface Props {
   onModeChange?: (m: CzarMode) => void;
   subscription?: any;
   onUpgrade?: () => void;
-  /** Called when a .docx with feedback/corrections keywords is submitted — triggers supervisor feedback parsing. */
-  onSupervisorFeedback?: (text: string, attachments: CzarAttachment[]) => void;
+  /** Opens the supervisor corrections modal directly — modal handles its own file upload. */
+  onOpenCorrections?: () => void;
 }
 
 export interface CzarComposerHandle {
@@ -57,7 +54,7 @@ const MODE_META: Record<CzarMode, { label: string; Icon: typeof ScrollText; hint
 };
 
 export const CzarComposer = forwardRef<CzarComposerHandle, Props>(function CzarComposer(
-  { onSend, onStop, disabled, streaming, thinkingMode, onToggleThinking, mode = "chat", onModeChange, subscription, onUpgrade, onSupervisorFeedback },
+  { onSend, onStop, disabled, streaming, thinkingMode, onToggleThinking, mode = "chat", onModeChange, subscription, onUpgrade, onOpenCorrections },
   ref,
 ) {
   const { user } = useAuth();
@@ -65,10 +62,8 @@ export const CzarComposer = forwardRef<CzarComposerHandle, Props>(function CzarC
   const [attachments, setAttachments] = useState<CzarAttachment[]>([]);
   const [dragOver, setDragOver] = useState(false);
   const [modeOpen, setModeOpen] = useState(false);
-  const [correctionsUploading, setCorrectionsUploading] = useState(false);
   const taRef = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
-  const correctionsRef = useRef<HTMLInputElement>(null);
   const modeBtnRef = useRef<HTMLDivElement>(null);
 
   // Compute remaining words for the live word-count strip.
@@ -122,17 +117,6 @@ export const CzarComposer = forwardRef<CzarComposerHandle, Props>(function CzarC
     }
     const payloadText = text.trim();
     const payloadAttachments = attachments.filter((a) => a.status === "ready");
-
-    // Supervisor feedback detection: .docx + feedback/corrections keywords → open correction modal.
-    if (onSupervisorFeedback && payloadAttachments.some((a) => a.filename.toLowerCase().endsWith(".docx") && a.status === "ready") && FEEDBACK_KEYWORDS.test(payloadText)) {
-      onSupervisorFeedback(payloadText, payloadAttachments);
-      requestAnimationFrame(() => {
-        setText("");
-        setAttachments([]);
-        if (taRef.current) taRef.current.style.height = "auto";
-      });
-      return;
-    }
 
     onSend(payloadText, payloadAttachments);
     requestAnimationFrame(() => {
@@ -192,31 +176,6 @@ export const CzarComposer = forwardRef<CzarComposerHandle, Props>(function CzarC
   const removeAttachment = async (path: string) => {
     setAttachments((prev) => prev.filter((a) => a.path !== path));
     supabase.storage.from("czar-uploads").remove([path]).catch(() => {});
-  };
-
-  const handleCorrectionsFile = async (file: File) => {
-    if (!user || !onSupervisorFeedback) return;
-    if (!file.name.toLowerCase().endsWith(".docx")) {
-      toast({ title: "Only .docx files supported for corrections", variant: "destructive" });
-      return;
-    }
-    setCorrectionsUploading(true);
-    const safe = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-    const path = `${user.id}/${crypto.randomUUID()}-${safe}`;
-    const { error } = await supabase.storage.from("czar-uploads").upload(path, file, {
-      cacheControl: "3600", upsert: false, contentType: file.type || undefined,
-    });
-    setCorrectionsUploading(false);
-    if (error) {
-      toast({ title: "Upload failed", description: error.message, variant: "destructive" });
-      return;
-    }
-    const att: CzarAttachment = {
-      path, filename: file.name, size: file.size,
-      mime: file.type || "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-      status: "ready",
-    };
-    onSupervisorFeedback("Apply supervisor corrections", [att]);
   };
 
   const ModeIcon = MODE_META[mode].Icon;
@@ -413,35 +372,22 @@ export const CzarComposer = forwardRef<CzarComposerHandle, Props>(function CzarC
                   </button>
                 )}
 
-                {/* Corrections upload — dedicated button for supervisor feedback */}
-                {onSupervisorFeedback && (
-                  <>
-                    <input
-                      ref={correctionsRef}
-                      type="file"
-                      accept=".docx"
-                      className="hidden"
-                      onChange={(e) => {
-                        const f = e.target.files?.[0];
-                        if (f) handleCorrectionsFile(f);
-                        e.target.value = "";
-                      }}
-                    />
-                    <button
-                      onClick={() => correctionsRef.current?.click()}
-                      disabled={disabled || correctionsUploading}
-                      className="flex items-center gap-1.5 h-8 px-3 rounded-full text-[11px] font-semibold transition-all shrink-0 disabled:opacity-40"
-                      style={{
-                        background: "var(--czar-bg)",
-                        color: "var(--czar-text-dim)",
-                        border: "1px solid var(--czar-border)",
-                      }}
-                      title="Upload a .docx with supervisor tracked changes or comments"
-                    >
-                      <FileEdit size={12} />
-                      {correctionsUploading ? "Uploading…" : "Corrections"}
-                    </button>
-                  </>
+                {/* Corrections — opens the supervisor feedback modal directly */}
+                {onOpenCorrections && (
+                  <button
+                    onClick={() => onOpenCorrections()}
+                    disabled={disabled}
+                    className="flex items-center gap-1.5 h-8 px-3 rounded-full text-[11px] font-semibold transition-all shrink-0 disabled:opacity-40"
+                    style={{
+                      background: "var(--czar-bg)",
+                      color: "var(--czar-text-dim)",
+                      border: "1px solid var(--czar-border)",
+                    }}
+                    title="Apply supervisor corrections — upload a .docx with tracked changes or comments"
+                  >
+                    <FileEdit size={12} />
+                    Corrections
+                  </button>
                 )}
 
               </div>

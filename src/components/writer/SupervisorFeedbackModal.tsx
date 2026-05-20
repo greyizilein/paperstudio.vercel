@@ -130,6 +130,7 @@ export function SupervisorFeedbackModal({ open, onClose, chapter, project, docum
   const [items, setItems] = useState<FeedbackItem[]>(() =>
     (initialItems || []).map((it) => ({ ...it, selected: true, override: "", scope: "local" as const }))
   );
+  const [localCleanText, setLocalCleanText] = useState("");
   const [pasted, setPasted] = useState("");
   const [applying, setApplying] = useState(false);
   const [applyProgress, setApplyProgress] = useState(0);
@@ -145,6 +146,7 @@ export function SupervisorFeedbackModal({ open, onClose, chapter, project, docum
     setParseProgress(0);
     setApplyProgress(0);
     setAppliedCount(0);
+    setLocalCleanText("");
   };
 
   const handleClose = () => { reset(); onClose(); };
@@ -202,6 +204,7 @@ export function SupervisorFeedbackModal({ open, onClose, chapter, project, docum
         toast.error("No feedback items detected. Try pasting comments below.");
       } else {
         setItems(parsed);
+        if (data.cleanText) setLocalCleanText(data.cleanText);
         setStep("confirm");
       }
     } catch (e: any) {
@@ -254,7 +257,7 @@ export function SupervisorFeedbackModal({ open, onClose, chapter, project, docum
             chapter: {
               title: chapter?.title ?? "Document",
               type: chapter?.type ?? "general",
-              content: documentText ?? chapter?.content ?? "",
+              content: documentText ?? localCleanText || chapter?.content ?? "",
               word_count_actual: chapter?.word_count_actual,
               word_count_target: chapter?.word_count_target,
             },
