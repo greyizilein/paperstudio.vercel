@@ -140,6 +140,7 @@ export function SupervisorFeedbackModal({ open, onClose, chapter, project, docum
   const [applyProgress, setApplyProgress] = useState(0);
   const [applyStatus, setApplyStatus] = useState("Analysing feedback…");
   const [appliedCount, setAppliedCount] = useState(0);
+  const [appliedResult, setAppliedResult] = useState<{ content: string; count: number } | null>(null);
 
   if (!open) return null;
 
@@ -151,6 +152,7 @@ export function SupervisorFeedbackModal({ open, onClose, chapter, project, docum
     setApplyProgress(0);
     setAppliedCount(0);
     setLocalCleanText("");
+    setAppliedResult(null);
   };
 
   const handleClose = () => { reset(); onClose(); };
@@ -329,11 +331,10 @@ export function SupervisorFeedbackModal({ open, onClose, chapter, project, docum
       const count = appliedIds.length || selected.length;
       setAppliedCount(count);
 
-      // Short delay for "Done!" feedback before closing
+      // Short delay for "Done!" feedback before advancing
       await new Promise((r) => setTimeout(r, 600));
+      setAppliedResult({ content: cleaned, count });
       setStep("done");
-
-      onApplied(cleaned, count);
     } catch (e: any) {
       clearInterval(ramp);
       clearInterval(statusInterval);
@@ -378,7 +379,7 @@ export function SupervisorFeedbackModal({ open, onClose, chapter, project, docum
                 </div>
               ) : (
                 <>
-                  <input id="sup-feedback-file" type="file" accept=".docx,.pdf,.txt,.md" className="hidden"
+                  <input id="sup-feedback-file" type="file" accept=".docx,.pdf,.txt,.md,.html,.htm,.rtf,.odt,.csv,.xlsx,.xls" className="hidden"
                     onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); e.target.value = ""; }} />
                   <label htmlFor="sup-feedback-file"
                     className="block border-2 border-dashed border-border rounded-xl p-8 text-center cursor-pointer hover:border-primary hover:bg-primary/5 transition-all group">
@@ -386,7 +387,7 @@ export function SupervisorFeedbackModal({ open, onClose, chapter, project, docum
                     <div className="text-[14px] font-bold text-foreground">Drop supervisor file here</div>
                     <p className="text-[12px] text-muted-foreground mt-1.5 leading-relaxed">
                       <strong>.docx</strong> with tracked changes + comments — recommended<br />
-                      Also accepts: .pdf, .txt, .md
+                      Also accepts: .pdf, .txt, .md, .html, .rtf, .odt, .csv, .xlsx
                     </p>
                     <div className="flex items-center gap-1.5 justify-center mt-3 text-[11px] text-muted-foreground">
                       <Info size={11} />
@@ -624,9 +625,15 @@ export function SupervisorFeedbackModal({ open, onClose, chapter, project, docum
               )}
             </div>
             <div className="flex gap-2">
-              <button onClick={handleClose}
+              <button
+                onClick={() => {
+                  if (step === "done" && appliedResult) {
+                    onApplied(appliedResult.content, appliedResult.count);
+                  }
+                  handleClose();
+                }}
                 className="px-4 py-2 rounded-xl text-[12px] font-bold text-muted-foreground hover:bg-secondary transition-colors">
-                {step === "done" ? "Close" : "Cancel"}
+                {step === "done" ? "Close & review diff" : "Cancel"}
               </button>
               {step === "confirm" && (
                 <button
