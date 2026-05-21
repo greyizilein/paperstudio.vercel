@@ -1,9 +1,11 @@
-import { LayoutDashboard, FolderOpen, Download, User, Settings, CreditCard, HelpCircle, LogOut, ShieldCheck } from "lucide-react";
+import { useState } from "react";
+import { LayoutDashboard, FolderOpen, Download, User, Settings, CreditCard, HelpCircle, LogOut, ShieldCheck, Bell } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { CzarIcon } from "@/components/icons/CzarIcon";
 import { usePsTheme } from "@/contexts/PsThemeContext";
 import { getPsTheme } from "@/lib/psThemes";
 import { NotionSidebar } from "@/components/dashboard/NotionSidebar";
+import { NotificationPanel } from "@/components/dashboard/NotificationPanel";
 import { PsAvatar } from "@/components/ps/PsAvatar";
 
 const ADMIN_EMAIL = "grey.izilein@gmail.com";
@@ -34,6 +36,8 @@ export function DashboardSidebar({ userName, userInitials, tier = "Masters", onS
   const isAdmin = userEmail === ADMIN_EMAIL;
   const { themeId } = usePsTheme();
   const sidebarVariant = getPsTheme(themeId).sidebar;
+  const [inboxOpen, setInboxOpen] = useState(false);
+  const [unread, setUnread] = useState(0);
 
   // Themes opting into the Notion-exact layout render a fully different shell.
   if (sidebarVariant === "notion-exact") {
@@ -122,7 +126,17 @@ export function DashboardSidebar({ userName, userInitials, tier = "Masters", onS
       </nav>
 
       {/* Sign out */}
-      <div className="px-3 pb-5">
+      <div className="px-3 pb-5 space-y-0.5">
+        <button
+          onClick={() => setInboxOpen(true)}
+          className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-[12px] font-semibold text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground transition-colors cursor-pointer"
+        >
+          <Bell size={15} />
+          <span className="flex-1 text-left">Inbox</span>
+          {unread > 0 && (
+            <span className="px-1.5 py-0.5 rounded-full bg-primary text-primary-foreground text-[9px] font-bold">{unread}</span>
+          )}
+        </button>
         <button
           onClick={onSignOut}
           className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-[12px] font-semibold text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground transition-colors cursor-pointer"
@@ -131,6 +145,12 @@ export function DashboardSidebar({ userName, userInitials, tier = "Masters", onS
           Sign out
         </button>
       </div>
+
+      <NotificationPanel
+        open={inboxOpen}
+        onClose={() => setInboxOpen(false)}
+        onUnreadChange={setUnread}
+      />
     </aside>
   );
 }

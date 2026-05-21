@@ -9,7 +9,7 @@ const corsHeaders = {
 
 const ADMIN_EMAIL = "grey.izilein@gmail.com";
 const TIER_LIMITS: Record<string, number> = {
-  free: 3000, undergraduate: 50000, masters: 80000, phd: 120000,
+  free: 3000, undergraduate: 50000, masters: 80000, phd: 120000, enterprise: 200000,
 };
 
 serve(async (req) => {

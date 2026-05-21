@@ -1,6 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { PageHero } from "@/components/firstdraft/PageHero";
+import { useSiteContent } from "@/hooks/useSiteContent";
 
 const FONTS = {
   headline: '"Fraunces", "Playfair Display", Georgia, serif',
@@ -10,6 +11,10 @@ const FONTS = {
 export default function PricingPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const introContent = useSiteContent<{ text: string }>(
+    "pricing", "intro_text",
+    { text: "No subscriptions. One project per payment. Revisions based per project tier." }
+  );
 
   const handleUpgrade = (tierKey: string) => {
     if (!user) { navigate(`/auth?redirect=/settings?tab=billing`); return; }
@@ -45,19 +50,27 @@ export default function PricingPage() {
       off: [],
       hot: false, dark: true,
     },
+    {
+      tier: 'Enterprise', amt: 'Contact us', per: 'Custom pricing',
+      desc: 'For institutions, research labs, and high-volume teams with unique needs.',
+      features: ['Everything in PhD', '200,000+ words', 'Dedicated account support', 'Custom onboarding & setup'],
+      off: [],
+      hot: false, dark: false,
+    },
   ];
 
   return (
     <div>
       <PageHero
         title={<>Pay once.<br /><em style={{ fontStyle: "italic", color: "var(--ma-accent)" }}>Yours forever.</em></>}
-        subtitle="No subscriptions. One project per payment. Revisions based per project tier."
+        subtitle={introContent.text}
       />
       <section style={{ padding: "100px 24px", maxWidth: "1200px", margin: "0 auto" }}>
         <style>{`
-          .pricing-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
-          @media (max-width: 900px) { .pricing-grid { grid-template-columns: repeat(2, 1fr); } }
-          @media (max-width: 560px) { .pricing-grid { grid-template-columns: 1fr; } }
+          .pricing-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; }
+          @media (max-width: 1100px) { .pricing-grid { grid-template-columns: repeat(3, 1fr); } }
+          @media (max-width: 760px) { .pricing-grid { grid-template-columns: repeat(2, 1fr); } }
+          @media (max-width: 480px) { .pricing-grid { grid-template-columns: 1fr; } }
         `}</style>
         <div className="pricing-grid">
           {plans.map(p => {
@@ -116,7 +129,7 @@ export default function PricingPage() {
                   <div style={{ fontFamily: FONTS.body, fontSize: "11px", fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase" as const, color: headerTextMuted, marginBottom: "8px" }}>
                     {p.tier}
                   </div>
-                  <div style={{ fontFamily: FONTS.headline, fontStyle: "italic", fontSize: "42px", fontWeight: 700, letterSpacing: "-0.02em", lineHeight: 1, color: headerTextPrimary }}>
+                  <div style={{ fontFamily: p.tier === 'Enterprise' ? FONTS.body : FONTS.headline, fontStyle: p.tier === 'Enterprise' ? "normal" : "italic", fontSize: p.tier === 'Enterprise' ? "24px" : "42px", fontWeight: 700, letterSpacing: "-0.02em", lineHeight: 1, color: headerTextPrimary }}>
                     {p.amt}
                   </div>
                   <div style={{ fontFamily: FONTS.body, fontSize: "13px", marginTop: "4px", color: headerTextMuted }}>
@@ -144,7 +157,11 @@ export default function PricingPage() {
                     ))}
                   </ul>
                   <button
-                    onClick={() => p.tier === 'Free' ? navigate('/auth?tab=signup') : handleUpgrade(p.tier.toLowerCase())}
+                    onClick={() => {
+                      if (p.tier === 'Free') { navigate('/auth?tab=signup'); return; }
+                      if (p.tier === 'Enterprise') { navigate('/contact'); return; }
+                      handleUpgrade(p.tier.toLowerCase());
+                    }}
                     style={{
                       width: "100%",
                       padding: "12px",
@@ -171,9 +188,9 @@ export default function PricingPage() {
                       btn.style.color = p.hot ? "var(--ma-accent)" : p.dark ? "var(--ma-text)" : "var(--ma-accent)";
                     }}
                   >
-                    {p.tier === 'Free' ? 'Start free →' : p.tier === 'Masters' ? 'Get Masters →' : p.tier === 'PhD' ? 'Get PhD tier →' : 'Get started →'}
+                    {p.tier === 'Free' ? 'Start free →' : p.tier === 'Enterprise' ? 'Get in touch →' : p.tier === 'Masters' ? 'Get Masters →' : p.tier === 'PhD' ? 'Get PhD tier →' : 'Get started →'}
                   </button>
-                  {p.tier !== 'Free' && (
+                  {p.tier !== 'Free' && p.tier !== 'Enterprise' && (
                     <p style={{ fontSize: "10px", textAlign: "center", marginTop: "6px", color: "var(--ma-text-dim)", fontFamily: FONTS.body }}>
                       Charged in NGN at checkout
                     </p>

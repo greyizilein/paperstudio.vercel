@@ -10,6 +10,7 @@ const TIER_LIMITS: Record<string, number> = {
   undergraduate: 50000,
   masters: 80000,
   phd: 120000,
+  enterprise: 200000,
 };
 
 Deno.serve(async (req) => {

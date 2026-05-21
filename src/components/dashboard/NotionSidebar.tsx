@@ -7,6 +7,7 @@ import {
 import { CzarIcon } from "@/components/icons/CzarIcon";
 import { PsAvatar } from "@/components/ps/PsAvatar";
 import { supabase } from "@/integrations/supabase/client";
+import { NotificationPanel } from "@/components/dashboard/NotificationPanel";
 
 const ADMIN_EMAIL = "grey.izilein@gmail.com";
 
@@ -18,6 +19,8 @@ interface Props {
   onSignOut: () => void;
   onNewProject?: () => void;
   avatarUrl?: string;
+  onOpenInbox?: () => void;
+  onUnreadChange?: (n: number) => void;
 }
 
 interface RecentProject { id: string; title: string }
@@ -43,12 +46,14 @@ interface RecentProject { id: string; title: string }
  */
 export function NotionSidebar({
   userName, userInitials, tier = "Free", userEmail, onSignOut, onNewProject, avatarUrl,
+  onOpenInbox, onUnreadChange,
 }: Props) {
   const navigate = useNavigate();
   const location = useLocation();
   const isAdmin = userEmail === ADMIN_EMAIL;
   const [recents, setRecents] = useState<RecentProject[]>([]);
   const [unreadInbox, setUnreadInbox] = useState(0);
+  const [inboxOpen, setInboxOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -79,8 +84,8 @@ export function NotionSidebar({
       }, active: false },
     { icon: CzarIcon, label: "CZAR",   onClick: () => navigate("/czar"), badge: "AI",
       active: isActive(() => location.pathname.startsWith("/czar")) },
-    { icon: Inbox,    label: "Inbox",  onClick: () => navigate("/dashboard"),
-      active: false, count: unreadInbox },
+    { icon: Inbox,    label: "Inbox",  onClick: () => { if (onOpenInbox) { onOpenInbox(); } else { setInboxOpen(true); } },
+      active: inboxOpen, count: unreadInbox },
   ];
 
   const bottom = [
@@ -222,6 +227,12 @@ export function NotionSidebar({
           New project
         </button>
       </div>
+
+      <NotificationPanel
+        open={inboxOpen}
+        onClose={() => setInboxOpen(false)}
+        onUnreadChange={(n) => { setUnreadInbox(n); onUnreadChange?.(n); }}
+      />
     </aside>
   );
 }
