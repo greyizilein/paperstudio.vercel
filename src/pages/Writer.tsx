@@ -4,7 +4,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import {
   Check, Copy, Download, Settings, X, Plus, Trash2,
   Loader2, Sparkles, StopCircle, Wand2, BarChart2, Upload, Lock, MoreVertical, Image as ImageIcon, Cpu,
-  FolderOpen, ChevronRight, ArrowLeft, PenLine, FileEdit, Columns2, GripVertical, Share2, MessageCircle
+  FolderOpen, ChevronRight, ArrowLeft, PenLine, FileEdit, Columns2, GripVertical, Share2, MessageCircle, MessageSquare
 } from "lucide-react";
 import { CzarIcon } from "@/components/icons/CzarIcon";
 
@@ -49,6 +49,7 @@ import { SupervisorFeedbackModal } from "@/components/writer/SupervisorFeedbackM
 import { toast } from "sonner";
 import { authedHeaders } from "@/lib/edgeFetch";
 import { computeParaDiff, type DiffParagraph } from "@/lib/diffUtils";
+import { MessagePanel } from "@/components/dashboard/MessagePanel";
 
 // ═══ PERSONALISE STATE ═══
 interface PersonaliseState {
@@ -369,6 +370,7 @@ export default function WriterPage() {
   const [showGrammarModal, setShowGrammarModal] = useState(false);
   const [showModelPicker, setShowModelPicker] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [messagesOpen, setMessagesOpen] = useState(false);
   const [reviseText, setReviseText] = useState("");
   const [personalise, setPersonalise] = useState<PersonaliseState>({ ...defaultPersonalise });
   const [dynamicTheorists, setDynamicTheorists] = useState<string[]>([]);
@@ -2187,6 +2189,7 @@ ${thesisArea}`);
                     { icon: Sparkles, label: "Settings", onClick: () => { setShowPersonalise(true); setMobileMenuOpen(false); } },
                     { icon: FolderOpen, label: "Projects", onClick: () => { setShowProjectsDrawer(true); setMobileMenuOpen(false); } },
                     { icon: Plus, label: "New", onClick: () => { navigate("/new-project"); setMobileMenuOpen(false); } },
+                    { icon: MessageSquare, label: "Messages", onClick: () => { setMessagesOpen(true); setMobileMenuOpen(false); } },
                   ].map((item) => (
                     <button key={item.label} onClick={item.onClick} title={item.label} className="flex flex-col items-center gap-1 px-2 py-3 rounded-xl bg-secondary/40 hover:bg-secondary text-foreground transition-all">
                       <item.icon size={18} />
@@ -4037,6 +4040,9 @@ ${thesisArea}`);
 
       {/* First-visit studio tour */}
       {showTour && <OnboardingTour onDone={handleTourDone} />}
+
+      {/* Messages panel — accessible via mobile ⋯ menu */}
+      <MessagePanel open={messagesOpen} onClose={() => setMessagesOpen(false)} />
 
       {/* Supervisor share link modal */}
       {showShareModal && shareUrl && (

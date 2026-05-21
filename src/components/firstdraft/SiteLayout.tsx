@@ -1,6 +1,7 @@
 import { Outlet, Link } from "react-router-dom";
 import { MarketingThemeProvider, useMarketingTheme } from "@/contexts/MarketingThemeContext";
 import { MarketingNavbar } from "./marketing/Navbar";
+import { FloatingChat } from "@/components/FloatingChat";
 
 const FONTS = {
   headline: '"Fraunces", "Playfair Display", Georgia, serif',
@@ -20,6 +21,7 @@ function SiteLayoutInner() {
         <Outlet />
       </main>
       <SiteFooter />
+      <FloatingChat />
     </div>
   );
 }

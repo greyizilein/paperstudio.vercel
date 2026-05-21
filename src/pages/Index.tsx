@@ -10,6 +10,7 @@ import { MarketingPricing } from "@/components/firstdraft/marketing/Pricing";
 import { CTABanner } from "@/components/firstdraft/marketing/CTABanner";
 import { MarketingFooter } from "@/components/firstdraft/marketing/Footer";
 import { MarketingThemeProvider, useMarketingTheme } from "@/contexts/MarketingThemeContext";
+import { FloatingChat } from "@/components/FloatingChat";
 
 const IndexInner = () => {
   const { mode } = useMarketingTheme();
@@ -28,6 +29,7 @@ const IndexInner = () => {
         <CTABanner />
       </main>
       <MarketingFooter />
+      <FloatingChat />
     </div>
   );
 };
