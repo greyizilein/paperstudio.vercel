@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
+import { useSiteContent } from "@/hooks/useSiteContent";
 
 const DA_FONTS = {
   headline: '"Fraunces", "Playfair Display", Georgia, serif',
@@ -31,7 +32,11 @@ const QuillDecorSmall = () => (
   </svg>
 );
 
-export const CTABanner = () => (
+export const CTABanner = () => {
+  const ctaHeadline = useSiteContent<{ text: string }>("landing", "cta_headline", { text: "Your thesis is waiting." });
+  const ctaSubtext = useSiteContent<{ text: string }>("landing", "cta_subtext", { text: "Write Chapter 1 today — for free. No subscription, no card required. Just your idea and a deadline you can finally meet." });
+  const ctaButton = useSiteContent<{ text: string }>("landing", "cta_button", { text: "Start Chapter 1 — free" });
+  return (
   <section
     style={{
       position: "relative",
@@ -124,7 +129,7 @@ export const CTABanner = () => (
             margin: "0 0 20px",
           }}
         >
-          Your thesis is waiting.
+          {ctaHeadline.text}
         </h2>
 
         {/* Sub */}
@@ -138,7 +143,7 @@ export const CTABanner = () => (
             lineHeight: 1.65,
           }}
         >
-          Write Chapter 1 today — for free. No subscription, no card required. Just your idea and a deadline you can finally meet.
+          {ctaSubtext.text}
         </p>
 
         {/* CTA */}
@@ -174,7 +179,7 @@ export const CTABanner = () => (
             onMouseDown={(e) => { (e.currentTarget as HTMLButtonElement).style.transform = "scale(0.97)"; }}
             onMouseUp={(e) => { (e.currentTarget as HTMLButtonElement).style.transform = "scale(1)"; }}
           >
-            Start Chapter 1 — free
+            {ctaButton.text}
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
               <path d="M3 8 L13 8 M9 4 L13 8 L9 12" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
@@ -195,6 +200,7 @@ export const CTABanner = () => (
       </motion.div>
     </div>
   </section>
-);
+  );
+};
 
 export default CTABanner;

@@ -230,9 +230,10 @@ export default function SettingsPage() {
   }
 
   const plans = [
-    { tier: "undergraduate", label: "Undergraduate", price: "$30", words: "50,000 words" },
-    { tier: "masters",       label: "Masters",       price: "$150", words: "80,000 words" },
-    { tier: "phd",           label: "PhD",           price: "$280", words: "100,000 words" },
+    { tier: "undergraduate", label: "Undergraduate", price: "$30",     words: "50,000 words" },
+    { tier: "masters",       label: "Masters",       price: "$150",    words: "80,000 words" },
+    { tier: "phd",           label: "PhD",           price: "$280",    words: "100,000 words" },
+    { tier: "enterprise",    label: "Enterprise Pack", price: "Custom", words: "200,000+ words" },
   ];
 
   return (
@@ -382,12 +383,23 @@ export default function SettingsPage() {
                   <div key={p.tier} id={`tier-${p.tier}`} className={`flex items-center justify-between bg-card border rounded-xl px-4 py-3 ${tierParam === p.tier ? "border-primary ring-2 ring-primary/20" : "border-border"}`}>
                     <div>
                       <div className="text-[13px] font-bold text-foreground">{p.label}</div>
-                      <div className="text-[11px] text-muted-foreground">{p.words} · {p.price}</div>
+                      {p.tier !== "enterprise" && (
+                        <div className="text-[11px] text-muted-foreground">{p.words} · {p.price}</div>
+                      )}
+                      {p.tier === "enterprise" && (
+                        <div className="text-[11px] text-muted-foreground">High-volume — contact us for pricing</div>
+                      )}
                     </div>
                     <div className="text-right">
-                      <button onClick={() => handleUpgrade(p.tier)} className="px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-[11px] font-bold hover:bg-primary/90 transition-colors cursor-pointer">
-                        Upgrade
-                      </button>
+                      {p.tier === "enterprise" ? (
+                        <button onClick={() => window.location.href = "/contact"} className="px-3 py-1.5 rounded-lg bg-secondary text-foreground border border-border text-[11px] font-bold hover:bg-secondary/80 transition-colors cursor-pointer">
+                          Contact us
+                        </button>
+                      ) : (
+                        <button onClick={() => handleUpgrade(p.tier)} className="px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-[11px] font-bold hover:bg-primary/90 transition-colors cursor-pointer">
+                          Upgrade
+                        </button>
+                      )}
                     </div>
                   </div>
                 ))}

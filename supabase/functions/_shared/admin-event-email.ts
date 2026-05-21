@@ -3,6 +3,10 @@
 
 const ADMIN_EMAIL = "grey.izilein@gmail.com";
 
+function fromAddress(): string {
+  return Deno.env.get("RESEND_FROM_EMAIL") ?? "onboarding@resend.dev";
+}
+
 export type AdminEventKind =
   | "signup"
   | "subscription"
@@ -11,6 +15,38 @@ export type AdminEventKind =
   | "payout_success"
   | "payout_failed"
   | "complaint";
+
+/** Send a transactional email to any recipient. */
+export async function sendEmail(opts: {
+  to: string | string[];
+  subject: string;
+  html: string;
+  text?: string;
+}): Promise<void> {
+  const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
+  if (!RESEND_API_KEY) {
+    console.log(`[Email skipped — no RESEND_API_KEY] To: ${opts.to} | ${opts.subject}`);
+    return;
+  }
+  const resp = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${RESEND_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      from: fromAddress(),
+      to: Array.isArray(opts.to) ? opts.to : [opts.to],
+      subject: opts.subject,
+      html: opts.html,
+      text: opts.text ?? opts.html.replace(/<[^>]+>/g, ""),
+    }),
+  });
+  if (!resp.ok) {
+    const err = await resp.text().catch(() => resp.statusText);
+    console.warn(`Resend error ${resp.status}:`, err);
+  }
+}
 
 export async function notifyAdmin(
   kind: AdminEventKind,
@@ -27,7 +63,7 @@ export async function notifyAdmin(
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          from: "PaperStudio <noreply@paperstudio.dev>",
+          from: fromAddress(),
           to: [ADMIN_EMAIL],
           subject: `[${kind}] ${subject}`,
           html: body.replace(/\n/g, "<br>"),

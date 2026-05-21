@@ -1,11 +1,16 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
+import { useSiteContent } from "@/hooks/useSiteContent";
 
 const cyclingWords = ["dissertation", "thesis", "capstone", "research paper"];
 
 export const MarketingHero = () => {
   const [wordIndex, setWordIndex] = useState(0);
+  const subContent = useSiteContent<{ text: string }>(
+    "landing", "hero_subtitle",
+    { text: "Chapter-by-chapter structure, real citations, narrative flow — exports a submission-ready .docx your supervisor will respect." }
+  );
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -138,7 +143,7 @@ export const MarketingHero = () => {
               margin: "0 0 40px",
             }}
           >
-            Chapter-by-chapter structure, real citations, narrative flow — exports a submission-ready .docx your supervisor will respect.
+            {subContent.text}
           </motion.p>
 
           {/* CTAs */}

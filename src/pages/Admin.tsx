@@ -76,7 +76,7 @@ interface ImageAttemptRow {
 }
 
 type Tab = "analytics" | "referrals" | "users" | "subscriptions" | "settings" | "calculator"
-  | "revenue" | "email" | "complaints" | "promotions" | "refunds" | "payouts" | "activity" | "broadcast" | "images";
+  | "revenue" | "email" | "complaints" | "promotions" | "refunds" | "payouts" | "activity" | "broadcast" | "images" | "content";
 
 // Cost per 1K tokens
 const MODEL_COSTS: Record<string, { input: number; output: number }> = {
@@ -88,7 +88,7 @@ const MODEL_COSTS: Record<string, { input: number; output: number }> = {
   "gpt-5.2": { input: 0.01, output: 0.03 },
 };
 
-const TIER_PRICES: Record<string, number> = { free: 0, undergraduate: 30, masters: 100, phd: 180 };
+const TIER_PRICES: Record<string, number> = { free: 0, undergraduate: 30, masters: 100, phd: 180, enterprise: 0 };
 
 export default function Admin() {
   const { user, signOut } = useAuth();
@@ -180,6 +180,17 @@ export default function Admin() {
   const [imageAttempts, setImageAttempts] = useState<ImageAttemptRow[]>([]);
   const [imageJobFilter, setImageJobFilter] = useState<"all" | "failed" | "processing" | "completed">("all");
 
+  // Content CMS
+  const [siteContent, setSiteContent] = useState<{ page: string; section: string; content: any; id?: string }[]>([]);
+  const [contentSaving, setContentSaving] = useState<string | null>(null);
+  const [newContentPage, setNewContentPage] = useState("landing");
+  const [newContentSection, setNewContentSection] = useState("");
+  const [newContentValue, setNewContentValue] = useState("");
+
+  // Inline tier edit in Users tab
+  const [editingTier, setEditingTier] = useState<{ userId: string; tier: string } | null>(null);
+  const [tierSaving, setTierSaving] = useState(false);
+
   useEffect(() => {
     if (!user) return;
     if (user.email !== ADMIN_EMAIL) { navigate("/dashboard"); return; }
@@ -189,8 +200,13 @@ export default function Admin() {
   const loadAll = async () => {
     setLoading(true);
     await Promise.all([loadLogs(), loadReferrals(), loadUsers(), loadSettings(),
-      loadComplaints(), loadPromoCodes(), loadRefunds(), loadPayouts(), loadEmailLog(), loadImageJobs()]);
+      loadComplaints(), loadPromoCodes(), loadRefunds(), loadPayouts(), loadEmailLog(), loadImageJobs(), loadSiteContent()]);
     setLoading(false);
+  };
+
+  const loadSiteContent = async () => {
+    const { data } = await supabase.from("site_content" as any).select("*").order("page").order("section");
+    if (data) setSiteContent(data as any[]);
   };
 
   const loadLogs = async () => {
@@ -302,6 +318,14 @@ export default function Admin() {
       resolved_at: complaintStatus === "resolved" ? new Date().toISOString() : null,
     } as any).eq("id", selectedComplaint.id);
     if (error) { toast.error(error.message); return; }
+    if (adminReply && selectedComplaint.user_id) {
+      await supabase.from("notifications").insert({
+        user_id: selectedComplaint.user_id,
+        title: "Response to your support request",
+        message: adminReply.slice(0, 200),
+        type: "info",
+      } as any);
+    }
     toast.success("Complaint updated");
     setSelectedComplaint(null);
     loadComplaints();
@@ -344,12 +368,47 @@ export default function Admin() {
     setRefundTier(sub.tier);
   };
 
+  const TIER_LIMITS_MAP: Record<string, number> = { free: 3000, undergraduate: 50000, masters: 80000, phd: 120000, enterprise: 200000 };
+
   const applyTierOverride = async () => {
     if (!refundUser) return;
-    const limits: Record<string, number> = { free: 3000, undergraduate: 50000, masters: 80000, phd: 120000 };
-    await supabase.from("subscriptions").update({ tier: refundTier, word_limit: limits[refundTier] || 3000, status: "active" } as any).eq("user_id", refundUser.profile.user_id);
+    await supabase.from("subscriptions").update({ tier: refundTier, word_limit: TIER_LIMITS_MAP[refundTier] || 3000, status: "active" } as any).eq("user_id", refundUser.profile.user_id);
     toast.success(`Tier set to ${refundTier}`);
     loadUsers();
+  };
+
+  const saveInlineTier = async () => {
+    if (!editingTier) return;
+    setTierSaving(true);
+    await supabase.from("subscriptions").update({
+      tier: editingTier.tier, word_limit: TIER_LIMITS_MAP[editingTier.tier] || 3000, status: "active"
+    } as any).eq("user_id", editingTier.userId);
+    toast.success(`Tier updated to ${editingTier.tier}`);
+    setEditingTier(null);
+    setTierSaving(false);
+    loadUsers();
+  };
+
+  const saveSiteContentSection = async (page: string, section: string, text: string) => {
+    setContentSaving(`${page}:${section}`);
+    await supabase.from("site_content" as any).upsert(
+      { page, section, content: { text }, updated_at: new Date().toISOString() },
+      { onConflict: "page,section" }
+    );
+    toast.success("Content saved");
+    setContentSaving(null);
+    loadSiteContent();
+  };
+
+  const createSiteContentSection = async () => {
+    if (!newContentSection.trim() || !newContentValue.trim()) { toast.error("Section name and value required"); return; }
+    await supabase.from("site_content" as any).upsert(
+      { page: newContentPage, section: newContentSection.trim(), content: { text: newContentValue.trim() }, updated_at: new Date().toISOString() },
+      { onConflict: "page,section" }
+    );
+    toast.success("Content block added");
+    setNewContentSection(""); setNewContentValue("");
+    loadSiteContent();
   };
 
   const resetWordCredits = async () => {
@@ -375,7 +434,16 @@ export default function Admin() {
   };
 
   const markPayoutPaid = async (id: string) => {
+    const payout = payoutUses.find(p => p.id === id);
     await supabase.from("referral_payouts").update({ status: "success", completed_at: new Date().toISOString() } as any).eq("id", id);
+    if (payout) {
+      await supabase.from("notifications").insert({
+        user_id: payout.user_id,
+        title: "Payout processed",
+        message: `Your referral payout of $${Number(payout.amount_usd).toFixed(2)} has been marked as paid.`,
+        type: "success",
+      } as any);
+    }
     toast.success("Marked as paid");
     loadPayouts();
   };
@@ -526,11 +594,14 @@ export default function Admin() {
   };
   const calcResult = calcEstimate();
 
-  const revenueByTier = (["free", "undergraduate", "masters", "phd"] as const).map(t => ({
+  const revenueByTier = (["free", "undergraduate", "masters", "phd", "enterprise"] as const).map(t => ({
     tier: t,
     count: subscriptions.filter(s => s.tier === t && s.status === "active").length,
     revenue: subscriptions.filter(s => s.tier === t && s.status === "active").length * TIER_PRICES[t],
   }));
+
+  const walletByUser: Record<string, number> = {};
+  referralWallets.forEach(w => { walletByUser[w.user_id] = Number(w.balance_usd); });
   const totalMRR = revenueByTier.reduce((s, r) => s + r.revenue, 0);
 
   const filteredComplaints = complaints.filter(c => complaintFilter === "all" || c.status === complaintFilter);
@@ -546,11 +617,12 @@ export default function Admin() {
     { key: "referrals", label: "Referrals" },
     { key: "payouts", label: "Payouts" },
     { key: "email", label: "Email" },
+    { key: "broadcast", label: "Broadcast" },
     { key: "complaints", label: "Complaints" },
     { key: "promotions", label: "Promotions" },
     { key: "refunds", label: "Refunds" },
     { key: "activity", label: "Activity" },
-    { key: "broadcast", label: "Broadcast" },
+    { key: "content", label: "Content" },
     { key: "settings", label: "Settings" },
     { key: "images", label: "Image Jobs" },
     { key: "calculator", label: "Calculator" },
@@ -596,8 +668,15 @@ export default function Admin() {
           <h1 className="text-2xl font-bold text-foreground">Admin Dashboard</h1>
         </div>
 
-        {/* Tabs — scrollable on mobile */}
-        <div className="flex gap-1 mb-6 p-0.5 rounded-lg bg-secondary overflow-x-auto scrollbar-none">
+        {/* Mobile tab select */}
+        <div className="block lg:hidden mb-4">
+          <select value={tab} onChange={e => setTab(e.target.value as Tab)}
+            className="w-full px-3 py-2.5 border border-border rounded-lg text-sm bg-background outline-none font-semibold">
+            {TABS.map(t => <option key={t.key} value={t.key}>{t.label}</option>)}
+          </select>
+        </div>
+        {/* Desktop scrollable tab bar */}
+        <div className="hidden lg:flex gap-1 mb-6 p-0.5 rounded-lg bg-secondary overflow-x-auto scrollbar-none">
           {TABS.map(t => (
             <button key={t.key} onClick={() => setTab(t.key)}
               className={`px-3 py-2 rounded-md text-xs font-bold transition-all whitespace-nowrap flex-shrink-0 ${tab === t.key ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
@@ -690,6 +769,7 @@ export default function Admin() {
                         <option value="undergraduate">Undergraduate</option>
                         <option value="masters">Masters</option>
                         <option value="phd">PhD</option>
+                        <option value="enterprise">Enterprise</option>
                       </select>
                     </div>
                     <p className="text-[11px] text-muted-foreground">An invite email will be sent. The user sets their own password.</p>
@@ -707,22 +787,45 @@ export default function Admin() {
               <div className="overflow-x-auto max-h-[500px] overflow-y-auto">
                 <table className="w-full text-xs min-w-[700px]">
                   <thead className="sticky top-0 bg-card"><tr className="border-b border-border text-muted-foreground">
-                    <th className="text-left py-2 px-3">Name</th><th className="text-left py-2 px-3">Email</th><th className="text-left py-2 px-3">Tier</th><th className="text-left py-2 px-3">CZAR</th><th className="text-left py-2 px-3">Status</th><th className="text-right py-2 px-3">Words</th><th className="text-left py-2 px-3">Bank</th><th className="text-left py-2 px-3">Joined</th><th className="py-2 px-3"></th>
+                    <th className="text-left py-2 px-3">Name</th><th className="text-left py-2 px-3">Email</th><th className="text-left py-2 px-3">Tier</th><th className="text-left py-2 px-3">CZAR</th><th className="text-left py-2 px-3">Status</th><th className="text-right py-2 px-3">Words</th><th className="text-right py-2 px-3">Wallet</th><th className="text-left py-2 px-3">Joined</th><th className="py-2 px-3"></th>
                   </tr></thead>
                   <tbody>{filteredProfiles.map(p => {
                     const sub = subscriptions.find(s => s.user_id === p.user_id);
                     const czar = czarSubscriptions.find((c: any) => c.user_id === p.user_id);
+                    const isEditing = editingTier?.userId === p.user_id;
                     return (
                       <tr key={p.user_id} className="border-b border-border/30 hover:bg-secondary/30">
                         <td className="py-2 px-3 text-foreground font-semibold whitespace-nowrap">{p.display_name || "—"}</td>
                         <td className="py-2 px-3 text-muted-foreground text-[11px]">{p.email || "—"}</td>
-                        <td className="py-2 px-3 text-muted-foreground capitalize">{sub?.tier || "free"}</td>
+                        <td className="py-2 px-3">
+                          {isEditing ? (
+                            <div className="flex items-center gap-1">
+                              <select value={editingTier.tier} onChange={e => setEditingTier({ userId: p.user_id, tier: e.target.value })}
+                                className="px-1.5 py-1 border border-border rounded text-[11px] bg-background outline-none">
+                                <option value="free">Free</option>
+                                <option value="undergraduate">Undergraduate</option>
+                                <option value="masters">Masters</option>
+                                <option value="phd">PhD</option>
+                                <option value="enterprise">Enterprise</option>
+                              </select>
+                              <button onClick={saveInlineTier} disabled={tierSaving} className="px-1.5 py-1 rounded bg-primary text-white text-[10px] font-bold disabled:opacity-50">
+                                {tierSaving ? "…" : "Save"}
+                              </button>
+                              <button onClick={() => setEditingTier(null)} className="px-1.5 py-1 rounded bg-secondary text-foreground text-[10px] font-bold">✕</button>
+                            </div>
+                          ) : (
+                            <button onClick={() => setEditingTier({ userId: p.user_id, tier: sub?.tier || "free" })}
+                              className="text-muted-foreground capitalize hover:text-primary text-[11px] font-medium transition-colors">
+                              {sub?.tier || "free"} ✎
+                            </button>
+                          )}
+                        </td>
                         <td className="py-2 px-3">
                           {czar ? <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-primary/10 text-primary capitalize">{czar.tier}</span> : <span className="text-muted-foreground text-[11px]">—</span>}
                         </td>
                         <td className="py-2 px-3"><span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${sub?.status === "active" ? "bg-green/10 text-green" : "bg-secondary text-muted-foreground"}`}>{sub?.status || "—"}</span></td>
                         <td className="py-2 px-3 text-right font-mono text-foreground text-[11px]">{sub ? `${sub.words_used.toLocaleString()}/${sub.word_limit.toLocaleString()}` : "—"}</td>
-                        <td className="py-2 px-3 text-muted-foreground text-[11px]">{(p as any).bank_name ? `${(p as any).bank_name} ···${((p as any).account_number || "").slice(-4)}` : "—"}</td>
+                        <td className="py-2 px-3 text-right font-mono text-[11px] text-muted-foreground">{walletByUser[p.user_id] !== undefined ? `$${walletByUser[p.user_id].toFixed(2)}` : "—"}</td>
                         <td className="py-2 px-3 text-muted-foreground whitespace-nowrap">{new Date(p.created_at).toLocaleDateString()}</td>
                         <td className="py-2 px-3">
                           {p.email !== ADMIN_EMAIL && (
@@ -744,8 +847,8 @@ export default function Admin() {
         {/* Subscriptions Tab */}
         {tab === "subscriptions" && (
           <div className="space-y-4">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              {["free", "undergraduate", "masters", "phd"].map(t => {
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+              {["free", "undergraduate", "masters", "phd", "enterprise"].map(t => {
                 const count = subscriptions.filter(s => s.tier === t).length;
                 const active = subscriptions.filter(s => s.tier === t && s.status === "active").length;
                 return (
@@ -936,6 +1039,7 @@ export default function Admin() {
                       <option value="tier:undergraduate">Undergraduate tier only</option>
                       <option value="tier:masters">Masters tier only</option>
                       <option value="tier:phd">PhD tier only</option>
+                      <option value="tier:enterprise">Enterprise only</option>
                       <option value="specific">Specific email address</option>
                     </select>
                   </div>
@@ -1109,7 +1213,11 @@ export default function Admin() {
                     <div>
                       <label className="text-xs font-bold text-foreground mb-1 block">Set Tier</label>
                       <select value={refundTier} onChange={e => setRefundTier(e.target.value)} className="px-3 py-2 border border-border rounded-lg text-sm bg-background outline-none">
-                        <option value="free">Free</option><option value="undergraduate">Undergraduate</option><option value="masters">Masters</option><option value="phd">PhD</option>
+                        <option value="free">Free</option>
+                        <option value="undergraduate">Undergraduate</option>
+                        <option value="masters">Masters</option>
+                        <option value="phd">PhD</option>
+                        <option value="enterprise">Enterprise (200K)</option>
                       </select>
                     </div>
                     <button onClick={applyTierOverride} className="px-3 py-2 rounded-lg bg-primary text-white text-xs font-bold hover:bg-primary/90">Apply Tier</button>
@@ -1312,10 +1420,11 @@ export default function Admin() {
                   <label className="text-xs font-bold text-foreground mb-1 block">Target</label>
                   <select value={broadcastTarget} onChange={e => setBroadcastTarget(e.target.value)} className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-background outline-none focus:border-primary">
                     <option value="all">All Users</option>
+                    <option value="tier:free">Free tier only</option>
                     <option value="tier:undergraduate">Undergraduate only</option>
                     <option value="tier:masters">Masters only</option>
                     <option value="tier:phd">PhD only</option>
-                    <option value="tier:free">Free tier only</option>
+                    <option value="tier:enterprise">Enterprise only</option>
                   </select>
                 </div>
                 <div>
@@ -1456,6 +1565,89 @@ export default function Admin() {
                   </tbody>
                 </table>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Content CMS Tab */}
+        {tab === "content" && (
+          <div className="space-y-6">
+            <div>
+              <h2 className="text-sm font-semibold text-foreground">Live Content Management</h2>
+              <p className="text-xs text-muted-foreground mt-0.5">Edit text shown on public pages. Changes take effect immediately — no redeploy needed.</p>
+            </div>
+
+            {/* Group by page */}
+            {(["landing", "pricing", "help", "global"] as const).map(page => {
+              const items = siteContent.filter(c => c.page === page);
+              if (items.length === 0) return null;
+              return (
+                <div key={page} className="bg-card border border-border rounded-xl overflow-hidden">
+                  <div className="px-4 py-3 border-b border-border bg-secondary/30">
+                    <h3 className="text-xs font-bold text-foreground capitalize">{page} page</h3>
+                  </div>
+                  <div className="divide-y divide-border">
+                    {items.map(item => {
+                      const key = `${item.page}:${item.section}`;
+                      const isSaving = contentSaving === key;
+                      const text = typeof item.content?.text === "string" ? item.content.text : JSON.stringify(item.content);
+                      const [draft, setDraft] = [
+                        (document.getElementById(`draft-${key}`) as HTMLTextAreaElement)?.value ?? text,
+                        () => {},
+                      ];
+                      return (
+                        <div key={key} className="px-4 py-3 space-y-2">
+                          <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">{item.section.replace(/_/g, " ")}</label>
+                          <textarea
+                            id={`draft-${key}`}
+                            defaultValue={text}
+                            rows={text.length > 120 ? 4 : 2}
+                            className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-background outline-none focus:border-primary resize-y"
+                          />
+                          <button
+                            onClick={() => {
+                              const el = document.getElementById(`draft-${key}`) as HTMLTextAreaElement;
+                              if (el) saveSiteContentSection(item.page, item.section, el.value);
+                            }}
+                            disabled={isSaving}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-white text-xs font-bold hover:bg-primary/90 disabled:opacity-50"
+                          >
+                            {isSaving ? <Loader2 size={11} className="animate-spin" /> : <Save size={11} />}
+                            {isSaving ? "Saving…" : "Save"}
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+
+            {/* Add new content block */}
+            <div className="bg-card border border-border rounded-xl p-5">
+              <h3 className="text-xs font-bold text-foreground mb-3">Add New Content Block</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
+                <div>
+                  <label className="text-xs font-bold text-foreground mb-1 block">Page</label>
+                  <select value={newContentPage} onChange={e => setNewContentPage(e.target.value)} className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-background outline-none">
+                    <option value="landing">landing</option>
+                    <option value="pricing">pricing</option>
+                    <option value="help">help</option>
+                    <option value="global">global</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-foreground mb-1 block">Section key</label>
+                  <input value={newContentSection} onChange={e => setNewContentSection(e.target.value)} placeholder="e.g. hero_headline" className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-background outline-none focus:border-primary" />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-foreground mb-1 block">Value</label>
+                  <input value={newContentValue} onChange={e => setNewContentValue(e.target.value)} placeholder="Text content…" className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-background outline-none focus:border-primary" />
+                </div>
+              </div>
+              <button onClick={createSiteContentSection} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-secondary text-foreground text-xs font-bold hover:bg-border transition-colors">
+                <Plus size={13} /> Add Block
+              </button>
             </div>
           </div>
         )}
