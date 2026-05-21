@@ -2189,7 +2189,7 @@ ${thesisArea}`);
                     { icon: Sparkles, label: "Settings", onClick: () => { setShowPersonalise(true); setMobileMenuOpen(false); } },
                     { icon: FolderOpen, label: "Projects", onClick: () => { setShowProjectsDrawer(true); setMobileMenuOpen(false); } },
                     { icon: Plus, label: "New", onClick: () => { navigate("/new-project"); setMobileMenuOpen(false); } },
-                    { icon: MessageSquare, label: "Messages", onClick: () => { setMessagesOpen(true); setMobileMenuOpen(false); } },
+                    // { icon: MessageSquare, label: "Messages", onClick: () => { setMessagesOpen(true); setMobileMenuOpen(false); } },
                   ].map((item) => (
                     <button key={item.label} onClick={item.onClick} title={item.label} className="flex flex-col items-center gap-1 px-2 py-3 rounded-xl bg-secondary/40 hover:bg-secondary text-foreground transition-all">
                       <item.icon size={18} />

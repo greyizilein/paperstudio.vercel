@@ -21,7 +21,7 @@ function SiteLayoutInner() {
         <Outlet />
       </main>
       <SiteFooter />
-      <FloatingChat />
+      {/* <FloatingChat /> */}
     </div>
   );
 }

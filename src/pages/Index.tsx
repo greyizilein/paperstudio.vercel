@@ -29,7 +29,7 @@ const IndexInner = () => {
         <CTABanner />
       </main>
       <MarketingFooter />
-      <FloatingChat />
+      {/* <FloatingChat /> */}
     </div>
   );
 };
