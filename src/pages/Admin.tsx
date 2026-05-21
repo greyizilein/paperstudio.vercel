@@ -76,7 +76,7 @@ interface ImageAttemptRow {
 }
 
 type Tab = "analytics" | "referrals" | "users" | "subscriptions" | "settings" | "calculator"
-  | "revenue" | "email" | "complaints" | "promotions" | "refunds" | "payouts" | "activity" | "broadcast" | "images" | "content";
+  | "revenue" | "email" | "complaints" | "promotions" | "refunds" | "payouts" | "activity" | "broadcast" | "images" | "content" | "messages";
 
 // Cost per 1K tokens
 const MODEL_COSTS: Record<string, { input: number; output: number }> = {
@@ -191,6 +191,16 @@ export default function Admin() {
   const [editingTier, setEditingTier] = useState<{ userId: string; tier: string } | null>(null);
   const [tierSaving, setTierSaving] = useState(false);
 
+  // Messages tab
+  interface AdminMessage { id: string; user_id: string; from_admin: boolean; content: string; read: boolean; created_at: string; }
+  interface MessageThread { user_id: string; email: string | null; display_name: string | null; last_message: string; last_at: string; unread: number; }
+  const [messageThreads, setMessageThreads] = useState<MessageThread[]>([]);
+  const [selectedThread, setSelectedThread] = useState<string | null>(null);
+  const [threadMessages, setThreadMessages] = useState<AdminMessage[]>([]);
+  const [adminReplyMsg, setAdminReplyMsg] = useState("");
+  const [adminReplying, setAdminReplying] = useState(false);
+  const [messagesLoading, setMessagesLoading] = useState(false);
+
   useEffect(() => {
     if (!user) return;
     if (user.email !== ADMIN_EMAIL) { navigate("/dashboard"); return; }
@@ -200,8 +210,66 @@ export default function Admin() {
   const loadAll = async () => {
     setLoading(true);
     await Promise.all([loadLogs(), loadReferrals(), loadUsers(), loadSettings(),
-      loadComplaints(), loadPromoCodes(), loadRefunds(), loadPayouts(), loadEmailLog(), loadImageJobs(), loadSiteContent()]);
+      loadComplaints(), loadPromoCodes(), loadRefunds(), loadPayouts(), loadEmailLog(), loadImageJobs(), loadSiteContent(), loadMessageThreads()]);
     setLoading(false);
+  };
+
+  const loadMessageThreads = async () => {
+    const { data } = await supabase
+      .from("messages" as any)
+      .select("user_id, content, from_admin, read, created_at")
+      .order("created_at", { ascending: false });
+    if (!data) return;
+    const msgs = data as { user_id: string; content: string; from_admin: boolean; read: boolean; created_at: string }[];
+    const byUser: Record<string, { last_message: string; last_at: string; unread: number }> = {};
+    for (const m of msgs) {
+      if (!byUser[m.user_id]) {
+        byUser[m.user_id] = { last_message: m.content, last_at: m.created_at, unread: 0 };
+      }
+      if (!m.from_admin && !m.read) byUser[m.user_id].unread++;
+    }
+    const threads: MessageThread[] = Object.entries(byUser).map(([user_id, v]) => {
+      const profile = profiles.find(p => p.user_id === user_id);
+      return { user_id, email: profile?.email ?? null, display_name: profile?.display_name ?? null, ...v };
+    });
+    threads.sort((a, b) => new Date(b.last_at).getTime() - new Date(a.last_at).getTime());
+    setMessageThreads(threads);
+  };
+
+  const loadThreadMessages = async (userId: string) => {
+    setMessagesLoading(true);
+    const { data } = await supabase
+      .from("messages" as any)
+      .select("id, user_id, from_admin, content, read, created_at")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: true })
+      .limit(200);
+    setMessagesLoading(false);
+    if (data) setThreadMessages(data as AdminMessage[]);
+    // Mark user messages as read
+    await supabase.from("messages" as any).update({ read: true }).eq("user_id", userId).eq("from_admin", false).eq("read", false);
+  };
+
+  const sendAdminReply = async () => {
+    if (!selectedThread || !adminReplyMsg.trim() || adminReplying) return;
+    setAdminReplying(true);
+    const content = adminReplyMsg.trim();
+    setAdminReplyMsg("");
+    const { data } = await supabase
+      .from("messages" as any)
+      .insert({ user_id: selectedThread, from_admin: true, content, read: false })
+      .select("id, user_id, from_admin, content, read, created_at")
+      .single();
+    if (data) setThreadMessages(prev => [...prev, data as AdminMessage]);
+    // Send notification to user
+    await supabase.from("notifications").insert({
+      user_id: selectedThread,
+      title: "New message from support",
+      message: content.slice(0, 160),
+      type: "info",
+    } as any);
+    setAdminReplying(false);
+    loadMessageThreads();
   };
 
   const loadSiteContent = async () => {
@@ -622,6 +690,7 @@ export default function Admin() {
     { key: "promotions", label: "Promotions" },
     { key: "refunds", label: "Refunds" },
     { key: "activity", label: "Activity" },
+    { key: "messages", label: "Messages" },
     { key: "content", label: "Content" },
     { key: "settings", label: "Settings" },
     { key: "images", label: "Image Jobs" },
@@ -677,12 +746,18 @@ export default function Admin() {
         </div>
         {/* Desktop scrollable tab bar */}
         <div className="hidden lg:flex gap-1 mb-6 p-0.5 rounded-lg bg-secondary overflow-x-auto scrollbar-none">
-          {TABS.map(t => (
-            <button key={t.key} onClick={() => setTab(t.key)}
-              className={`px-3 py-2 rounded-md text-xs font-bold transition-all whitespace-nowrap flex-shrink-0 ${tab === t.key ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
-              {t.label}
-            </button>
-          ))}
+          {TABS.map(t => {
+            const totalUnread = t.key === "messages" ? messageThreads.reduce((s, x) => s + x.unread, 0) : 0;
+            return (
+              <button key={t.key} onClick={() => setTab(t.key)}
+                className={`px-3 py-2 rounded-md text-xs font-bold transition-all whitespace-nowrap flex-shrink-0 flex items-center gap-1 ${tab === t.key ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
+                {t.label}
+                {totalUnread > 0 && (
+                  <span className="px-1 py-0.5 rounded-full bg-primary text-primary-foreground text-[9px] font-bold">{totalUnread}</span>
+                )}
+              </button>
+            );
+          })}
         </div>
 
         {/* Analytics Tab */}
@@ -1564,6 +1639,81 @@ export default function Admin() {
                     )}
                   </tbody>
                 </table>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Messages Tab */}
+        {tab === "messages" && (
+          <div className="space-y-4">
+            <div>
+              <h2 className="text-sm font-semibold text-foreground">Messages</h2>
+              <p className="text-xs text-muted-foreground mt-0.5">In-app messages from users. Select a thread to reply.</p>
+            </div>
+            <div className="flex gap-4 h-[calc(100vh-220px)] min-h-[400px]">
+              {/* Thread list */}
+              <div className="w-64 flex-shrink-0 border border-border rounded-xl overflow-y-auto">
+                {messageThreads.length === 0 ? (
+                  <div className="p-6 text-center text-muted-foreground text-sm">No messages yet.</div>
+                ) : (
+                  messageThreads.map(t => (
+                    <button
+                      key={t.user_id}
+                      onClick={() => { setSelectedThread(t.user_id); loadThreadMessages(t.user_id); }}
+                      className={`w-full text-left px-3 py-2.5 border-b border-border/50 hover:bg-secondary/50 transition-colors ${selectedThread === t.user_id ? "bg-secondary" : ""}`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-semibold truncate">{t.display_name || t.email || t.user_id.slice(0, 8)}</span>
+                        {t.unread > 0 && (
+                          <span className="px-1.5 py-0.5 rounded-full bg-primary text-primary-foreground text-[9px] font-bold flex-shrink-0">{t.unread}</span>
+                        )}
+                      </div>
+                      <p className="text-[11px] text-muted-foreground truncate mt-0.5">{t.last_message}</p>
+                      <p className="text-[10px] text-muted-foreground/50 mt-0.5">{new Date(t.last_at).toLocaleDateString()}</p>
+                    </button>
+                  ))
+                )}
+              </div>
+
+              {/* Thread view */}
+              <div className="flex-1 border border-border rounded-xl flex flex-col overflow-hidden">
+                {!selectedThread ? (
+                  <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm">Select a thread to view messages.</div>
+                ) : (
+                  <>
+                    <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-2">
+                      {messagesLoading ? (
+                        <div className="flex items-center justify-center h-20 text-muted-foreground text-sm">Loading…</div>
+                      ) : threadMessages.map(m => (
+                        <div key={m.id} className={`flex ${m.from_admin ? "justify-end" : "justify-start"}`}>
+                          <div className={`max-w-[75%] px-3 py-2 rounded-2xl text-[13px] leading-relaxed ${m.from_admin ? "bg-primary text-primary-foreground rounded-tr-sm" : "bg-secondary text-foreground rounded-tl-sm"}`}>
+                            {!m.from_admin && <p className="text-[10px] font-semibold opacity-60 mb-0.5">{messageThreads.find(t => t.user_id === selectedThread)?.display_name || "User"}</p>}
+                            <p>{m.content}</p>
+                            <p className="text-[10px] mt-1 opacity-60">{new Date(m.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="border-t border-border p-3 flex gap-2 items-end flex-shrink-0">
+                      <textarea
+                        value={adminReplyMsg}
+                        onChange={e => setAdminReplyMsg(e.target.value)}
+                        onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendAdminReply(); } }}
+                        placeholder="Reply… (Enter to send)"
+                        rows={2}
+                        className="flex-1 resize-none px-3 py-2 rounded-xl border border-border bg-secondary/40 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                      />
+                      <button
+                        onClick={sendAdminReply}
+                        disabled={!adminReplyMsg.trim() || adminReplying}
+                        className="px-3 py-2 rounded-xl bg-primary text-primary-foreground text-xs font-semibold hover:opacity-90 disabled:opacity-40 transition-opacity flex-shrink-0"
+                      >
+                        {adminReplying ? "…" : "Send"}
+                      </button>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           </div>

@@ -1,21 +1,35 @@
 import { PageHero } from "@/components/firstdraft/PageHero";
 import { CTABand } from "@/components/firstdraft/CTABand";
 import { ContentSection } from "@/components/firstdraft/ContentSection";
+import { useSiteContent } from "@/hooks/useSiteContent";
+
+const DEFAULT_FAQS = [
+  { q: "How do I get started?", a: "Sign up for a free account and you'll receive 3,000 words to try CZAR immediately." },
+  { q: "How do I export my work?", a: "Use the Export button in the editor toolbar. Your document downloads as a .docx file." },
+  { q: "What is CZAR?", a: "CZAR is PaperStudio's AI writing engine. It has four modes: Chat, Plan, Build, and Agent." },
+  { q: "Can I use my own sources?", a: "Yes — upload PDFs or paste text and CZAR will cite them correctly in your chosen style." },
+  { q: "Choosing your research framework", a: "PICO for clinical/health studies; PEO for observational health research; SPIDER for qualitative health reviews; SMART for management." },
+  { q: "What chapters does PAPERSTUDIO support?", a: "All dissertation chapters: Abstract, Introduction, Literature Review, Methodology, Data Analysis & Findings, and Conclusion." },
+  { q: "Why does my word count not match exactly?", a: "PAPERSTUDIO targets your specified word count as a guide. All required sections will be fully written." },
+  { q: "Are citations real sources?", a: "PAPERSTUDIO uses AI to generate citations based on real academic sources. Always verify before submission." },
+  { q: "How do I contact support?", a: "Use the Messages panel in the sidebar to contact us directly." },
+];
 
 export default function HelpPage() {
+  const heroContent = useSiteContent<{ text: string }>("help", "hero_headline", { text: "How can we help?" });
+  const faqContent = useSiteContent<{ items: { q: string; a: string }[] }>(
+    "help", "faq_items", { items: DEFAULT_FAQS }
+  );
+
+  const faqs = faqContent.items.length > 0 ? faqContent.items : DEFAULT_FAQS;
+
   return (
     <div>
-      <PageHero title={<>Help Centre</>} subtitle="Everything you need to get the most out of PAPERSTUDIO." />
+      <PageHero title={<>{heroContent.text}</>} subtitle="Everything you need to get the most out of PAPERSTUDIO." />
       <section className="py-[100px] px-6 md:px-20 max-w-[1200px] mx-auto">
-        <ContentSection title="Getting started">Create an account, start a new project, and fill in your dissertation details in the three-step wizard. Your first chapter is free — no payment required.</ContentSection>
-        <ContentSection title="Choosing your research framework">If you're unsure which framework to use, check with your supervisor first. PICO for clinical/health studies; PEO for observational health research; SPIDER for qualitative health reviews; SMART for management and business objectives.</ContentSection>
-        <ContentSection title="What chapters does PAPERSTUDIO support?">PAPERSTUDIO supports all dissertation chapters: Abstract, Introduction (Chapter 1), Literature Review (Chapter 2), Methodology (Chapter 3), Data Analysis & Findings (Chapter 4), and Conclusion (Chapter 5). Each chapter follows its own academic template.</ContentSection>
-        <ContentSection title="Why does my word count not match exactly?">PAPERSTUDIO targets your specified word count as a guide. All required sections will be fully written — the AI will not cut sections short to meet an arbitrary limit.</ContentSection>
-        <ContentSection title="Are citations real sources?">PAPERSTUDIO uses AI to generate citations based on real academic sources in the relevant field. Citations are intended to be real and verifiable — however, you should always verify them before submission, as occasional inaccuracies may occur.</ContentSection>
-        <ContentSection title="Can I revise a chapter?">Yes — use the Revise button on any completed chapter. Describe what you want changed and PAPERSTUDIO will update only those sections, preserving the rest of the chapter.</ContentSection>
-        <ContentSection title="How do I upgrade my tier?">Go to Account Settings {'>'} Subscription. One-time payments per project — not a monthly subscription.</ContentSection>
-        <ContentSection title="Can I export part of my dissertation?">Yes — in the Export screen you can toggle individual chapters on or off before downloading.</ContentSection>
-        <ContentSection title="How do I contact support?">Email us at xeros.opinion@gmail.com. Masters and PhD users receive priority responses within 12 hours.</ContentSection>
+        {faqs.map((faq, i) => (
+          <ContentSection key={i} title={faq.q}>{faq.a}</ContentSection>
+        ))}
       </section>
       <CTABand />
     </div>

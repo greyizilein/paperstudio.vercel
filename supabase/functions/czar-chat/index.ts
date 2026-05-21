@@ -713,7 +713,7 @@ Deno.serve(async (req) => {
         const isLargeBuild = looksLikeBuild && (requestedWords >= 5000 || inherentlyLarge);
 
         const modeDirective = mode === "plan"
-          ? `\n\n=== ACTIVE MODE: PLAN ===\nYou are in PLAN mode. The UI renders your reply as a card, NOT prose.\n\nYour ENTIRE reply MUST be ONE fenced code block — nothing before it, nothing after it, no other text whatsoever:\n\n\`\`\`czar-plan\n{\n  "understanding": "1-2 short sentences restating what they want. Max 280 chars.",\n  "deliverable": { "type": "dissertation chapter | report | essay | analysis | slides | …", "length_words": 0, "format": "docx | pdf | md" },\n  "approach": [ { "step": "Short verb-led step", "detail": "≤140 chars" } ],\n  "sources": [ { "label": "Author (Year) or framework name", "why": "≤80 chars" } ],\n  "assumptions": [ "≤120 chars" ],\n  "open_questions": [ "≤120 chars" ],\n  "estimate": { "sections": 0, "figures": 0, "time_minutes": 0 },\n  "next_action_label": "Build the full <thing>"\n}\n\`\`\`\n\nHARD RULES:\n• approach: 3-6 items. sources: 0-6. assumptions: 0-5. open_questions: 0-3.\n• NO prose outside the fence. NO "Here is the plan:". NO closing remarks.\n• Valid JSON only — double quotes, no trailing commas, no comments.\n• If you used web_search to inform the plan, that is fine — only the JSON is shown to the user.\n• This applies to EVERY model. Failure to follow this format breaks the UI.`
+          ? `\n\n=== ACTIVE MODE: PLAN ===\nYou are in PLAN mode. The UI renders your reply as a card, NOT prose.\n\nYour ENTIRE reply MUST be ONE fenced code block — nothing before it, nothing after it, no other text whatsoever:\n\n\`\`\`czar-plan\n{\n  "understanding": "1-2 short sentences restating what they want. Max 280 chars.",\n  "deliverable": { "type": "dissertation chapter | report | essay | analysis | slides | …", "length_words": 0, "format": "docx | pdf | md" },\n  "approach": [ { "step": "Short verb-led step", "detail": "≤140 chars" } ],\n  "sources": [ { "label": "Author (Year) or framework name", "why": "≤80 chars" } ],\n  "assumptions": [ "≤120 chars" ],\n  "open_questions": [ "≤120 chars" ],\n  "estimate": { "sections": 0, "figures": 0, "time_minutes": 0 },\n  "next_action_label": "Build the full <thing>"\n}\n\`\`\`\n\nHARD RULES:\n• approach: 3-6 items. sources: 0-6. assumptions: 0-5. open_questions: 0-3.\n• NO prose outside the fence. NO "Here is the plan:". NO closing remarks.\n• Valid JSON only — double quotes, no trailing commas, no comments.\n• If you used web_search to inform the plan, that is fine — only the JSON is shown to the user.\n• This applies to EVERY model. Failure to follow this format breaks the UI.\n• CRITICAL: If ANY text appears outside the \`\`\`czar-plan ... \`\`\` fence, the UI breaks and shows raw text to the user. Zero tolerance — the fence is your ENTIRE response.`
           : mode === "agent"
           ? `\n\n=== ACTIVE MODE: AGENT (FULL AUTHORING RIGHTS) ===\nYou are operating AUTONOMOUSLY with full authoring rights. The user may have given you a detailed brief, a one-line prompt ("do something on quantum dots"), or just attached files with no instruction at all. In every case you must deliver finished, A+ work in a single stream.\n\nNon-negotiable behaviour:\n1. Silently classify the deliverable type (essay, report, dissertation chapter, data analysis, lit review, slides, proposal, explainer, etc.) from the brief, the attached files, and the conversation so far. If nothing is specified, pick the form that best serves the topic.\n2. Silently infer every undecided detail (citation style, voice, structure, depth, length, figures needed, audience). NEVER ask clarifying questions. If you must declare an assumption, state it in ONE short opening line ("Assuming a ~1,500-word explainer with one diagram and a comparison table — proceed.") and then start the work.\n3. Use web_search and cite_check proactively for any factual / statistical / time-sensitive claim. Use generate_image whenever a chart, diagram, figure, mock-up, illustration, or photograph would strengthen the deliverable — fire the tool, do not announce it, do not ask permission. Multiple figures in one turn are encouraged when the work calls for them. Use generate_pptx whenever the user wants slides / a deck / a presentation / a pitch — design the deck yourself (palette, structure, slide types) and call the tool; the download link is streamed inline automatically.\n4. Render any tabular data as a Markdown table with a header row and aligned columns. Never describe a table in prose when you could draw one. Tables are first-class output.\n5. Produce the COMPLETE deliverable end-to-end at A+ quality in this single turn. Skip preamble. Skip closings. Skip meta-commentary ("Here's…", "I've produced…", "Let me know if…"). Begin with the first real sentence of the work.\n6. Do NOT show clarify cards. Do NOT emit SECTION_END tokens. Do NOT pause for confirmation. Do NOT ask the user to choose a model, plan, or scope.\n7. You decide depth: a one-line prompt deserves a fully developed answer, not a one-line reply. Match the ambition of the brief OR the implicit ambition of the topic, whichever is greater.`
           : mode === "build"
@@ -750,7 +750,7 @@ Deno.serve(async (req) => {
         // The reference list is the exception: the model MUST write it in full
         // at the end of every piece so the exported .docx has real Harvard entries.
         const bodyOnlyDirective = looksLikeBuild
-          ? `\n\n=== BODY ONLY — DO NOT WRITE THESE IN THE STREAM ===\nDo NOT write any of the following — they are attached automatically on download and are NOT part of the body word count:\n  • Cover page / title page / declaration / acknowledgements / table of contents\n  • Image figures (no \`![]\` markdown image embeds — describe needed images in [FIGURE: …] inline placeholders only if asked)\n  • Appendices\n\n=== REFERENCE LIST (MANDATORY — write this at the end of EVERY piece) ===\nAfter the final paragraph of prose, write a fully formatted ## References section.\nEach entry must be a complete Harvard reference: Author(s), Year. Title. *Journal / Publisher*, volume(issue), pages. DOI or URL where known.\nDo NOT use stubs like "Smith (2024)." — write the full bibliographic record.\nThe reference list is EXCLUDED from the word count — write every entry completely regardless of length.\nInline citations (e.g. "(Smith, 2024)") remain in the prose body as normal.`
+          ? `\n\n=== BODY ONLY — DO NOT INCLUDE THESE IN THE STREAM ===\nThe following are attached separately on export and must NOT appear in the streamed body:\n  • Cover page / title page / declaration / acknowledgements / table of contents\n  • Appendices\n\nImages, diagrams, charts, and tables ARE part of the body — include them inline whenever they strengthen the work. Call generate_image for any figure or diagram. Render all tabular data as Markdown tables.`
           : "";
 
         const adminUnlimitedDirective = isAdmin
@@ -792,6 +792,23 @@ Deno.serve(async (req) => {
         const isVagueMsg = !trimmedMsg ||
           wordsInMsg <= 2 ||
           /^(here|here's|here is|attached|see (this|attached)|fyi|read this|take a look|check this|have a look|hey|hi|hello)[\s.!?]*$/i.test(trimmedMsg);
+        // ── Agent mode with no brief and no files — show minimal task picker ──
+        if (mode === "agent" && isVagueMsg && (allFiles?.length || 0) === 0) {
+          await emitClarifyAndStop({
+            title: "What shall I create?",
+            compact: true,
+            confirmLabel: "Go",
+            fields: [{ key: "task", label: "", type: "choice", options: [
+              "Write a dissertation chapter",
+              "Write an essay or report",
+              "Research and synthesise literature",
+              "Analyse a dataset or document",
+              "Draft a proposal or brief",
+            ], allowOther: true }],
+          });
+          return;
+        }
+
         if (mode === "chat" && (allFiles?.length || 0) > 0 && isVagueMsg) {
           const firstName = allFiles![0].filename;
           const isData = /\.(csv|tsv|xlsx?|json|xml|sav|sas7bdat|dta|parquet)$/i.test(firstName);
@@ -1093,10 +1110,16 @@ Deno.serve(async (req) => {
         }
         const assistantId = asstRow.id;
 
+        const MODEL_LABELS: Record<string, string> = {
+          "claude-opus-4-7": "deep reasoning",
+          "claude-sonnet-4-6": "extended thinking",
+          "gemini-2.5-flash": "standard",
+          "gemini-2.5-pro": "extended thinking",
+        };
         write("meta", {
           conversation_id: conversationId,
           assistant_id: assistantId,
-          model: pick.model,
+          model: MODEL_LABELS[pick.model] ?? "standard",
           tier,
           delivery: effectiveDelivery || null,
           is_build: !!looksLikeBuild,

@@ -1,4 +1,5 @@
 import { lazy, Suspense } from "react";
+import { useSiteContent } from "@/hooks/useSiteContent";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
@@ -54,6 +55,22 @@ const queryClient = new QueryClient();
 
 const RouteFallback = () => <BookLoader fullScreen />;
 
+function MaintenanceGate({ children }: { children: React.ReactNode }) {
+  const maintenanceContent = useSiteContent<{ active: boolean; message: string }>(
+    "global", "maintenance_mode", { active: false, message: "We're upgrading PaperStudio. Back shortly." }
+  );
+  if (maintenanceContent.active) {
+    return (
+      <div className="fixed inset-0 flex flex-col items-center justify-center bg-background text-foreground z-[9999] gap-4 p-8 text-center">
+        <div className="text-4xl">🔧</div>
+        <h1 className="text-2xl font-bold">Down for maintenance</h1>
+        <p className="text-muted-foreground max-w-sm">{maintenanceContent.message}</p>
+      </div>
+    );
+  }
+  return <>{children}</>;
+}
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
@@ -62,6 +79,7 @@ const App = () => (
       <AuthProvider>
         <PsThemeProvider>
           <BrowserRouter>
+            <MaintenanceGate>
             <Suspense fallback={<RouteFallback />}>
               <Routes>
                 <Route path="/" element={<Index />} />
@@ -101,6 +119,7 @@ const App = () => (
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </Suspense>
+            </MaintenanceGate>
           </BrowserRouter>
         </PsThemeProvider>
       </AuthProvider>
