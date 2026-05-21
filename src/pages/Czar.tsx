@@ -1173,6 +1173,7 @@ export default function Czar() {
                 })()}
                 imageJobs={Object.values(imageJobs).filter((s) => s === "loading").length}
                 downloaded={agentDownloaded}
+                toolCalls={messages.find((mm) => mm.id === agentMsgId)?.toolCalls?.length || 0}
                 onRedownload={() => {
                   if (!attachContent) return;
                   const sel = attachLastSel ?? { cover: true, references: true, appendix: false, images: true };

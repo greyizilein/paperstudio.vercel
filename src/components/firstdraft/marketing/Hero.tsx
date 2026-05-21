@@ -11,6 +11,16 @@ export const MarketingHero = () => {
     "landing", "hero_subtitle",
     { text: "Chapter-by-chapter structure, real citations, narrative flow — exports a submission-ready .docx your supervisor will respect." }
   );
+  const ctaPrimary = useSiteContent<{ text: string }>(
+    "landing", "hero_cta_primary", { text: "Start writing free" }
+  );
+  const ctaSecondary = useSiteContent<{ text: string }>(
+    "landing", "hero_cta_secondary", { text: "Watch demo →" }
+  );
+  const statsContent = useSiteContent<{ items: { value: string; label: string }[] }>(
+    "landing", "hero_stats",
+    { items: [{ value: "12,000+", label: "students" }, { value: "50+", label: "frameworks" }, { value: "Free", label: "Chapter 1 always" }] }
+  );
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -173,7 +183,7 @@ export const MarketingHero = () => {
                 onMouseDown={(e) => { (e.currentTarget as HTMLButtonElement).style.transform = "scale(0.97)"; }}
                 onMouseUp={(e) => { (e.currentTarget as HTMLButtonElement).style.transform = "scale(1)"; }}
               >
-                Start writing free
+                {ctaPrimary.text}
               </button>
             </Link>
             <Link to="/how-it-works#demo">
@@ -199,7 +209,7 @@ export const MarketingHero = () => {
                   b.style.color = "var(--ma-text-muted)";
                 }}
               >
-                Watch demo →
+                {ctaSecondary.text}
               </button>
             </Link>
           </motion.div>
@@ -216,11 +226,7 @@ export const MarketingHero = () => {
               flexWrap: "wrap",
             }}
           >
-            {[
-              { value: "12,000+", label: "students" },
-              { value: "50+", label: "frameworks" },
-              { value: "Free", label: "Chapter 1 always" },
-            ].map((stat) => (
+            {statsContent.items.map((stat) => (
               <div key={stat.label}>
                 <div
                   style={{

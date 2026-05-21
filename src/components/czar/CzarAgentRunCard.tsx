@@ -14,6 +14,8 @@ interface Props {
   downloaded?: boolean;
   /** Re-trigger download (shown after run completes). */
   onRedownload?: () => void;
+  /** Number of tool calls made so far (web_search, cite_check, etc.). */
+  toolCalls?: number;
 }
 
 /**
@@ -27,20 +29,23 @@ export function CzarAgentRunCard({
   imageJobs = 0,
   downloaded = false,
   onRedownload,
+  toolCalls = 0,
 }: Props) {
-  const [phase, setPhase] = useState<"reading" | "planning" | "writing" | "figures" | "packaging" | "done">("reading");
+  const [phase, setPhase] = useState<"reading" | "researching" | "planning" | "writing" | "figures" | "packaging" | "done">("reading");
 
   useEffect(() => {
     if (!active && downloaded) { setPhase("done"); return; }
     if (!active) return;
-    if (words > 50) setPhase("writing");
-    else if (words > 0) setPhase("planning");
-    else setPhase("reading");
-    if (imageJobs > 0) setPhase("figures");
-  }, [active, words, imageJobs, downloaded]);
+    if (imageJobs > 0) { setPhase("figures"); return; }
+    if (words > 400) { setPhase("writing"); return; }
+    if (words > 80) { setPhase("writing"); return; }
+    if (toolCalls > 0 && words < 80) { setPhase("researching"); return; }
+    if (words > 0) { setPhase("planning"); return; }
+    setPhase("reading");
+  }, [active, words, imageJobs, downloaded, toolCalls]);
 
   const Step = ({ k, label }: { k: typeof phase; label: string }) => {
-    const order: Record<typeof phase, number> = { reading: 0, planning: 1, writing: 2, figures: 3, packaging: 4, done: 5 };
+    const order: Record<typeof phase, number> = { reading: 0, researching: 1, planning: 2, writing: 3, figures: 4, packaging: 5, done: 6 };
     const isDone = order[k] < order[phase] || phase === "done";
     const isCurrent = order[k] === order[phase] && phase !== "done";
     return (
@@ -76,6 +81,9 @@ export function CzarAgentRunCard({
       </div>
       <div className="flex flex-col gap-1">
         <Step k="reading" label={`Read brief${files > 0 ? ` · ${files} file${files === 1 ? "" : "s"}` : ""}`} />
+        {(toolCalls > 0 || ["researching","planning","writing","figures","packaging","done"].includes(phase)) && (
+          <Step k="researching" label={`Researching${toolCalls > 0 ? ` · ${toolCalls} source${toolCalls === 1 ? "" : "s"}` : ""}`} />
+        )}
         <Step k="planning" label="Plan locked" />
         <Step k="writing" label={`Writing${words > 0 ? ` · ${words.toLocaleString()} words` : ""}`} />
         {imageJobs > 0 && <Step k="figures" label={`Generating ${imageJobs} figure${imageJobs === 1 ? "" : "s"}`} />}

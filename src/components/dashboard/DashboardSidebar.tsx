@@ -1,11 +1,12 @@
 import { useState } from "react";
-import { LayoutDashboard, FolderOpen, Download, User, Settings, CreditCard, HelpCircle, LogOut, ShieldCheck, Bell } from "lucide-react";
+import { LayoutDashboard, FolderOpen, Download, User, Settings, CreditCard, HelpCircle, LogOut, ShieldCheck, Bell, MessageSquare } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { CzarIcon } from "@/components/icons/CzarIcon";
 import { usePsTheme } from "@/contexts/PsThemeContext";
 import { getPsTheme } from "@/lib/psThemes";
 import { NotionSidebar } from "@/components/dashboard/NotionSidebar";
 import { NotificationPanel } from "@/components/dashboard/NotificationPanel";
+import { MessagePanel } from "@/components/dashboard/MessagePanel";
 import { PsAvatar } from "@/components/ps/PsAvatar";
 
 const ADMIN_EMAIL = "grey.izilein@gmail.com";
@@ -38,6 +39,8 @@ export function DashboardSidebar({ userName, userInitials, tier = "Masters", onS
   const sidebarVariant = getPsTheme(themeId).sidebar;
   const [inboxOpen, setInboxOpen] = useState(false);
   const [unread, setUnread] = useState(0);
+  const [messagesOpen, setMessagesOpen] = useState(false);
+  const [unreadMessages, setUnreadMessages] = useState(0);
 
   // Themes opting into the Notion-exact layout render a fully different shell.
   if (sidebarVariant === "notion-exact") {
@@ -138,6 +141,16 @@ export function DashboardSidebar({ userName, userInitials, tier = "Masters", onS
           )}
         </button>
         <button
+          onClick={() => setMessagesOpen(true)}
+          className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-[12px] font-semibold text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground transition-colors cursor-pointer"
+        >
+          <MessageSquare size={15} />
+          <span className="flex-1 text-left">Messages</span>
+          {unreadMessages > 0 && (
+            <span className="px-1.5 py-0.5 rounded-full bg-primary text-primary-foreground text-[9px] font-bold">{unreadMessages}</span>
+          )}
+        </button>
+        <button
           onClick={onSignOut}
           className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-[12px] font-semibold text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground transition-colors cursor-pointer"
         >
@@ -150,6 +163,11 @@ export function DashboardSidebar({ userName, userInitials, tier = "Masters", onS
         open={inboxOpen}
         onClose={() => setInboxOpen(false)}
         onUnreadChange={setUnread}
+      />
+      <MessagePanel
+        open={messagesOpen}
+        onClose={() => setMessagesOpen(false)}
+        onUnreadChange={setUnreadMessages}
       />
     </aside>
   );

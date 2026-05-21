@@ -15,6 +15,15 @@ export default function PricingPage() {
     "pricing", "intro_text",
     { text: "No subscriptions. One project per payment. Revisions based per project tier." }
   );
+  const faqContent = useSiteContent<{ items: { q: string; a: string }[] }>(
+    "pricing", "faq_items",
+    { items: [
+      { q: "What counts as a word?", a: "Every word CZAR generates counts toward your monthly limit. Your own edits do not count." },
+      { q: "Can I upgrade or downgrade?", a: "Yes — changes take effect immediately and your remaining balance is prorated." },
+      { q: "Is my data private?", a: "Yes. Your documents and conversations are never used to train AI models." },
+      { q: "What citation styles are supported?", a: "Harvard, APA 7th, Chicago Author-Date, Vancouver, and IEEE — with more coming soon." },
+    ]}
+  );
 
   const handleUpgrade = (tierKey: string) => {
     if (!user) { navigate(`/auth?redirect=/settings?tab=billing`); return; }
@@ -200,6 +209,23 @@ export default function PricingPage() {
             );
           })}
         </div>
+
+        {/* FAQ */}
+        {faqContent.items.length > 0 && (
+          <div style={{ marginTop: "64px" }}>
+            <h3 style={{ fontFamily: FONTS.headline, fontStyle: "italic", fontWeight: 700, fontSize: "1.5rem", color: "var(--ma-text)", marginBottom: "24px", textAlign: "center" }}>
+              Frequently asked questions
+            </h3>
+            <div style={{ display: "flex", flexDirection: "column", gap: "16px", maxWidth: "680px", margin: "0 auto" }}>
+              {faqContent.items.map((item, i) => (
+                <div key={i} style={{ padding: "20px 24px", borderRadius: "12px", background: "rgba(196,56,74,0.04)", border: "1px solid rgba(196,56,74,0.12)" }}>
+                  <p style={{ fontFamily: FONTS.body, fontWeight: 600, fontSize: "0.95rem", color: "var(--ma-text)", marginBottom: "8px" }}>{item.q}</p>
+                  <p style={{ fontFamily: FONTS.body, fontSize: "0.9rem", color: "var(--ma-text-muted)", lineHeight: 1.65 }}>{item.a}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* University box */}
         <div
