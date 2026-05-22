@@ -715,6 +715,7 @@ async function runMain(
         user_id: userId,
         role: "user",
         content: req.user_message,
+        mode,
         metadata: hasFiles ? { attachments: req.attachments } : {},
       });
     } catch (err: any) {
@@ -731,6 +732,7 @@ async function runMain(
           user_id: userId,
           role: "assistant",
           content: "",
+          mode,
           model_used: modelChoice.model,
           metadata: { mode, complexity },
         })
@@ -866,7 +868,8 @@ async function runMain(
       await svc
         .from("czar_conversations")
         .update({
-          last_user_message: req.user_message.slice(0, 200),
+          mode,
+          last_message: req.user_message.slice(0, 200),
           updated_at: new Date().toISOString(),
         })
         .eq("id", conversationId);

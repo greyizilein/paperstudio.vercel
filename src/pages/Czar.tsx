@@ -5,6 +5,8 @@ import {
   User, Bot, AlertCircle, FileText, Search, PenLine, Cpu,
   ChevronDown, LayoutPanelLeft, FileSearch,
 } from "lucide-react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -102,6 +104,12 @@ export default function CzarPage() {
 
   // ── Upload state ──
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+
+  // ── Auto-scroll ──
+  const threadEndRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    threadEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
 
   // ── Upgrade modal ──
   const [showUpgrade, setShowUpgrade] = useState(false);
@@ -342,7 +350,7 @@ export default function CzarPage() {
   const isDocMode = ["write", "correct", "research"].includes(mode);
 
   return (
-    <div className="flex h-screen bg-background overflow-hidden">
+    <div className="flex h-[100dvh] bg-background overflow-hidden">
       {/* App sidebar (branding/nav) */}
       <DashboardSidebar
         userName={userName}
@@ -477,6 +485,7 @@ export default function CzarPage() {
               {messages.map(msg => (
                 <MessageBubble key={msg.id} msg={msg} />
               ))}
+              <div ref={threadEndRef} />
             </div>
 
             {/* Input */}
@@ -543,18 +552,27 @@ function MessageBubble({ msg }: { msg: UIMessage }) {
       )}
       <div className={`max-w-[85%] lg:max-w-[75%] ${isUser ? "order-first" : ""}`}>
         <div
-          className={`px-3.5 py-2.5 rounded-2xl text-[13.5px] leading-relaxed whitespace-pre-wrap ${
+          className={`px-3.5 py-2.5 rounded-2xl text-[13.5px] leading-relaxed ${
             isUser
-              ? "bg-primary text-primary-foreground rounded-tr-sm"
+              ? "bg-primary text-primary-foreground rounded-tr-sm whitespace-pre-wrap"
               : msg.error
-              ? "bg-destructive/10 text-destructive border border-destructive/20 rounded-tl-sm"
+              ? "bg-destructive/10 text-destructive border border-destructive/20 rounded-tl-sm whitespace-pre-wrap"
               : "bg-secondary text-foreground rounded-tl-sm"
           }`}
         >
           {msg.error && <AlertCircle size={13} className="inline mr-1.5 mb-0.5" />}
-          {msg.content || (msg.streaming ? "" : "—")}
-          {msg.streaming && (
-            <span className="inline-block w-0.5 h-4 bg-current ml-0.5 align-middle animate-pulse" />
+          {isUser || msg.error ? (
+            <>
+              {msg.content || (msg.streaming ? "" : "—")}
+              {msg.streaming && <span className="inline-block w-0.5 h-4 bg-current ml-0.5 align-middle animate-pulse" />}
+            </>
+          ) : (
+            <div className="prose prose-sm dark:prose-invert max-w-none prose-p:my-1 prose-headings:my-2 prose-ul:my-1 prose-ol:my-1 prose-pre:bg-background/50 prose-pre:border prose-pre:border-border prose-code:text-primary prose-code:bg-primary/10 prose-code:px-1 prose-code:rounded prose-blockquote:border-l-primary/40">
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                {msg.content || (msg.streaming ? "​" : "—")}
+              </ReactMarkdown>
+              {msg.streaming && <span className="inline-block w-0.5 h-4 bg-current ml-0.5 align-middle animate-pulse" />}
+            </div>
           )}
         </div>
         {msg.mode && msg.mode !== "chat" && !isUser && (

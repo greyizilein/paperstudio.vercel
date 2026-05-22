@@ -24,6 +24,7 @@ export interface Agent {
 interface AgentDockProps {
   agents: Agent[];
   className?: string;
+  expanded?: boolean;
 }
 
 const AGENT_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
