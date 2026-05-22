@@ -227,7 +227,7 @@ export function DocumentPanel({
             className="flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
           >
             <Download className="w-3 h-3" />
-            Download .docx
+            Download
           </button>
         </div>
       </div>
