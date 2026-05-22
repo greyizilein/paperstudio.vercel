@@ -235,7 +235,7 @@ function pickModel(
     if (complexity === "low" && mode === "chat") {
       return { provider: "google", model: "gemini-2.5-flash", thinking: false, label: "standard" };
     }
-    return { provider: "anthropic", model: "claude-sonnet-4-6", thinking: false, label: "extended thinking" };
+    return { provider: "anthropic", model: "claude-sonnet-4-6", thinking: false, label: "enhanced" };
   }
 
   // Free / undergraduate / none: always Gemini Flash
@@ -363,23 +363,16 @@ async function streamAnthropic(
   const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
   if (!apiKey) throw new Error("ANTHROPIC_API_KEY not configured");
 
-  const thinkingBudget = 8000;
-  let maxTokens = 32000;
-  if (useThinking && maxTokens <= thinkingBudget + 2000) {
-    maxTokens = thinkingBudget + 16000;
-  }
-  if (maxTokens > 64000) maxTokens = 64000;
-
   const body: Record<string, unknown> = {
     model,
-    max_tokens: maxTokens,
+    max_tokens: 16000,
     stream: true,
     messages,
     system,
   };
 
   if (useThinking) {
-    body.thinking = { type: "enabled", budget_tokens: thinkingBudget };
+    body.thinking = { type: "adaptive" };
     body.temperature = 1;
   }
 
@@ -800,7 +793,7 @@ async function runMain(
       id: "writer",
       name: "CZAR Writer",
       status: "starting",
-      action: `${mode} mode — ${modelChoice.model}`,
+      action: `${mode} mode`,
     });
 
     // ── 12. Stream AI response ────────────────────────────────────────────
