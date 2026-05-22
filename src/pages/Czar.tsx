@@ -5,6 +5,7 @@ import {
   User, Bot, AlertCircle, Search, PenLine, Cpu,
   ChevronDown, LayoutPanelLeft, FileSearch,
 } from "lucide-react";
+import { PsThemeToggle } from "@/components/ps/PsThemeToggle";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useAuth } from "@/contexts/AuthContext";
@@ -270,7 +271,8 @@ export default function CzarPage() {
               ? { ...m, content: accText || message, error: !recoverable, streaming: false }
               : m
           ));
-          if (!recoverable) setStreaming(false);
+          setStreaming(false);
+          setDocStreaming(false);
         },
         onBilling: (reason: string) => {
           setUpgradeReason(reason);
@@ -284,6 +286,7 @@ export default function CzarPage() {
           setStreaming(false);
           setDocStreaming(false);
           setAgents(prev => prev.map(a => a.status === "working" ? { ...a, status: "done" } : a));
+          setTimeout(() => setAgents([]), 3500);
           if (e.conversation_id && e.conversation_id !== convId) {
             setConvId(e.conversation_id);
           }
@@ -425,7 +428,7 @@ export default function CzarPage() {
             {streaming && (
               <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
                 <Loader2 size={12} className="animate-spin" />
-                Writing…
+                <span className="hidden sm:inline">Writing…</span>
               </span>
             )}
             {docContent && !streaming && (
@@ -434,25 +437,26 @@ export default function CzarPage() {
                 className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[12px] font-medium bg-primary text-primary-foreground hover:opacity-90 transition-opacity"
               >
                 <Download size={13} />
-                Export
+                <span className="hidden sm:inline">Export</span>
               </button>
             )}
+            <PsThemeToggle size={15} />
           </div>
         </header>
 
         {/* Mobile tab bar */}
-        <div className="lg:hidden flex border-b border-border bg-background flex-shrink-0">
+        <div className="lg:hidden flex border-b border-border bg-background/95 backdrop-blur flex-shrink-0">
           {(["chat", "document", "agents"] as MobileTab[]).map(t => (
             <button
               key={t}
               onClick={() => setMobileTab(t)}
-              className={`flex-1 py-2.5 text-[12px] font-semibold capitalize transition-colors ${
+              className={`flex-1 py-2 text-[11px] font-semibold capitalize tracking-wide transition-colors ${
                 mobileTab === t
                   ? "text-foreground border-b-2 border-primary"
-                  : "text-muted-foreground"
+                  : "text-muted-foreground/70"
               }`}
             >
-              {t}
+              {t === "chat" ? "Chat" : t === "document" ? "Document" : "Agents"}
               {t === "agents" && agents.filter(a => a.status === "working").length > 0 && (
                 <span className="ml-1 inline-block w-1.5 h-1.5 rounded-full bg-blue-500 align-middle" />
               )}
@@ -470,12 +474,14 @@ export default function CzarPage() {
               : "w-full"
           } ${mobileTab !== "chat" ? "hidden lg:flex" : "flex"}`}>
 
-            {/* Agent dock */}
-            <div className="flex-shrink-0 px-4 pt-2">
-              <Suspense fallback={null}>
-                <AgentDock agents={agents} />
-              </Suspense>
-            </div>
+            {/* Agent dock — only takes space when agents are active */}
+            {agents.some(a => a.status !== "idle") && (
+              <div className="flex-shrink-0 px-3 pt-2">
+                <Suspense fallback={null}>
+                  <AgentDock agents={agents} />
+                </Suspense>
+              </div>
+            )}
 
             {/* Message thread */}
             <div className="flex-1 overflow-y-auto px-4 py-3 space-y-4">
