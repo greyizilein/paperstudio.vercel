@@ -1,122 +1,311 @@
-// SSE reader for czar-chat.
 import { supabase } from "@/integrations/supabase/client";
 
 const FUNCTIONS_BASE = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1`;
+const ANON_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string;
+
+async function getAuthHeaders(): Promise<Record<string, string>> {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.access_token) {
+    throw new Error("Not authenticated");
+  }
+  return {
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${session.access_token}`,
+    apikey: ANON_KEY,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Event types
+// ---------------------------------------------------------------------------
+
+export type CzarEventType =
+  | "meta"
+  | "agent"
+  | "delta"
+  | "thinking"
+  | "tool"
+  | "status"
+  | "error"
+  | "billing"
+  | "done"
+  | "ping";
+
+export interface CzarMetaEvent {
+  conversation_id: string;
+  assistant_id: string;
+  model_label: string;
+  mode: string;
+}
+
+export interface CzarAgentEvent {
+  id: string;
+  name: string;
+  status: "starting" | "working" | "done" | "error";
+  action?: string;
+  detail?: string;
+}
+
+export interface CzarDeltaEvent {
+  text: string;
+}
 
 export interface CzarToolEvent {
   id: string;
   name: string;
   phase: "start" | "result" | "error";
-  input?: any;
+  query?: string;
   result?: any;
   error?: string;
 }
 
-export interface CzarStreamHandlers {
-  onMeta?: (meta: { conversation_id: string; assistant_id: string; model: string; tier: string; delivery?: string | null; is_build?: boolean }) => void;
+export interface CzarStatusEvent {
+  phase: string;
+  message?: string;
+}
+
+export interface CzarErrorEvent {
+  message: string;
+  recoverable?: boolean;
+}
+
+export interface CzarBillingEvent {
+  reason: string;
+}
+
+export interface CzarDoneEvent {
+  conversation_id: string;
+  assistant_id?: string;
+  words?: number;
+}
+
+// ---------------------------------------------------------------------------
+// Handlers
+// ---------------------------------------------------------------------------
+
+export interface CzarHandlers {
+  onMeta?: (e: CzarMetaEvent) => void;
+  onAgent?: (e: CzarAgentEvent) => void;
   onDelta?: (text: string) => void;
   onThinking?: (text: string) => void;
-  onTool?: (ev: CzarToolEvent) => void;
-  onFollowups?: (suggestions: string[]) => void;
-  onClarify?: (spec: any) => void;
-  onHumanise?: (ev: { state: string; stage?: number; label?: string; words?: number; reason?: string }) => void;
-  onCheckout?: (ev: { product: string; tier: string; authorization_url: string; reference?: string }) => void;
-  onError?: (msg: string, code?: number) => void;
-  onDone?: (data: { conversation_id: string; assistant_id?: string; words?: number; billing?: string }) => void;
+  onTool?: (e: CzarToolEvent) => void;
+  onStatus?: (e: CzarStatusEvent) => void;
+  onError?: (message: string, recoverable?: boolean) => void;
+  onBilling?: (reason: string) => void;
+  onDone?: (e: CzarDoneEvent) => void;
 }
 
-async function authHeaders() {
-  await supabase.auth.refreshSession().catch(() => {});
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session) throw new Error("Not authenticated");
-  return {
-    "Content-Type": "application/json",
-    Authorization: `Bearer ${session.access_token}`,
-    apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-  };
+// ---------------------------------------------------------------------------
+// Request types
+// ---------------------------------------------------------------------------
+
+export type CzarMode = "chat" | "write" | "correct" | "research" | "plan";
+
+export interface CzarRequest {
+  conversation_id: string | null;
+  user_message: string;
+  attachments?: { storage_path: string; filename: string; size: number; mime: string }[];
+  mode?: CzarMode;
+  settings?: Record<string, any>;
 }
 
-export type CzarMode = "chat" | "plan" | "build" | "agent";
+// ---------------------------------------------------------------------------
+// Dispatch helper
+// ---------------------------------------------------------------------------
 
-// ─── czar-chat stream ─────────────────────────────────────────────
+function dispatch(eventType: string, payload: any, handlers: CzarHandlers): void {
+  switch (eventType as CzarEventType) {
+    case "meta":
+      handlers.onMeta?.(payload as CzarMetaEvent);
+      break;
+    case "agent":
+      handlers.onAgent?.(payload as CzarAgentEvent);
+      break;
+    case "delta":
+      handlers.onDelta?.((payload as CzarDeltaEvent).text);
+      break;
+    case "thinking":
+      handlers.onThinking?.((payload as CzarDeltaEvent).text);
+      break;
+    case "tool":
+      handlers.onTool?.(payload as CzarToolEvent);
+      break;
+    case "status":
+      handlers.onStatus?.(payload as CzarStatusEvent);
+      break;
+    case "error": {
+      const e = payload as CzarErrorEvent;
+      handlers.onError?.(e.message, e.recoverable);
+      break;
+    }
+    case "billing":
+      handlers.onBilling?.((payload as CzarBillingEvent).reason);
+      break;
+    case "done":
+      handlers.onDone?.(payload as CzarDoneEvent);
+      break;
+    case "ping":
+      break;
+  }
+}
 
-export async function streamCzarChat(
-  body: {
-    conversation_id: string | null;
-    user_message: string;
-    attachments?: { storage_path: string; filename: string; size: number; mime: string }[];
-    think?: boolean;
-    mode?: CzarMode;
-    settings?: Record<string, any>;
-  },
-  handlers: CzarStreamHandlers,
+// ---------------------------------------------------------------------------
+// Main streaming function
+// ---------------------------------------------------------------------------
+
+export async function streamCzar(
+  req: CzarRequest,
+  handlers: CzarHandlers,
   signal?: AbortSignal,
-): Promise<string> {
-  const headers = await authHeaders();
-  const res = await fetch(`${FUNCTIONS_BASE}/czar-chat`, {
-    method: "POST", headers, body: JSON.stringify(body), signal,
-  });
-  if (!res.ok || !res.body) {
-    const txt = await res.text().catch(() => "");
-    handlers.onError?.(`CZAR failed (${res.status}): ${txt || res.statusText}`, res.status);
-    throw new Error(txt || res.statusText);
+): Promise<void> {
+  let headers: Record<string, string>;
+  try {
+    headers = await getAuthHeaders();
+  } catch (err: any) {
+    handlers.onError?.(err?.message ?? "Not authenticated");
+    return;
   }
 
-  const reader = res.body.getReader();
+  let resp: Response;
+  try {
+    resp = await fetch(`${FUNCTIONS_BASE}/czar-chat`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(req),
+      signal,
+    });
+  } catch (err: any) {
+    if (err?.name === "AbortError") return;
+    handlers.onError?.(err?.message ?? "Network error");
+    return;
+  }
+
+  if (!resp.ok) {
+    const text = await resp.text();
+    handlers.onError?.(text || `Request failed: ${resp.status}`);
+    return;
+  }
+
+  if (!resp.body) {
+    handlers.onError?.("No response stream");
+    return;
+  }
+
+  const reader = resp.body.getReader();
   const decoder = new TextDecoder();
-  let buffer = "";
-  let currentEvent = "message";
-  let full = "";
+
+  // SSE state: the spec allows `event:` on a preceding line before `data:`
+  let currentEventType: string | null = null;
+  let lineBuffer = "";
 
   try {
     while (true) {
+      if (signal?.aborted) break;
+
       const { done, value } = await reader.read();
       if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      let nl: number;
-      while ((nl = buffer.indexOf("\n")) !== -1) {
-        let line = buffer.slice(0, nl);
-        buffer = buffer.slice(nl + 1);
+
+      lineBuffer += decoder.decode(value, { stream: true });
+
+      let newlineIdx: number;
+      while ((newlineIdx = lineBuffer.indexOf("\n")) !== -1) {
+        let line = lineBuffer.slice(0, newlineIdx);
+        lineBuffer = lineBuffer.slice(newlineIdx + 1);
+
+        // Normalize CRLF
         if (line.endsWith("\r")) line = line.slice(0, -1);
-        if (!line) { currentEvent = "message"; continue; }
-        if (line.startsWith("event:")) { currentEvent = line.slice(6).trim(); continue; }
-        if (!line.startsWith("data:")) continue;
-        const payload = line.slice(5).trim();
-        if (!payload || payload === "[DONE]") continue;
-        try {
-          const parsed = JSON.parse(payload);
-          if (currentEvent === "message" && typeof parsed.delta === "string") {
-            full += parsed.delta;
-            handlers.onDelta?.(parsed.delta);
-          } else if (currentEvent === "thinking" && typeof parsed.delta === "string") {
-            handlers.onThinking?.(parsed.delta);
-          } else if (currentEvent === "tool") {
-            handlers.onTool?.(parsed as CzarToolEvent);
-          } else if (currentEvent === "followups" && Array.isArray(parsed.suggestions)) {
-            handlers.onFollowups?.(parsed.suggestions);
-          } else if (currentEvent === "meta") {
-            handlers.onMeta?.(parsed);
-          } else if (currentEvent === "clarify") {
-            handlers.onClarify?.(parsed);
-          } else if (currentEvent === "humanise") {
-            handlers.onHumanise?.(parsed);
-          } else if (currentEvent === "checkout") {
-            handlers.onCheckout?.(parsed);
-          } else if (currentEvent === "error") {
-            handlers.onError?.(parsed.message || "Unknown error", parsed.code);
-          } else if (currentEvent === "done") {
-            handlers.onDone?.(parsed);
-          }
-        } catch {
-          buffer = line + "\n" + buffer;
-          break;
+
+        if (line === "") {
+          // Empty line resets the SSE message boundary
+          currentEventType = null;
+          continue;
         }
+
+        if (line.startsWith(":")) {
+          // SSE comment — ignore
+          continue;
+        }
+
+        if (line.startsWith("event: ")) {
+          currentEventType = line.slice(7).trim();
+          continue;
+        }
+
+        if (!line.startsWith("data: ")) continue;
+
+        const jsonStr = line.slice(6).trim();
+        if (!jsonStr || jsonStr === "[DONE]") continue;
+
+        let parsed: any;
+        try {
+          parsed = JSON.parse(jsonStr);
+        } catch {
+          // Malformed JSON — skip
+          continue;
+        }
+
+        // Resolve event type: prefer the multi-line `event:` header,
+        // fall back to an inline `event` field inside the JSON payload.
+        const resolvedType: string = currentEventType ?? parsed.event ?? "";
+        if (!resolvedType) continue;
+
+        // When the event type is embedded in the payload, strip it so
+        // downstream handlers receive a clean object.
+        if (!currentEventType && "event" in parsed) {
+          const { event: _stripped, ...rest } = parsed;
+          dispatch(resolvedType, rest, handlers);
+        } else {
+          dispatch(resolvedType, parsed, handlers);
+        }
+
+        // Reset per-message event type after a data line (single-line format)
+        if (!currentEventType) currentEventType = null;
       }
     }
-    return full;
   } catch (err: any) {
-    if (err?.name === "AbortError" || signal?.aborted) return full;
-    handlers.onError?.(err?.message || "Stream failed");
-    throw err;
+    if (err?.name === "AbortError") return;
+    handlers.onError?.(err?.message ?? "Stream error");
   }
+}
+
+// ---------------------------------------------------------------------------
+// Conversation + message loaders
+// ---------------------------------------------------------------------------
+
+export interface CzarConversation {
+  id: string;
+  title: string | null;
+  mode: string | null;
+  created_at: string;
+  last_message: string | null;
+}
+
+export async function loadConversations(): Promise<CzarConversation[]> {
+  const { data, error } = await supabase
+    .from("czar_conversations")
+    .select("id, title, mode, created_at, last_message")
+    .order("updated_at", { ascending: false })
+    .limit(50);
+
+  if (error) throw new Error(error.message);
+  return (data ?? []) as CzarConversation[];
+}
+
+export interface CzarMessage {
+  id: string;
+  role: "user" | "assistant";
+  content: string | null;
+  mode: string | null;
+  created_at: string;
+}
+
+export async function loadMessages(conversationId: string): Promise<CzarMessage[]> {
+  const { data, error } = await supabase
+    .from("czar_messages")
+    .select("id, role, content, mode, created_at")
+    .eq("conversation_id", conversationId)
+    .order("created_at", { ascending: true });
+
+  if (error) throw new Error(error.message);
+  return (data ?? []) as CzarMessage[];
 }
