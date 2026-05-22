@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  PanelLeftClose, PanelLeftOpen, Download, Settings, Loader2,
-  User, Bot, AlertCircle, FileText, Search, PenLine, Cpu,
+  PanelLeftClose, PanelLeftOpen, Download, Loader2,
+  User, Bot, AlertCircle, Search, PenLine, Cpu,
   ChevronDown, LayoutPanelLeft, FileSearch,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
@@ -181,7 +181,7 @@ export default function CzarPage() {
     if (!user || files.length === 0) return [];
     const results: CzarRequest["attachments"] = [];
     for (const file of files) {
-      const path = `czar/${user.id}/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
+      const path = `${user.id}/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
       const { error } = await supabase.storage.from("czar-uploads").upload(path, file);
       if (error) {
         console.warn("Upload failed:", file.name, error.message);

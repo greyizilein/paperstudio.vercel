@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from "react";
-import { Plus, Search, MessageSquare, Pencil, Trash2, X, Check, Archive } from "lucide-react";
+import { Plus, Search, MessageSquare, Pencil, Trash2, X, Check } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import type { CzarConversation } from "@/lib/czarStream";
 
@@ -165,7 +165,7 @@ export function ConvSidebar({ currentId, onSelect, onNew }: Props) {
                       </span>
                     )}
                     <span className="text-[9.5px] text-muted-foreground/50">
-                      {timeLabel(c.created_at)}
+                      {timeLabel(c.updated_at ?? c.created_at)}
                     </span>
                   </div>
                 </>
