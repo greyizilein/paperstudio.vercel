@@ -355,7 +355,6 @@
    Scoped under .paperstudio-marketing to avoid bleeding into the dashboard,
    writer, auth, settings, admin, or legal pages.
    ───────────────────────────────────────────────────────────────────────── */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
 
 /* ── Marketing theme tokens ── */
 .paperstudio-marketing {
