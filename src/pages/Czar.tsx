@@ -18,6 +18,7 @@ import {
   type CzarMetaEvent, type CzarAgentEvent, type CzarToolEvent,
 } from "@/lib/czarStream";
 import { buildDocx, stripMarkdown, markdownComponents, chatMarkdownComponents } from "@/lib/czarDocUtils.tsx";
+import { computeParaDiff, type DiffParagraph } from "@/lib/diffUtils";
 import { ConvSidebar } from "@/components/czar/ConvSidebar";
 import { UpgradeModal } from "@/components/czar/UpgradeModal";
 import { DashboardSidebar } from "@/components/dashboard/DashboardSidebar";
@@ -45,6 +46,8 @@ interface UIMessage {
   error?: boolean;
   agents?: LiveAgent[];
   correctionApplied?: boolean;
+  correctionDiff?: DiffParagraph[];
+  correctionOriginalText?: string;
 }
 
 // ── Constants ──────────────────────────────────────────────────────
@@ -373,15 +376,22 @@ export default function CzarPage() {
     setMessages(prev => prev.map(m => m.id === id ? { ...m, content } : m));
   }, []);
 
-  const handleCorrectionApplied = useCallback((content: string, count: number) => {
+  const handleCorrectionApplied = useCallback((content: string, originalText: string, count: number) => {
     const assistantMsgId = `a_${Date.now()}`;
+    const diff = originalText ? computeParaDiff(originalText, content) : undefined;
     setMessages(prev => [...prev, {
       id: assistantMsgId,
       role: "assistant",
       content,
       mode: "correct",
       correctionApplied: true,
+      correctionDiff: diff,
+      correctionOriginalText: originalText,
     }]);
+  }, []);
+
+  const handleDismissDiff = useCallback((id: string) => {
+    setMessages(prev => prev.map(m => m.id === id ? { ...m, correctionDiff: undefined } : m));
   }, []);
 
   if (!user) return null;
@@ -521,6 +531,7 @@ export default function CzarPage() {
                 userInitials={userInitials}
                 onContentChange={handleMessageContentChange}
                 onSelectionAction={handleSelectionAction}
+                onDismissDiff={handleDismissDiff}
               />
             ))}
             <div ref={threadEndRef} />
@@ -627,10 +638,11 @@ function AgentStepsBlock({ agents, isLive }: { agents: LiveAgent[]; isLive: bool
   );
 }
 
-function InlineDocMessage({ msg, onContentChange, onSelectionAction }: {
+function InlineDocMessage({ msg, onContentChange, onSelectionAction, onDismissDiff }: {
   msg: UIMessage;
   onContentChange?: (id: string, content: string) => void;
   onSelectionAction?: (action: string, text: string) => void;
+  onDismissDiff?: (id: string) => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [isSpeaking, setIsSpeaking] = useState(false);
@@ -707,6 +719,58 @@ function InlineDocMessage({ msg, onContentChange, onSelectionAction }: {
 
   return (
     <div ref={containerRef} className="relative" onMouseUp={handleMouseUp}>
+      {/* ── Diff view (correction mode only) ── */}
+      {msg.correctionDiff && !isEditMode && (
+        <div className="mb-5 rounded-xl border border-border overflow-hidden">
+          <style>{`
+            .czar-diff-del { background: rgba(239,68,68,0.18); color: #b91c1c; text-decoration: line-through; border-radius: 2px; padding: 0 1px; }
+            .dark .czar-diff-del { color: #f87171; }
+            .czar-diff-ins { background: rgba(34,197,94,0.18); color: #15803d; border-radius: 2px; padding: 0 1px; }
+            .dark .czar-diff-ins { color: #4ade80; }
+          `}</style>
+          {/* Diff toolbar */}
+          <div className="flex items-center gap-3 px-4 py-2.5 bg-amber-500/5 border-b border-border flex-wrap">
+            <span className="text-[11px] font-bold text-amber-600 dark:text-amber-400">Corrections applied</span>
+            <span className="flex gap-1.5 text-[10px]">
+              <span className="px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300 font-semibold">~ modified</span>
+              <span className="px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/40 text-emerald-800 dark:text-emerald-300 font-semibold">+ added</span>
+              <span className="px-1.5 py-0.5 rounded bg-red-100 dark:bg-red-900/40 text-red-800 dark:text-red-300 font-semibold">– deleted</span>
+            </span>
+            <div className="ml-auto flex items-center gap-2">
+              <button onClick={handleDownload} className="text-[11px] px-2.5 py-1 rounded-lg border border-border text-muted-foreground hover:text-foreground transition-colors">⬇ Download</button>
+              <button onClick={() => onDismissDiff?.(msg.id)} className="text-[11px] text-muted-foreground hover:text-foreground transition-colors">Dismiss</button>
+              <button onClick={() => onDismissDiff?.(msg.id)} className="text-[11px] px-3 py-1 rounded-lg bg-foreground text-background font-semibold hover:opacity-80 transition-opacity">Accept all</button>
+            </div>
+          </div>
+          {/* Diff paragraphs */}
+          <div className="px-5 py-4 space-y-1 max-h-[60vh] overflow-y-auto">
+            {msg.correctionDiff.map((para, i) => {
+              const isHeading = /^#{1,4}\s/.test(para.text.trimStart());
+              return (
+                <div
+                  key={i}
+                  className={[
+                    "px-3 py-2 rounded-md border-l-4 text-[13.5px] leading-relaxed transition-colors",
+                    para.type === "unchanged" ? "border-transparent" :
+                    para.type === "modified"  ? "bg-amber-500/8 border-amber-500" :
+                    para.type === "added"     ? "bg-emerald-500/10 border-emerald-500" :
+                                                "bg-red-500/10 border-red-500 opacity-70",
+                  ].join(" ")}
+                >
+                  {para.type === "modified" && para.diffHtml && !isHeading ? (
+                    <p dangerouslySetInnerHTML={{ __html: para.diffHtml.replace(/diff-del/g, "czar-diff-del").replace(/diff-ins/g, "czar-diff-ins") }} className="text-foreground" />
+                  ) : para.type === "deleted" ? (
+                    <p className="line-through text-muted-foreground">{para.text}</p>
+                  ) : (
+                    <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents as any}>{para.text}</ReactMarkdown>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {isEditMode ? (
         <textarea
           value={editContent}
@@ -803,13 +867,14 @@ function InlineDocMessage({ msg, onContentChange, onSelectionAction }: {
 
 function CzarMessage({
   msg, currentAgents, userInitials,
-  onContentChange, onSelectionAction,
+  onContentChange, onSelectionAction, onDismissDiff,
 }: {
   msg: UIMessage;
   currentAgents: LiveAgent[];
   userInitials: string;
   onContentChange: (id: string, content: string) => void;
   onSelectionAction: (action: string, text: string) => void;
+  onDismissDiff: (id: string) => void;
 }) {
   const isDocMsg = DOC_MODES.includes(msg.mode ?? "");
 
@@ -866,6 +931,7 @@ function CzarMessage({
             msg={msg}
             onContentChange={onContentChange}
             onSelectionAction={onSelectionAction}
+            onDismissDiff={onDismissDiff}
           />
         )}
 
