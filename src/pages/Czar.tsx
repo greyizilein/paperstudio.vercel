@@ -16,15 +16,12 @@ import {
   streamCzar, loadMessages,
   type CzarRequest, type CzarMode, type CzarHandlers,
   type CzarMetaEvent, type CzarAgentEvent, type CzarToolEvent,
-  type CorrectionChangeEvent, type CorrectionSummaryEvent,
 } from "@/lib/czarStream";
 import { buildDocx, stripMarkdown, markdownComponents } from "@/lib/czarDocUtils.tsx";
-import { type CorrectionChangeUI, type CorrectionSummary } from "@/lib/czarCorrection";
 import { ConvSidebar } from "@/components/czar/ConvSidebar";
 import { UpgradeModal } from "@/components/czar/UpgradeModal";
 import { DashboardSidebar } from "@/components/dashboard/DashboardSidebar";
 import { CorrectionModal } from "@/components/czar/CorrectionModal";
-import { CorrectionDiffView } from "@/components/czar/CorrectionDiffView";
 
 import { lazy, Suspense } from "react";
 const CommandInput = lazy(() => import("@/components/czar/CommandInput").then(m => ({ default: m.CommandInput })));
@@ -47,8 +44,6 @@ interface UIMessage {
   streaming?: boolean;
   error?: boolean;
   agents?: LiveAgent[];
-  correctionChanges?: CorrectionChangeUI[];
-  correctionSummary?: CorrectionSummary | null;
   correctionApplied?: boolean;
 }
 
@@ -165,7 +160,6 @@ export default function CzarPage() {
   const [upgradeReason, setUpgradeReason] = useState("");
 
   const [correctionModalOpen, setCorrectionModalOpen] = useState(false);
-  const [correctionModalInitialText, setCorrectionModalInitialText] = useState("");
 
   const [userName, setUserName] = useState("");
   const [userInitials, setUserInitials] = useState("U");
@@ -232,8 +226,8 @@ export default function CzarPage() {
     if (!user || streaming) return;
     if (!text.trim() && files.length === 0) return;
 
-    // In correction mode without a document source: redirect to the modal
-    if (mode === "correct" && files.length === 0 && !extraSettings.correction_paste) {
+    // Correction mode is handled entirely by the modal — redirect any attempt to send
+    if (mode === "correct") {
       setCorrectionModalOpen(true);
       return;
     }
@@ -379,68 +373,16 @@ export default function CzarPage() {
     setMessages(prev => prev.map(m => m.id === id ? { ...m, content } : m));
   }, []);
 
-  const handleCorrectionToggleSelect = useCallback((msgId: string, changeId: string) => {
-    setMessages(prev => prev.map(m =>
-      m.id === msgId
-        ? { ...m, correctionChanges: m.correctionChanges?.map(c => c.id === changeId ? { ...c, selected: !c.selected } : c) }
-        : m
-    ));
+  const handleCorrectionApplied = useCallback((content: string, count: number) => {
+    const assistantMsgId = `a_${Date.now()}`;
+    setMessages(prev => [...prev, {
+      id: assistantMsgId,
+      role: "assistant",
+      content,
+      mode: "correct",
+      correctionApplied: true,
+    }]);
   }, []);
-
-  const handleCorrectionSelectAll = useCallback((msgId: string) => {
-    setMessages(prev => prev.map(m =>
-      m.id === msgId
-        ? { ...m, correctionChanges: m.correctionChanges?.map(c => ({ ...c, selected: true })) }
-        : m
-    ));
-  }, []);
-
-  const handleCorrectionSelectNone = useCallback((msgId: string) => {
-    setMessages(prev => prev.map(m =>
-      m.id === msgId
-        ? { ...m, correctionChanges: m.correctionChanges?.map(c => ({ ...c, selected: false })) }
-        : m
-    ));
-  }, []);
-
-  const handleCorrectionOverrideChange = useCallback((msgId: string, changeId: string, instruction: string) => {
-    setMessages(prev => prev.map(m =>
-      m.id === msgId
-        ? { ...m, correctionChanges: m.correctionChanges?.map(c => c.id === changeId ? { ...c, overrideInstruction: instruction } : c) }
-        : m
-    ));
-  }, []);
-
-  const handleCorrectionApply = useCallback((selectedChanges: CorrectionChangeUI[], originalText: string) => {
-    const correctionsList = selectedChanges.map((c, i) =>
-      `${i + 1}. [${c.type}] Original: "${c.original}" → Replace with: "${c.corrected}" — ${c.explanation}${c.overrideInstruction ? `. Override: ${c.overrideInstruction}` : ""}`
-    ).join("\n");
-
-    sendMessage(
-      `Apply ${selectedChanges.length} correction${selectedChanges.length !== 1 ? "s" : ""} to document`,
-      [],
-      {
-        correction_apply: true,
-        correction_original_text: originalText,
-        correction_selected_changes: correctionsList,
-      },
-    );
-  }, [sendMessage]);
-
-  const handleCorrectionModalSubmit = useCallback(({ text, notes, file }: { text?: string; notes: string; file?: File }) => {
-    // Don't close immediately — modal shows "Scanning…" while streaming, then auto-closes
-    const files = file ? [file] : [];
-    const settings: Record<string, any> = {};
-    if (notes) settings.correction_notes = notes;
-    const docText = text ?? correctionModalInitialText;
-    if (docText) settings.correction_paste = docText;
-    setCorrectionModalInitialText("");
-    sendMessage(
-      "Correct this document" + (notes ? `. Editor notes: ${notes.slice(0, 120)}` : ""),
-      files,
-      settings,
-    );
-  }, [sendMessage, correctionModalInitialText]);
 
   if (!user) return null;
 
@@ -579,11 +521,6 @@ export default function CzarPage() {
                 userInitials={userInitials}
                 onContentChange={handleMessageContentChange}
                 onSelectionAction={handleSelectionAction}
-                onCorrectionToggleSelect={(changeId) => handleCorrectionToggleSelect(msg.id, changeId)}
-                onCorrectionSelectAll={() => handleCorrectionSelectAll(msg.id)}
-                onCorrectionSelectNone={() => handleCorrectionSelectNone(msg.id)}
-                onCorrectionOverrideChange={(changeId, instr) => handleCorrectionOverrideChange(msg.id, changeId, instr)}
-                onCorrectionApply={handleCorrectionApply}
               />
             ))}
             <div ref={threadEndRef} />
@@ -620,10 +557,8 @@ export default function CzarPage() {
 
       <CorrectionModal
         open={correctionModalOpen}
-        onClose={() => { setCorrectionModalOpen(false); setCorrectionModalInitialText(""); }}
-        onSubmit={handleCorrectionModalSubmit}
-        isSubmitting={streaming}
-        initialText={correctionModalInitialText}
+        onClose={() => setCorrectionModalOpen(false)}
+        onApplied={handleCorrectionApplied}
       />
     </div>
   );
@@ -869,19 +804,12 @@ function InlineDocMessage({ msg, onContentChange, onSelectionAction }: {
 function CzarMessage({
   msg, currentAgents, userInitials,
   onContentChange, onSelectionAction,
-  onCorrectionToggleSelect, onCorrectionSelectAll, onCorrectionSelectNone,
-  onCorrectionOverrideChange, onCorrectionApply,
 }: {
   msg: UIMessage;
   currentAgents: LiveAgent[];
   userInitials: string;
   onContentChange: (id: string, content: string) => void;
   onSelectionAction: (action: string, text: string) => void;
-  onCorrectionToggleSelect: (changeId: string) => void;
-  onCorrectionSelectAll: () => void;
-  onCorrectionSelectNone: () => void;
-  onCorrectionOverrideChange: (changeId: string, instruction: string) => void;
-  onCorrectionApply: (selectedChanges: CorrectionChangeUI[], originalText: string) => void;
 }) {
   const isDocMsg = DOC_MODES.includes(msg.mode ?? "");
 
@@ -932,34 +860,13 @@ function CzarMessage({
           </div>
         )}
 
-        {/* Correction review cards — analysis result */}
-        {!msg.error && msg.mode === "correct" && !msg.correctionApplied && (msg.correctionSummary || msg.streaming) && (
-          <CorrectionDiffView
-            summary={msg.correctionSummary ?? null}
-            changes={msg.correctionChanges ?? []}
-            isAnalyzing={!!msg.streaming}
-            onToggleSelect={onCorrectionToggleSelect}
-            onSelectAll={onCorrectionSelectAll}
-            onSelectNone={onCorrectionSelectNone}
-            onOverrideChange={onCorrectionOverrideChange}
-            onApply={onCorrectionApply}
-          />
-        )}
-
-        {/* Applied clean document — streamed result */}
+        {/* Corrected document — placed in thread after modal completes */}
         {!msg.error && msg.mode === "correct" && msg.correctionApplied && (
           <InlineDocMessage
             msg={msg}
             onContentChange={onContentChange}
             onSelectionAction={onSelectionAction}
           />
-        )}
-
-        {/* Correction history placeholder (loaded from DB, no live data) */}
-        {!msg.error && msg.mode === "correct" && !msg.correctionApplied && !msg.correctionSummary && !msg.streaming && msg.content && (
-          <div className="text-sm text-muted-foreground px-4 py-3 rounded-xl border border-border bg-secondary/20">
-            Correction session complete. Upload a new document to start again.
-          </div>
         )}
 
         {/* Standard doc content (non-correction doc modes) */}
