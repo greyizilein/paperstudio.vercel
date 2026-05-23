@@ -4,6 +4,8 @@
 
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { CZAR_BRAIN_SYSTEM_PROMPT } from "./brain.ts";
+import { runOrchestrator } from "./orchestrator.ts";
+import { pickPlaybook, playbookText, RouterSignals } from "./promptLibrary.ts";
 
 // ---------------------------------------------------------------------------
 // CORS
@@ -758,81 +760,121 @@ async function runMain(
     // ── 9. Build system prompt ────────────────────────────────────────────
     const settingsBlock = req.settings ? buildSettingsManifest(req.settings) : "";
     const directive = modeDirective(mode, hasFiles);
+
+    // Pick and append the right task playbook
+    const routerSignals: RouterSignals = {
+      user_message: req.user_message,
+      attachment_count: req.attachments?.length ?? 0,
+      total_attachment_words: 0,
+      filenames: req.attachments?.map((a) => a.filename) ?? [],
+    };
+    const playbook = pickPlaybook(routerSignals);
+    const playbookContent = playbookText(playbook);
+
     const systemParts = [CZAR_BRAIN_SYSTEM_PROMPT];
     if (settingsBlock) systemParts.push(settingsBlock);
     if (directive) systemParts.push("\n\n" + directive);
+    if (playbookContent) systemParts.push("\n\n" + playbookContent);
     const system = systemParts.join("\n");
 
-    // ── 10. Build messages array ──────────────────────────────────────────
+    // ── 10. Load conversation history ─────────────────────────────────────
     let history: { role: string; content: string }[] = [];
     try {
       history = await loadConversationHistory(conversationId, svc);
-      // Remove the user message we just inserted (it's the last one) and the empty assistant
-      // The history already includes the user message we saved above — strip the last two
-      // (user + empty assistant placeholder) so we can rebuild cleanly
+      // Strip empty assistant placeholder (just inserted above)
       while (
         history.length > 0 &&
-        (history[history.length - 1].role === "assistant" && history[history.length - 1].content.trim() === "")
+        history[history.length - 1].role === "assistant" &&
+        history[history.length - 1].content.trim() === ""
       ) {
         history.pop();
       }
+      // Strip current user message — we re-add it below (with augmented content for write/research)
+      if (history.length > 0 && history[history.length - 1].role === "user") {
+        history.pop();
+      }
     } catch {
-      // non-fatal — continue without history
+      // non-fatal
     }
 
-    const userContent = req.user_message + (fileContext ? "\n\n" + fileContext : "");
-    const messages = [
-      ...history.slice(-20), // keep last 20 turns max
-      { role: "user", content: userContent },
-    ];
-
-    // ── 11. Emit writer agent starting ───────────────────────────────────
-    write("agent", {
-      id: "writer",
-      name: "CZAR Writer",
-      status: "starting",
-      action: `${mode} mode`,
-    });
-
-    // ── 12. Stream AI response ────────────────────────────────────────────
+    // ── 11. Generate response (orchestrated or direct) ────────────────────
     let fullResponse = "";
-    try {
-      if (modelChoice.provider === "anthropic") {
-        fullResponse = await streamAnthropic(
-          modelChoice.model,
-          system,
-          messages,
-          modelChoice.thinking,
-          write,
-          signal,
-        );
-      } else {
-        fullResponse = await streamGoogle(
-          modelChoice.model,
-          system,
-          messages,
-          write,
-          signal,
-        );
-      }
-    } catch (err: any) {
-      const isAbort = err?.name === "AbortError";
-      if (!isAbort) {
-        write("error", {
-          message: `AI generation failed: ${err?.message ?? "unknown error"}`,
-          recoverable: false,
-        });
-        return;
-      }
-      // Aborted — still save whatever we have
-    }
 
-    write("agent", {
-      id: "writer",
-      name: "CZAR Writer",
-      status: "done",
-      action: `${countWords(fullResponse)} words generated`,
-    });
+    if ((mode === "write" || mode === "research") && !signal.aborted) {
+      // Multi-agent pipeline: Planner → Researcher → Writer → References
+      try {
+        fullResponse = await runOrchestrator({
+          userMessage: req.user_message,
+          mode,
+          fileContext,
+          systemPrompt: system,
+          history: history.slice(-20),
+          modelChoice,
+          write,
+          signal,
+          streamAnthropicFn: streamAnthropic,
+          streamGoogleFn: streamGoogle,
+        });
+      } catch (err: any) {
+        if (err?.name !== "AbortError") {
+          write("error", {
+            message: `Orchestration failed: ${err?.message ?? "unknown error"}`,
+            recoverable: false,
+          });
+          return;
+        }
+      }
+    } else {
+      // Direct model call for chat, plan, correct
+      write("agent", {
+        id: "writer",
+        name: "CZAR Writer",
+        status: "starting",
+        action: `${mode} mode`,
+      });
+
+      const userContent = req.user_message + (fileContext ? "\n\n" + fileContext : "");
+      const messages = [
+        ...history.slice(-20),
+        { role: "user", content: userContent },
+      ];
+
+      try {
+        if (modelChoice.provider === "anthropic") {
+          fullResponse = await streamAnthropic(
+            modelChoice.model,
+            system,
+            messages,
+            modelChoice.thinking,
+            write,
+            signal,
+          );
+        } else {
+          fullResponse = await streamGoogle(
+            modelChoice.model,
+            system,
+            messages,
+            write,
+            signal,
+          );
+        }
+      } catch (err: any) {
+        if (err?.name !== "AbortError") {
+          write("error", {
+            message: `AI generation failed: ${err?.message ?? "unknown error"}`,
+            recoverable: false,
+          });
+          return;
+        }
+      }
+
+      write("agent", {
+        id: "writer",
+        name: "CZAR Writer",
+        status: "done",
+        action: `${countWords(fullResponse)} words generated`,
+      });
+    }
 
     // ── 13. Persist response ──────────────────────────────────────────────
     const wordCount = countWords(fullResponse);
