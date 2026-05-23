@@ -165,20 +165,28 @@ function countWords(text: string): number {
 // ---------------------------------------------------------------------------
 
 function detectMode(message: string, hasFiles: boolean, requestedMode?: CzarMode): CzarMode {
-  if (requestedMode) return requestedMode;
-
   const lower = message.toLowerCase();
 
-  if (/\b(correct|fix|improve|proofread|edit)\b/.test(lower) && hasFiles) return "correct";
-  if (/\b(literature review|systematic review|scoping review|prisma)\b/.test(lower)) return "literature_review";
-  if (/\b(screenplay|script|scene|dialogue|fade in|ext\.|int\.)\b/.test(lower)) return "screenplay";
-  if (/\b(legal brief|irac|case law|statute|tort|contract law|legal memo)\b/.test(lower)) return "legal";
-  if (/\b(research|find sources|literature|bibliography)\b/.test(lower)) return "research";
-  if (/\b(plan|outline|structure)\b/.test(lower)) return "plan";
-
-  if (!hasFiles && message.length > 300 && /\b(write|draft|essay|report|paper)\b/.test(lower)) {
-    return "write";
+  // Specialist modes are ALWAYS auto-detected from content — they override any frontend selection.
+  // Users no longer see these in the dropdown; CZAR senses them from the brief automatically.
+  if (/\b(literature review|systematic review|scoping review|integrative review|narrative review|prisma)\b/.test(lower)) {
+    return "literature_review";
   }
+  if (/\b(screenplay|script|scene heading|fade in|ext\.|int\.|feature film|short film|pilot|teleplay)\b/.test(lower)) {
+    return "screenplay";
+  }
+  if (/\b(legal brief|legal memo|legal analysis|irac|case law|statute|tort|contract law|judicial|appellant|respondent|claimant|defendant brief)\b/.test(lower)) {
+    return "legal";
+  }
+
+  // For non-specialist modes, respect what the user selected in the UI
+  if (requestedMode) return requestedMode;
+
+  // Auto-detect when no explicit mode was sent
+  if (/\b(correct|fix|improve|proofread|edit)\b/.test(lower) && hasFiles) return "correct";
+  if (/\b(research|find sources|bibliography)\b/.test(lower)) return "research";
+  if (/\b(plan|outline|structure)\b/.test(lower)) return "plan";
+  if (!hasFiles && message.length > 300 && /\b(write|draft|essay|report|paper)\b/.test(lower)) return "write";
 
   return "chat";
 }
@@ -206,11 +214,25 @@ function detectComplexity(
 // ---------------------------------------------------------------------------
 
 interface ModelChoice {
-  provider: "anthropic" | "google";
+  provider: "anthropic" | "google" | "qwen";
   model: string;
   thinking: boolean;
   label: string;
 }
+
+// ── Model roster ─────────────────────────────────────────────────────────────
+// Gemini 3.5 Flash — best-in-class fast reasoning, complex agentic tasks
+const G_FAST = "gemini-3.5-flash";
+// Gemini 3.1 Flash-Lite — cheap classification, memory extraction, tagging
+const G_LITE = "gemini-3.1-flash-lite";
+// Gemini 3.1 Pro Preview — advanced PhD-level reasoning, writing
+const G_PRO  = "gemini-3.1-pro-preview";
+// Claude models
+const C_SONNET = "claude-sonnet-4-6";   // precision editing, correction
+const C_OPUS   = "claude-opus-4-7";     // hardest PhD tasks, deep thinking
+// Qwen — legal/structured reasoning (QwQ), general writing (Max)
+const Q_REASON = "qwq-32b";             // dedicated reasoning model
+const Q_MAX    = "qwen-max";            // general Qwen writer
 
 const ADMIN_EMAIL = "grey.izilein@gmail.com";
 
@@ -222,26 +244,44 @@ function pickModel(
 ): ModelChoice {
   const isAdmin = !!email && email.toLowerCase() === ADMIN_EMAIL;
   const effectiveTier = isAdmin ? "phd" : tier.toLowerCase();
+  const isPremium = ["phd", "enterprise", "custom"].includes(effectiveTier) || isAdmin;
 
-  // Chat and Plan are always lightweight — Gemini Flash
+  // Chat + Plan: fast Gemini — conversational, no heavy reasoning needed
   if (mode === "chat" || mode === "plan") {
-    return { provider: "google", model: "gemini-2.5-flash", thinking: false, label: "standard" };
+    return { provider: "google", model: G_FAST, thinking: false, label: "standard" };
   }
 
-  // Screenplay is creative — Gemini Flash is good enough and fast
+  // Screenplay: Gemini 3.5 Flash — creative, fast, no citation pipeline
   if (mode === "screenplay") {
-    return { provider: "google", model: "gemini-2.5-flash", thinking: false, label: "standard" };
+    return { provider: "google", model: G_FAST, thinking: false, label: "standard" };
   }
 
-  // Hardest case only: PhD/enterprise/admin, high complexity, write/research/legal/lit-review
-  const isPremiumTier = effectiveTier === "phd" || effectiveTier === "enterprise" || effectiveTier === "custom" || isAdmin;
-  const isDeepMode = mode === "write" || mode === "research" || mode === "literature_review" || mode === "legal";
-  if (isPremiumTier && complexity === "high" && isDeepMode) {
-    return { provider: "anthropic", model: "claude-opus-4-7", thinking: true, label: "deep reasoning" };
+  // Correct: Claude Sonnet — superb at editing, line-level precision, following markup instructions
+  if (mode === "correct") {
+    return { provider: "anthropic", model: C_SONNET, thinking: false, label: "standard" };
   }
 
-  // Everything else: Gemini 2.5 Pro
-  return { provider: "google", model: "gemini-2.5-pro", thinking: false, label: "enhanced" };
+  // Legal: reasoning-heavy — Qwen QwQ (reasoning model) for standard; Claude Opus for premium
+  if (mode === "legal") {
+    if (isPremium) {
+      return { provider: "anthropic", model: C_OPUS, thinking: true, label: "deep reasoning" };
+    }
+    return { provider: "qwen", model: Q_REASON, thinking: false, label: "legal reasoning" };
+  }
+
+  // Write / Research / Lit Review — premium + high complexity: Claude Opus with thinking
+  const isDeepMode = mode === "write" || mode === "research" || mode === "literature_review";
+  if (isPremium && complexity === "high" && isDeepMode) {
+    return { provider: "anthropic", model: C_OPUS, thinking: true, label: "deep reasoning" };
+  }
+
+  // Write / Research / Lit Review — premium, medium complexity: Claude Sonnet (excellent academic writer)
+  if (isPremium && isDeepMode) {
+    return { provider: "anthropic", model: C_SONNET, thinking: false, label: "enhanced" };
+  }
+
+  // Everything else: Gemini 3.1 Pro — advanced reasoning, PhD-level for standard tier
+  return { provider: "google", model: G_PRO, thinking: false, label: "enhanced" };
 }
 
 // ---------------------------------------------------------------------------
@@ -296,7 +336,7 @@ async function extractWithGemini(
 
   try {
     const resp = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/${G_FAST}:generateContent?key=${apiKey}`,
       { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal },
     );
     if (!resp.ok) return "";
@@ -575,6 +615,81 @@ async function streamGoogle(
 }
 
 // ---------------------------------------------------------------------------
+// Qwen streaming (OpenAI-compatible DashScope endpoint)
+// ---------------------------------------------------------------------------
+
+async function streamQwen(
+  model: string,
+  system: string,
+  messages: { role: string; content: string }[],
+  write: WriteFunction,
+  signal: AbortSignal,
+): Promise<string> {
+  const apiKey = Deno.env.get("QWEN_API_KEY");
+  if (!apiKey) throw new Error("QWEN_API_KEY not configured");
+
+  const resp = await fetch("https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model,
+      messages: [{ role: "system", content: system }, ...messages],
+      stream: true,
+      max_tokens: 16000,
+    }),
+    signal,
+  });
+
+  if (!resp.ok) {
+    const txt = await resp.text().catch(() => "");
+    throw new Error(`Qwen ${resp.status}: ${txt.slice(0, 400)}`);
+  }
+  if (!resp.body) throw new Error("Qwen returned empty body");
+
+  const reader = resp.body.getReader();
+  const decoder = new TextDecoder();
+  let accumulated = "";
+  let buf = "";
+
+  try {
+    while (true) {
+      if (signal.aborted) break;
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buf += decoder.decode(value, { stream: true });
+      let nlIdx: number;
+      while ((nlIdx = buf.indexOf("\n")) !== -1) {
+        const line = buf.slice(0, nlIdx).trim();
+        buf = buf.slice(nlIdx + 1);
+        if (!line.startsWith("data:")) continue;
+        const payload = line.slice(5).trim();
+        if (!payload || payload === "[DONE]") continue;
+        try {
+          const ev = JSON.parse(payload);
+          // Reasoning content (QwQ think-aloud) — stream as thinking event
+          const reasoning = ev?.choices?.[0]?.delta?.reasoning_content;
+          if (reasoning) write("thinking", { text: reasoning });
+          // Main content
+          const text = ev?.choices?.[0]?.delta?.content;
+          if (text) {
+            accumulated += text;
+            write("delta", { text });
+          }
+        } catch { /* ignore */ }
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  return accumulated;
+}
+
+// ---------------------------------------------------------------------------
 // Auth helpers
 // ---------------------------------------------------------------------------
 
@@ -722,7 +837,7 @@ Return {} if nothing memorable. Max 5 keys.`;
       generationConfig: { maxOutputTokens: 512, temperature: 0 },
     };
     const resp = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/${G_LITE}:generateContent?key=${apiKey}`,
       { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) },
     );
     if (!resp.ok) return;
@@ -961,6 +1076,7 @@ async function runMain(
           signal,
           streamAnthropicFn: streamAnthropic,
           streamGoogleFn: streamGoogle,
+          streamQwenFn: streamQwen,
           svc,
           userId,
         });
@@ -995,6 +1111,14 @@ async function runMain(
             system,
             messages,
             modelChoice.thinking,
+            write,
+            signal,
+          );
+        } else if (modelChoice.provider === "qwen") {
+          fullResponse = await streamQwen(
+            modelChoice.model,
+            system,
+            messages,
             write,
             signal,
           );
