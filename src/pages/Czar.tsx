@@ -1149,7 +1149,42 @@ function CzarMessage({
   );
 }
 
+const WELCOME_MODE_CONFIG: Record<string, { greeting: string; left?: string; center: string; right?: string }> = {
+  chat:              { greeting: "What are we working on?",        left: "/chars/char-social.png",      center: "/chars/char-planner.png",    right: "/chars/char-writer.png" },
+  write:             { greeting: "The blank page ends here.",      left: "/chars/char-planner.png",     center: "/chars/char-writer.png",     right: "/chars/char-critic.png" },
+  research:          { greeting: "Let's find the evidence.",       left: "/chars/char-writer.png",      center: "/chars/char-researcher.png", right: "/chars/char-team.png" },
+  plan:              { greeting: "Let's structure this.",          left: "/chars/char-social.png",      center: "/chars/char-planner.png",    right: "/chars/char-team.png" },
+  correct:           { greeting: "Ready to review.",              center: "/chars/char-critic.png" },
+  literature_review: { greeting: "Systematic review mode.",       left: "/chars/char-planner.png",     center: "/chars/char-researcher.png", right: "/chars/char-critic.png" },
+  screenplay:        { greeting: "Action.",                       left: "/chars/char-social.png",      center: "/chars/char-writer.png",     right: "/chars/char-team.png" },
+  legal:             { greeting: "IRAC. Statute. Case law.",      left: "/chars/char-planner.png",     center: "/chars/char-critic.png",     right: "/chars/char-researcher.png" },
+};
+
 function WelcomeScreen({ mode, onExample, onOpenCorrectionModal }: { mode: CzarMode; onExample: (text: string) => void; onOpenCorrectionModal?: () => void }) {
+  const [visible, setVisible] = useState(false);
+  const [typedGreeting, setTypedGreeting] = useState("");
+  const typingRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const config = WELCOME_MODE_CONFIG[mode] ?? WELCOME_MODE_CONFIG.chat;
+
+  useEffect(() => {
+    const t = setTimeout(() => setVisible(true), 80);
+    return () => clearTimeout(t);
+  }, [mode]);
+
+  useEffect(() => {
+    if (!visible) return;
+    setTypedGreeting("");
+    let i = 0;
+    const tick = () => {
+      i++;
+      setTypedGreeting(config.greeting.slice(0, i));
+      if (i < config.greeting.length) typingRef.current = setTimeout(tick, 30);
+    };
+    const start = setTimeout(tick, 500);
+    return () => { clearTimeout(start); if (typingRef.current) clearTimeout(typingRef.current); };
+  }, [visible, config.greeting]);
+
   const examples: Partial<Record<CzarMode, { text: string; label: string }[]>> = {
     chat: [
       { label: "Explain a concept", text: "Explain the difference between qualitative and quantitative research methods." },
@@ -1173,51 +1208,138 @@ function WelcomeScreen({ mode, onExample, onOpenCorrectionModal }: { mode: CzarM
 
   const items = examples[mode] ?? examples.chat!;
 
+  const charStyle = (delay: number, scale = 1): React.CSSProperties => ({
+    opacity: visible ? (scale === 1 ? 1 : 0.72) : 0,
+    transform: visible ? "translateY(0) scale(1)" : "translateY(24px) scale(0.88)",
+    transition: `opacity 0.7s ${delay}ms, transform 0.7s ${delay}ms`,
+  });
+
   if (mode === "correct") {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-4 py-8">
-        <div className="w-12 h-12 rounded-2xl bg-amber-500/10 flex items-center justify-center mb-4">
-          <FileSearch className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+      <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-4 py-6 overflow-hidden">
+        {/* Character with speech bubble */}
+        <div className="relative flex flex-col items-center mb-4" style={charStyle(0)}>
+          {typedGreeting.length > 0 && (
+            <div className="absolute -top-12 left-1/2 -translate-x-1/2 whitespace-nowrap bg-foreground text-background text-[11px] font-semibold px-3 py-1.5 rounded-xl shadow-lg z-10">
+              {typedGreeting}
+              {typedGreeting.length < config.greeting.length && (
+                <span className="inline-block w-0.5 h-3 bg-background/70 ml-0.5 align-middle animate-pulse" />
+              )}
+              <div className="absolute left-1/2 -translate-x-1/2 -bottom-1.5 w-3 h-3 bg-foreground rotate-45 rounded-sm" />
+            </div>
+          )}
+          <img
+            src={config.center}
+            alt="Agent"
+            className="h-48 sm:h-56 object-contain"
+            style={{ animation: visible ? "welcomeBob 3s ease-in-out infinite alternate" : "none" }}
+          />
         </div>
-        <h2 className="text-xl font-bold text-foreground mb-1">Correct & Improve</h2>
-        <p className="text-sm text-muted-foreground mb-3 max-w-sm leading-relaxed">
-          Upload a document or paste your text. CZAR identifies every correction — grammar, style, argument, register — as tracked changes. Accept or reject each one individually, then download the clean document.
-        </p>
-        <div className="flex flex-col items-center gap-2 text-[11px] text-muted-foreground/60 mb-8">
-          <span>Grammar · Style · Structure · Argument · Register</span>
-          <span>Color-coded · Accept/Reject per change · Clean download</span>
+
+        <div style={{ opacity: visible ? 1 : 0, transition: "opacity 0.7s 200ms" }}>
+          <h2 className="text-xl font-bold text-foreground mb-1">Correct &amp; Improve</h2>
+          <p className="text-sm text-muted-foreground mb-3 max-w-sm leading-relaxed">
+            Upload a document or paste your text. CZAR identifies every correction — grammar, style, argument, register — as tracked changes. Accept or reject each one individually, then download the clean document.
+          </p>
+          <div className="flex flex-col items-center gap-1.5 text-[11px] text-muted-foreground/50 mb-7">
+            <span>Grammar · Style · Structure · Argument · Register</span>
+            <span>Color-coded · Accept/Reject per change · Clean download</span>
+          </div>
+          <button
+            onClick={onOpenCorrectionModal}
+            className="px-7 py-3 rounded-xl bg-foreground text-background font-bold text-sm hover:opacity-80 transition-opacity shadow-md"
+          >
+            Open Document
+          </button>
         </div>
-        <button
-          onClick={onOpenCorrectionModal}
-          className="px-6 py-3 rounded-xl bg-primary text-primary-foreground font-medium hover:bg-primary/90 transition-colors text-sm"
-        >
-          Open Document
-        </button>
+        <style>{`@keyframes welcomeBob { from { transform: translateY(0); } to { transform: translateY(-7px); } }`}</style>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-4 py-8">
-      <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center mb-4">
-        {modeIcon(mode)}
+    <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-4 py-4 overflow-hidden">
+      {/* Three characters */}
+      <div className="flex items-end justify-center gap-4 sm:gap-8 mb-8 mt-6">
+        {/* Left character */}
+        {config.left && (
+          <img
+            src={config.left}
+            alt=""
+            className="h-32 sm:h-40 object-contain flex-shrink-0"
+            style={{
+              ...charStyle(200, 0.72),
+              animation: visible ? "welcomeBob 3.5s 0.3s ease-in-out infinite alternate" : "none",
+            }}
+          />
+        )}
+
+        {/* Center character — largest, speech bubble */}
+        <div className="relative flex flex-col items-center flex-shrink-0">
+          {typedGreeting.length > 0 && (
+            <div
+              className="absolute -top-14 left-1/2 -translate-x-1/2 whitespace-nowrap bg-foreground text-background text-[11px] font-semibold px-3 py-1.5 rounded-xl shadow-lg z-10"
+              style={{ opacity: typedGreeting.length > 0 ? 1 : 0, transition: "opacity 0.3s" }}
+            >
+              {typedGreeting}
+              {typedGreeting.length < config.greeting.length && (
+                <span className="inline-block w-0.5 h-3 bg-background/70 ml-0.5 align-middle animate-pulse" />
+              )}
+              <div className="absolute left-1/2 -translate-x-1/2 -bottom-1.5 w-3 h-3 bg-foreground rotate-45 rounded-sm" />
+            </div>
+          )}
+          <img
+            src={config.center}
+            alt="Agent"
+            className="h-44 sm:h-56 object-contain"
+            style={{
+              ...charStyle(0),
+              animation: visible ? "welcomeBob 3s ease-in-out infinite alternate" : "none",
+            }}
+          />
+        </div>
+
+        {/* Right character */}
+        {config.right && (
+          <img
+            src={config.right}
+            alt=""
+            className="h-32 sm:h-40 object-contain flex-shrink-0"
+            style={{
+              ...charStyle(400, 0.72),
+              animation: visible ? "welcomeBob 4s 0.6s ease-in-out infinite alternate" : "none",
+            }}
+          />
+        )}
       </div>
-      <h2 className="text-xl font-bold text-foreground mb-1">CZAR</h2>
-      <p className="text-sm text-muted-foreground mb-8 max-w-sm">
-        {MODE_DESCRIPTIONS[mode]}
-      </p>
-      <div className="w-full max-w-lg space-y-2">
+
+      {/* Title & description */}
+      <div
+        className="mb-6"
+        style={{ opacity: visible ? 1 : 0, transform: visible ? "translateY(0)" : "translateY(12px)", transition: "opacity 0.7s 500ms, transform 0.7s 500ms" }}
+      >
+        <h2 className="text-xl font-bold text-foreground mb-1">CZAR</h2>
+        <p className="text-sm text-muted-foreground max-w-xs leading-relaxed">{MODE_DESCRIPTIONS[mode]}</p>
+      </div>
+
+      {/* Example prompts */}
+      <div
+        className="w-full max-w-lg space-y-2"
+        style={{ opacity: visible ? 1 : 0, transform: visible ? "translateY(0)" : "translateY(12px)", transition: "opacity 0.7s 700ms, transform 0.7s 700ms" }}
+      >
         {items.map((ex) => (
           <button
             key={ex.text}
             onClick={() => onExample(ex.text)}
-            className="w-full text-left px-4 py-3 rounded-xl border border-border bg-secondary/30 hover:bg-secondary transition-colors text-sm text-foreground"
+            className="w-full text-left px-4 py-3 rounded-xl border border-border bg-background/60 hover:bg-secondary hover:border-primary/20 transition-all text-sm text-foreground group"
           >
-            <span className="font-medium text-foreground/80 text-[12px] block mb-0.5">{ex.label}</span>
-            <span className="text-muted-foreground text-[12px] leading-snug line-clamp-2">{ex.text}</span>
+            <span className="font-semibold text-foreground/70 text-[11.5px] block mb-0.5 group-hover:text-foreground/90 transition-colors">{ex.label}</span>
+            <span className="text-muted-foreground text-[11.5px] leading-snug line-clamp-2 group-hover:text-foreground/60 transition-colors">{ex.text}</span>
           </button>
         ))}
       </div>
+
+      <style>{`@keyframes welcomeBob { from { transform: translateY(0); } to { transform: translateY(-7px); } }`}</style>
     </div>
   );
 }
