@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   PanelLeftClose, PanelLeftOpen, Loader2, Square,
@@ -29,7 +29,7 @@ import { DashboardSidebar } from "@/components/dashboard/DashboardSidebar";
 import { CorrectionModal } from "@/components/czar/CorrectionModal";
 
 import { lazy, Suspense } from "react";
-import { AgentActivityDock, WritingGlow, WelcomeAurora, CzarTypingScene, CzarReviewScene } from "@/components/czar/CzarVisuals";
+import { AgentActivityDock, WritingGlow, WelcomeAurora, CzarObjectScene } from "@/components/czar/CzarVisuals";
 const CommandInput = lazy(() => import("@/components/czar/CommandInput").then(m => ({ default: m.CommandInput })));
 
 // ── Types ──────────────────────────────────────────────────────────
@@ -484,9 +484,9 @@ export default function CzarPage() {
           <div className="relative max-w-3xl mx-auto px-4 py-6 pb-10 space-y-8">
             {messages.length === 0 && (
               <WelcomeScreen
-                mode={mode}
-                onExample={(text) => sendMessage(text, [])}
-                onOpenCorrectionModal={() => setCorrectionModalOpen(true)}
+                userName={userName}
+                userInitials={userInitials}
+                avatarUrl={avatarUrl}
               />
             )}
 
@@ -1061,128 +1061,71 @@ function CzarMessage({
   );
 }
 
-const WELCOME_GREETINGS: Partial<Record<CzarMode, string>> = {
-  chat:              "What are we working on?",
-  write:             "The blank page ends here.",
-  research:          "Let's find the evidence.",
-  plan:              "Let's structure this.",
-  correct:           "Ready to review.",
-  literature_review: "Systematic review mode.",
-  screenplay:        "Action.",
-  legal:             "IRAC. Statute. Case law.",
-};
+const GREETING_POOL = [
+  "The blank page ends here.",
+  "What are we building today?",
+  "Ready when you are.",
+  "Your ideas deserve better words.",
+  "Let's put it into words.",
+  "Something great starts here.",
+  "What's been on your mind?",
+  "Time to write something great.",
+  "Let's make it count.",
+  "Words are waiting.",
+];
 
-function WelcomeScreen({ mode, onExample, onOpenCorrectionModal }: { mode: CzarMode; onExample: (text: string) => void; onOpenCorrectionModal?: () => void }) {
+function WelcomeScreen({ userName, userInitials, avatarUrl }: {
+  userName?: string;
+  userInitials?: string;
+  avatarUrl?: string;
+}) {
   const [visible, setVisible] = useState(false);
-  const [typedGreeting, setTypedGreeting] = useState("");
-  const typingRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const greeting = WELCOME_GREETINGS[mode] ?? "What are we working on?";
+  const greeting = useMemo(() => GREETING_POOL[Math.floor(Math.random() * GREETING_POOL.length)], []);
+  const firstName = userName?.split(" ")[0] || "";
 
   useEffect(() => {
-    setVisible(false);
     const t = setTimeout(() => setVisible(true), 60);
     return () => clearTimeout(t);
-  }, [mode]);
-
-  useEffect(() => {
-    if (!visible) return;
-    setTypedGreeting("");
-    let i = 0;
-    const tick = () => {
-      i++;
-      setTypedGreeting(greeting.slice(0, i));
-      if (i < greeting.length) typingRef.current = setTimeout(tick, 28);
-    };
-    const start = setTimeout(tick, 520);
-    return () => { clearTimeout(start); if (typingRef.current) clearTimeout(typingRef.current); };
-  }, [visible, greeting]);
-
-  const examples: Partial<Record<CzarMode, { text: string; label: string }[]>> = {
-    chat: [
-      { label: "Explain a concept", text: "Explain the difference between qualitative and quantitative research methods." },
-      { label: "Quick question",    text: "What's the Harvard referencing format for a journal article?" },
-      { label: "Brainstorm",        text: "What are some angles I could take for an essay on climate change policy?" },
-    ],
-    write: [
-      { label: "Academic essay",    text: "Write a 2,000-word Level 7 essay on transformational leadership in NHS trusts, Harvard references." },
-      { label: "Literature review", text: "Write a systematic literature review on the effectiveness of mindfulness-based stress reduction in the workplace." },
-      { label: "Legal memo",        text: "Write a legal memo applying IRAC to whether an employer can monitor employee emails under UK law." },
-    ],
-    research: [
-      { label: "Synthesis",         text: "Research and synthesise current academic literature on AI bias in hiring algorithms." },
-      { label: "Topic overview",    text: "Find and summarise key academic sources on the digital divide in higher education." },
-    ],
-    correct: [
-      { label: "Improve draft",     text: "Here's my draft introduction — improve the academic tone and citation integration:" },
-      { label: "Fix structure",     text: "Review this paragraph for argument coherence and suggest improvements:" },
-    ],
-  };
-
-  const items = examples[mode] ?? examples.chat!;
-  const isReview = mode === "correct";
+  }, []);
 
   const fadeIn = (delay = 0): React.CSSProperties => ({
     opacity: visible ? 1 : 0,
-    transform: visible ? "translateY(0)" : "translateY(18px)",
+    transform: visible ? "none" : "translateY(16px)",
     transition: `opacity 0.65s ${delay}ms, transform 0.65s ${delay}ms`,
   });
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-4 py-6 overflow-hidden">
+    <div className="flex flex-col md:flex-row items-center justify-center gap-10 md:gap-16 min-h-[72vh] px-6 py-8">
 
-      {/* ── Illustration ── */}
-      <div className="relative w-full mb-2" style={fadeIn(0)}>
-        {/* Speech bubble above illustration */}
-        {typedGreeting.length > 0 && (
-          <div
-            className="inline-flex items-center gap-1 bg-foreground text-background text-[11px] font-semibold px-3 py-1.5 rounded-xl shadow-md mb-3 relative"
-            style={{ opacity: typedGreeting.length > 0 ? 1 : 0, transition: "opacity 0.25s" }}
-          >
-            {typedGreeting}
-            {typedGreeting.length < greeting.length && (
-              <span className="inline-block w-0.5 h-3 bg-background/70 ml-0.5 align-middle animate-pulse" />
-            )}
-          </div>
-        )}
-        {isReview ? <CzarReviewScene /> : <CzarTypingScene />}
+      {/* ── Left: Greeting ── */}
+      <div className="flex-1 flex flex-col items-center md:items-start text-center md:text-left max-w-xs">
+        {/* Avatar + Hi name */}
+        <div className="flex items-center gap-2.5 mb-6" style={fadeIn(0)}>
+          {avatarUrl ? (
+            <img src={avatarUrl} alt="" className="w-9 h-9 rounded-full object-cover ring-2 ring-border" />
+          ) : (
+            <div className="w-9 h-9 rounded-full bg-foreground text-background flex items-center justify-center text-sm font-bold select-none">
+              {userInitials ?? "U"}
+            </div>
+          )}
+          {firstName && (
+            <span className="text-sm text-muted-foreground font-medium">Hi {firstName}</span>
+          )}
+        </div>
+        {/* Large greeting */}
+        <h1
+          className="text-4xl sm:text-5xl font-bold font-heading text-foreground leading-tight"
+          style={fadeIn(120)}
+        >
+          {greeting}
+        </h1>
       </div>
 
-      {/* ── Mode label + description ── */}
-      <div className="mb-5" style={fadeIn(180)}>
-        <p className="text-sm text-muted-foreground max-w-xs leading-relaxed">{MODE_DESCRIPTIONS[mode]}</p>
+      {/* ── Right: SVG Scene ── */}
+      <div className="flex-1 flex items-center justify-center" style={fadeIn(260)}>
+        <CzarObjectScene />
       </div>
 
-      {/* ── Correct mode CTA ── */}
-      {isReview && (
-        <div style={fadeIn(280)} className="mb-6">
-          <div className="flex flex-col items-center gap-1 text-[11px] text-muted-foreground/50 mb-5">
-            <span>Grammar · Style · Structure · Argument · Register</span>
-            <span>Color-coded · Accept/Reject per change · Clean download</span>
-          </div>
-          <button
-            onClick={onOpenCorrectionModal}
-            className="px-7 py-3 rounded-xl bg-foreground text-background font-bold text-sm hover:opacity-80 transition-opacity shadow-md"
-          >
-            Open Document
-          </button>
-        </div>
-      )}
-
-      {/* ── Example prompts ── */}
-      {!isReview && (
-        <div className="w-full max-w-lg space-y-2" style={fadeIn(360)}>
-          {items.map((ex) => (
-            <button
-              key={ex.text}
-              onClick={() => onExample(ex.text)}
-              className="w-full text-left px-4 py-3 rounded-xl border border-border bg-background/60 hover:bg-secondary hover:border-primary/20 transition-all text-sm text-foreground group"
-            >
-              <span className="font-semibold text-foreground/70 text-[11.5px] block mb-0.5 group-hover:text-foreground/90 transition-colors">{ex.label}</span>
-              <span className="text-muted-foreground text-[11.5px] leading-snug line-clamp-2 group-hover:text-foreground/60 transition-colors">{ex.text}</span>
-            </button>
-          ))}
-        </div>
-      )}
     </div>
   );
 }

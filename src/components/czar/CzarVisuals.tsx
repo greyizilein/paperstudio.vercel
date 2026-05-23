@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 
 // ─── CSS keyframes (shared across all scene components) ────────────────────
 
@@ -465,9 +465,25 @@ export function FloatingElements() {
   );
 }
 
-// ─── Welcome aurora — always-on live background ───────────────────────────
+// ─── Welcome aurora — time-based live background ─────────────────────────
 
 export function WelcomeAurora() {
+  const palette = useMemo(() => {
+    const h = new Date().getHours();
+    if (h >= 5 && h < 12) return {
+      a: "hsl(32 85% 58%)",  b: "hsl(42 72% 60%)",  c: "hsl(18 72% 54%)",
+    };
+    if (h >= 12 && h < 17) return {
+      a: "hsl(160 45% 48%)", b: "hsl(140 38% 48%)", c: "hsl(195 50% 52%)",
+    };
+    if (h >= 17 && h < 21) return {
+      a: "hsl(265 50% 58%)", b: "hsl(320 45% 55%)", c: "hsl(280 40% 52%)",
+    };
+    return {
+      a: "hsl(235 50% 48%)", b: "hsl(255 40% 45%)", c: "hsl(220 45% 40%)",
+    };
+  }, []);
+
   return (
     <div className="fixed inset-0 z-[-1] pointer-events-none" aria-hidden>
       <style>{SCENE_CSS}</style>
@@ -480,7 +496,7 @@ export function WelcomeAurora() {
         height: "75vw",
         maxHeight: 560,
         borderRadius: "50%",
-        background: "radial-gradient(circle, hsl(18 65% 58%) 0%, transparent 62%)",
+        background: `radial-gradient(circle, ${palette.a} 0%, transparent 62%)`,
         animation: "czar-aurora-a 20s ease-in-out infinite",
       }} />
       <div style={{
@@ -492,7 +508,7 @@ export function WelcomeAurora() {
         height: "60vw",
         maxHeight: 480,
         borderRadius: "50%",
-        background: "radial-gradient(circle, hsl(153 28% 48%) 0%, transparent 62%)",
+        background: `radial-gradient(circle, ${palette.b} 0%, transparent 62%)`,
         animation: "czar-aurora-b 26s ease-in-out infinite",
       }} />
       <div style={{
@@ -504,7 +520,7 @@ export function WelcomeAurora() {
         height: "50vw",
         maxHeight: 380,
         borderRadius: "50%",
-        background: "radial-gradient(circle, hsl(37 56% 52%) 0%, transparent 62%)",
+        background: `radial-gradient(circle, ${palette.c} 0%, transparent 62%)`,
         animation: "czar-aurora-c 30s ease-in-out 6s infinite",
       }} />
     </div>
@@ -574,6 +590,12 @@ const SCENE2_CSS = `
   .dark .czar2-svg [stroke="white"]   { stroke: hsl(var(--background)); }
   .dark .czar2-svg [fill="#1a1a1a"]   { fill:   hsl(var(--foreground)); }
   .dark .czar2-svg [stroke="#1a1a1a"] { stroke: hsl(var(--foreground)); }
+  @keyframes czar-obj-write {
+    0%, 2%       { stroke-dashoffset: 220; opacity: 0; }
+    8%           { opacity: 0.5; }
+    48%, 88%     { stroke-dashoffset: 0;   opacity: 0.5; }
+    96%, 100%    { stroke-dashoffset: 220; opacity: 0; }
+  }
 `;
 
 export function CzarTypingScene() {
@@ -817,6 +839,116 @@ export function CzarReviewScene() {
         <g style={{ animation: "czar2-spin 3.4s ease-in-out infinite", transformOrigin: "156px 56px" }}>
           <path d="M 156 46 L 156 66 M 146 56 L 166 56 M 148 48 L 164 64 M 164 48 L 148 64"
             stroke="#1a1a1a" strokeWidth="1.6" strokeLinecap="round"/>
+        </g>
+
+      </svg>
+    </div>
+  );
+}
+
+// ─── CzarObjectScene — objects only, live laptop interface ────────────────
+
+export function CzarObjectScene() {
+  return (
+    <div className="w-full max-w-[540px] mx-auto select-none" aria-hidden>
+      <style>{SCENE2_CSS}</style>
+      <svg viewBox="0 0 540 290" fill="none" xmlns="http://www.w3.org/2000/svg"
+        className="czar2-svg w-full h-auto" strokeLinejoin="round" strokeLinecap="round">
+
+        {/* ── DESK ── */}
+        <rect x="10" y="259" width="520" height="4" rx="2" fill="#1a1a1a"/>
+        <rect x="28"  y="263" width="8" height="28" rx="4" fill="#1a1a1a" opacity="0.5"/>
+        <rect x="504" y="263" width="8" height="28" rx="4" fill="#1a1a1a" opacity="0.5"/>
+
+        {/* ── COFFEE CUP ── */}
+        <rect x="28" y="218" width="46" height="41" rx="9" fill="white" stroke="#1a1a1a" strokeWidth="2.2"/>
+        <ellipse cx="51" cy="259" rx="28" ry="6" fill="white" stroke="#1a1a1a" strokeWidth="2"/>
+        <path d="M 74 224 Q 86 228 86 236 Q 86 244 74 247" stroke="#1a1a1a" strokeWidth="2.2" fill="none"/>
+        <path d="M 38 215 Q 44 204 38 193" stroke="#1a1a1a" strokeWidth="1.8" fill="none"
+          style={{ animation: "czar2-steam 2.4s ease-in-out infinite", transformOrigin: "38px 215px" }}/>
+        <path d="M 54 215 Q 60 202 54 191" stroke="#1a1a1a" strokeWidth="1.8" fill="none"
+          style={{ animation: "czar2-steam 2.4s 0.72s ease-in-out infinite", transformOrigin: "54px 215px" }}/>
+
+        {/* ── LAPTOP SCREEN BEZEL ── */}
+        <rect x="146" y="56" width="248" height="205" rx="12" fill="white" stroke="#1a1a1a" strokeWidth="2.5"/>
+        {/* Screen glass */}
+        <rect x="156" y="66" width="228" height="185" rx="6" fill="#f7f8fa" stroke="#1a1a1a" strokeWidth="1.5"/>
+        {/* Toolbar strip */}
+        <rect x="156" y="66" width="228" height="24" rx="6" fill="#ebebeb" stroke="none"/>
+        <line x1="156" y1="90" x2="384" y2="90" stroke="#1a1a1a" strokeWidth="0.8" opacity="0.25"/>
+        <circle cx="168" cy="78" r="4" fill="#1a1a1a" opacity="0.18"/>
+        <circle cx="182" cy="78" r="4" fill="#1a1a1a" opacity="0.18"/>
+        <circle cx="196" cy="78" r="4" fill="#1a1a1a" opacity="0.18"/>
+        <rect x="212" y="71" width="118" height="14" rx="5" fill="white" opacity="0.7"/>
+
+        {/* Document content on screen */}
+        {/* Title line */}
+        <line x1="166" y1="108" x2="294" y2="108" stroke="#1a1a1a" strokeWidth="3.2" strokeLinecap="round" opacity="0.8"/>
+        {/* Subhead */}
+        <line x1="166" y1="121" x2="254" y2="121" stroke="#1a1a1a" strokeWidth="1.8" strokeLinecap="round" opacity="0.45"/>
+        {/* Body lines — static */}
+        <line x1="166" y1="136" x2="374" y2="136" stroke="#1a1a1a" strokeWidth="1.6" strokeLinecap="round" opacity="0.4"/>
+        <line x1="166" y1="148" x2="368" y2="148" stroke="#1a1a1a" strokeWidth="1.6" strokeLinecap="round" opacity="0.4"/>
+        <line x1="166" y1="160" x2="376" y2="160" stroke="#1a1a1a" strokeWidth="1.6" strokeLinecap="round" opacity="0.4"/>
+        <line x1="166" y1="172" x2="362" y2="172" stroke="#1a1a1a" strokeWidth="1.6" strokeLinecap="round" opacity="0.4"/>
+        <line x1="166" y1="184" x2="370" y2="184" stroke="#1a1a1a" strokeWidth="1.6" strokeLinecap="round" opacity="0.4"/>
+        <line x1="166" y1="196" x2="355" y2="196" stroke="#1a1a1a" strokeWidth="1.6" strokeLinecap="round" opacity="0.4"/>
+        {/* Active line being written */}
+        <line x1="166" y1="208" x2="324" y2="208" stroke="#1a1a1a" strokeWidth="1.6" strokeLinecap="round"
+          strokeDasharray="220" style={{ animation: "czar-obj-write 7s ease-in-out 0.4s infinite" }}/>
+        {/* Second active line */}
+        <line x1="166" y1="220" x2="282" y2="220" stroke="#1a1a1a" strokeWidth="1.6" strokeLinecap="round"
+          strokeDasharray="220" style={{ animation: "czar-obj-write 7s ease-in-out 3.6s infinite" }}/>
+        {/* Blinking cursor */}
+        <line x1="284" y1="213" x2="284" y2="227"
+          stroke="#1a1a1a" strokeWidth="2.2" strokeLinecap="round"
+          style={{ animation: "czar2-blink 1s step-end infinite" }}/>
+
+        {/* Keyboard hinge + base */}
+        <rect x="146" y="259" width="248" height="5" rx="2.5" fill="#1a1a1a" opacity="0.16"/>
+        <rect x="138" y="262" width="264" height="18" rx="9" fill="white" stroke="#1a1a1a" strokeWidth="2.2"/>
+        <line x1="156" y1="268" x2="384" y2="268" stroke="#1a1a1a" strokeWidth="0.8" opacity="0.2"/>
+        <line x1="156" y1="273" x2="384" y2="273" stroke="#1a1a1a" strokeWidth="0.8" opacity="0.2"/>
+        <rect x="228" y="265" width="84" height="12" rx="4" stroke="#1a1a1a" strokeWidth="0.8" opacity="0.25"/>
+
+        {/* ── BOOKS ── */}
+        <rect x="434" y="216" width="66" height="43" rx="3" fill="white" stroke="#1a1a1a" strokeWidth="2.2"/>
+        <line x1="444" y1="216" x2="444" y2="259" stroke="#1a1a1a" strokeWidth="2.2"/>
+        <rect x="438" y="188" width="58" height="30" rx="3" fill="white" stroke="#1a1a1a" strokeWidth="2.2"/>
+        <line x1="448" y1="188" x2="448" y2="218" stroke="#1a1a1a" strokeWidth="2.2"/>
+        <rect x="441" y="165" width="52" height="25" rx="3" fill="white" stroke="#1a1a1a" strokeWidth="2.2"/>
+        <line x1="451" y1="165" x2="451" y2="190" stroke="#1a1a1a" strokeWidth="2.2"/>
+
+        {/* ── FLOATING PAPER 1 (upper left) ── */}
+        <g style={{ animation: "czar2-float-a 4.8s ease-in-out infinite", transformOrigin: "96px 90px" }}>
+          <rect x="68" y="60" width="54" height="66" rx="4" fill="white" stroke="#1a1a1a" strokeWidth="1.8"/>
+          <line x1="78" y1="76" x2="114" y2="76"  stroke="#1a1a1a" strokeWidth="1.4" strokeLinecap="round"/>
+          <line x1="78" y1="87" x2="114" y2="87"  stroke="#1a1a1a" strokeWidth="1.4" strokeLinecap="round"/>
+          <line x1="78" y1="98" x2="110" y2="98"  stroke="#1a1a1a" strokeWidth="1.4" strokeLinecap="round"/>
+          <line x1="78" y1="109" x2="114" y2="109" stroke="#1a1a1a" strokeWidth="1.4" strokeLinecap="round"/>
+          <line x1="78" y1="120" x2="108" y2="120" stroke="#1a1a1a" strokeWidth="1.4" strokeLinecap="round"/>
+        </g>
+
+        {/* ── FLOATING PAPER 2 (upper right) ── */}
+        <g style={{ animation: "czar2-float-b 5.6s 1.3s ease-in-out infinite", transformOrigin: "462px 76px" }}>
+          <g transform="rotate(-14,462,76)">
+            <rect x="440" y="50" width="44" height="54" rx="3" fill="white" stroke="#1a1a1a" strokeWidth="1.6"/>
+            <line x1="448" y1="64" x2="476" y2="64"  stroke="#1a1a1a" strokeWidth="1.3" strokeLinecap="round"/>
+            <line x1="448" y1="74" x2="476" y2="74"  stroke="#1a1a1a" strokeWidth="1.3" strokeLinecap="round"/>
+            <line x1="448" y1="84" x2="473" y2="84"  stroke="#1a1a1a" strokeWidth="1.3" strokeLinecap="round"/>
+            <line x1="448" y1="94" x2="476" y2="94"  stroke="#1a1a1a" strokeWidth="1.3" strokeLinecap="round"/>
+          </g>
+        </g>
+
+        {/* ── SPARKLE 1 ── */}
+        <g style={{ animation: "czar2-spin 3.2s ease-in-out infinite", transformOrigin: "122px 36px" }}>
+          <path d="M 122 26 L 122 46 M 112 36 L 132 36 M 114 28 L 130 44 M 130 28 L 114 44"
+            stroke="#1a1a1a" strokeWidth="1.5" strokeLinecap="round"/>
+        </g>
+        {/* ── SPARKLE 2 ── */}
+        <g style={{ animation: "czar2-spin 2.4s 1.2s ease-in-out infinite", transformOrigin: "416px 30px" }}>
+          <path d="M 416 23 L 416 37 M 409 30 L 423 30"
+            stroke="#1a1a1a" strokeWidth="2.2" strokeLinecap="round"/>
         </g>
 
       </svg>
