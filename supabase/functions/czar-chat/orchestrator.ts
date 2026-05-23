@@ -692,8 +692,13 @@ export async function runOrchestrator(opts: OrchestratorOptions): Promise<string
     sources,
   );
 
+  // For orchestrated document tasks (write/research/lit-review/legal) the
+  // execution plan + sources already contain all the context the writer needs.
+  // Sending a long prior chat history risks the writer inferring the wrong
+  // topic from an earlier conversation, so we keep only the last 4 turns for
+  // immediate follow-up continuity but don't let old chat context dominate.
   const messages = [
-    ...history.slice(-20),
+    ...history.slice(-4),
     { role: "user", content: augmentedMessage },
   ];
 

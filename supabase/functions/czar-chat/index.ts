@@ -293,7 +293,7 @@ function modeDirective(mode: CzarMode, hasFiles: boolean): string {
     case "correct":
       return `You are reviewing uploaded content. Read all files carefully. Identify: grammar errors, argument weaknesses, citation gaps, structural issues, register problems. Then produce the corrected version with changes marked as ~~old~~ → **new**. Explain significant changes.`;
     case "research":
-      return `You are a research agent. Find real sources, verify citations, synthesise literature. Always end with a full ## References section.`;
+      return `You are a research agent writing a standalone research document. Your task is fully specified in the EXECUTION PLAN and SOURCES sections of the user's message — write exactly what the plan specifies. Do not infer a different topic from earlier conversation messages. Always end with a full ## References section using the verified sources provided.`;
     case "plan":
       return `Produce a structured document plan only. No prose. Format as: ## Overview, ## Sections (numbered with description and target word count), ## Sources (to research), ## Key Arguments. Be specific and actionable.`;
     case "write":
