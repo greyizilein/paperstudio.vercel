@@ -9,6 +9,7 @@ import { authedHeaders } from "@/lib/edgeFetch";
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type CorrectionType = "grammar" | "style" | "structure" | "argument" | "register";
+type Scope = "local" | "global";
 type Step = "upload" | "scanning" | "confirm" | "applying" | "done";
 
 interface CorrectionItem {
@@ -19,6 +20,7 @@ interface CorrectionItem {
   corrected: string;
   selected: boolean;
   override: string;
+  scope: Scope;
 }
 
 // ── Type metadata ─────────────────────────────────────────────────────────────
@@ -73,7 +75,7 @@ function StepBar({ step }: { step: Step }) {
 interface CorrectionModalProps {
   open: boolean;
   onClose: () => void;
-  onApplied: (content: string, changeCount: number) => void;
+  onApplied: (content: string, originalText: string, changeCount: number) => void;
 }
 
 export function CorrectionModal({ open, onClose, onApplied }: CorrectionModalProps) {
@@ -115,7 +117,7 @@ export function CorrectionModal({ open, onClose, onApplied }: CorrectionModalPro
       const data = await resp.json();
       if (!resp.ok) throw new Error(data.error || "Failed to scan document");
       const parsed: CorrectionItem[] = (data.items || []).map((it: any) => ({
-        ...it, selected: true, override: "",
+        ...it, selected: true, override: "", scope: "local" as Scope,
       }));
       setOriginalText(data.originalText || body.plainText || "");
       if (parsed.length === 0) {
@@ -208,7 +210,7 @@ export function CorrectionModal({ open, onClose, onApplied }: CorrectionModalPro
               comment: s.override.trim() || s.explanation,
               target_excerpt: s.original,
               suggested_replacement: s.corrected,
-              scope: "local",
+              scope: s.scope,
             })),
           }),
         }
@@ -257,7 +259,7 @@ export function CorrectionModal({ open, onClose, onApplied }: CorrectionModalPro
       setStep("done");
       // Small delay so user sees "Done" before modal closes
       await new Promise(r => setTimeout(r, 800));
-      onApplied(cleaned, count);
+      onApplied(cleaned, originalText, count);
       handleClose();
     } catch (e: any) {
       clearInterval(ramp);
@@ -432,6 +434,9 @@ export function CorrectionModal({ open, onClose, onApplied }: CorrectionModalPro
                             <span className={cn("text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded", meta.pill)}>
                               {meta.label}
                             </span>
+                            <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-300">
+                              Clear
+                            </span>
                             <span className="text-[13px] font-semibold text-foreground leading-snug">{item.explanation}</span>
                           </div>
 
@@ -451,15 +456,25 @@ export function CorrectionModal({ open, onClose, onApplied }: CorrectionModalPro
                             </ins>
                           </div>
 
-                          {/* Override instruction */}
+                          {/* Scope + Override row */}
                           {item.selected && (
-                            <input
-                              type="text"
-                              placeholder="Override instruction (optional)"
-                              value={item.override}
-                              onChange={e => setItems(prev => prev.map(p => p.id === item.id ? { ...p, override: e.target.value } : p))}
-                              className="w-full px-2.5 py-1.5 border border-border rounded-lg text-[12px] outline-none focus:border-primary bg-background text-foreground placeholder:text-muted-foreground/50"
-                            />
+                            <div className="flex items-center gap-2">
+                              <select
+                                value={item.scope}
+                                onChange={e => setItems(prev => prev.map(p => p.id === item.id ? { ...p, scope: e.target.value as Scope } : p))}
+                                className="flex-shrink-0 px-2 py-1.5 border border-border rounded-lg text-[11px] font-semibold outline-none focus:border-primary bg-background text-foreground cursor-pointer"
+                              >
+                                <option value="local">Fix locally</option>
+                                <option value="global">Apply to whole doc</option>
+                              </select>
+                              <input
+                                type="text"
+                                placeholder="Override instruction (optional)"
+                                value={item.override}
+                                onChange={e => setItems(prev => prev.map(p => p.id === item.id ? { ...p, override: e.target.value } : p))}
+                                className="flex-1 px-2.5 py-1.5 border border-border rounded-lg text-[12px] outline-none focus:border-primary bg-background text-foreground placeholder:text-muted-foreground/50"
+                              />
+                            </div>
                           )}
                         </div>
                       </div>
