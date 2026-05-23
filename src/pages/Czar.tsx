@@ -1,10 +1,11 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   PanelLeftClose, PanelLeftOpen, Loader2, Square,
   Bot, AlertCircle, Search, PenLine, Cpu,
   ChevronDown, ChevronRight, LayoutPanelLeft, FileSearch, Clock, X,
   BookOpen, Film, Scale, Download, Volume2, VolumeX, Edit3, Eye, FileText, Sparkles,
+  Compass, FlaskConical, Pen, Library, Gavel, RefreshCw, ImageIcon,
 } from "lucide-react";
 import { PsThemeToggle } from "@/components/ps/PsThemeToggle";
 import ReactMarkdown from "react-markdown";
@@ -667,15 +668,15 @@ function ClarificationCard({ questions, title, onAnswer }: {
   );
 }
 
-const AGENT_ICONS: Record<string, string> = {
-  planner: "🏛",
-  architect: "🏛",
-  researcher: "🔬",
-  writer: "✍️",
-  editor: "📚",
-  critic: "⚖️",
-  revision: "🔄",
-  illustrator: "🎨",
+const AGENT_ICON_MAP: Record<string, React.ReactNode> = {
+  planner:    <Compass size={10} />,
+  architect:  <Compass size={10} />,
+  researcher: <FlaskConical size={10} />,
+  writer:     <Pen size={10} />,
+  editor:     <Library size={10} />,
+  critic:     <Gavel size={10} />,
+  revision:   <RefreshCw size={10} />,
+  illustrator:<ImageIcon size={10} />,
 };
 
 function AgentStepsBlock({ agents, isLive }: { agents: LiveAgent[]; isLive: boolean }) {
@@ -727,7 +728,7 @@ function AgentStepsBlock({ agents, isLive }: { agents: LiveAgent[]; isLive: bool
               }`} />
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-1.5">
-                  <span className="text-[10px]">{AGENT_ICONS[a.id.toLowerCase()] ?? "·"}</span>
+                  <span className="text-muted-foreground/60">{AGENT_ICON_MAP[a.id.toLowerCase()] ?? <Bot size={10} />}</span>
                   <span className="text-[12px] font-medium text-foreground/80">{a.name}</span>
                   {a.action && (
                     <span className="text-[11px] text-muted-foreground/60 truncate">{a.action}</span>
