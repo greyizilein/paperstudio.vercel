@@ -541,3 +541,285 @@ export function WritingGlow({ visible }: { visible: boolean }) {
     </div>
   );
 }
+
+// ─── New illustration scenes ──────────────────────────────────────────────────
+
+const SCENE2_CSS = `
+  @keyframes czar2-blink  { 0%,49%{opacity:1} 50%,100%{opacity:0} }
+  @keyframes czar2-float-a {
+    0%,100%{transform:translateY(0px) rotate(-2deg)}
+    50%{transform:translateY(-14px) rotate(2deg)}
+  }
+  @keyframes czar2-float-b {
+    0%,100%{transform:translateY(0px) rotate(14deg)}
+    50%{transform:translateY(-10px) rotate(10deg)}
+  }
+  @keyframes czar2-steam {
+    0%  {transform:translateY(0)   scaleX(1);   opacity:0.55}
+    100%{transform:translateY(-20px) scaleX(1.6); opacity:0}
+  }
+  @keyframes czar2-spin {
+    0%,100%{transform:rotate(0deg)   scale(1)}
+    50%    {transform:rotate(180deg) scale(1.25)}
+  }
+  @keyframes czar2-pen-bob {
+    0%,100%{transform:translateY(0)}
+    50%    {transform:translateY(-3px)}
+  }
+  @keyframes czar2-check-pop {
+    0%,55%{opacity:0;transform:scale(0.4)}
+    70%,100%{opacity:1;transform:scale(1)}
+  }
+  .dark .czar2-svg [fill="white"]     { fill:   hsl(var(--background)); }
+  .dark .czar2-svg [stroke="white"]   { stroke: hsl(var(--background)); }
+  .dark .czar2-svg [fill="#1a1a1a"]   { fill:   hsl(var(--foreground)); }
+  .dark .czar2-svg [stroke="#1a1a1a"] { stroke: hsl(var(--foreground)); }
+`;
+
+export function CzarTypingScene() {
+  return (
+    <div className="w-full max-w-[500px] mx-auto select-none" aria-hidden>
+      <style>{SCENE2_CSS}</style>
+      <svg viewBox="0 0 500 278" fill="none" xmlns="http://www.w3.org/2000/svg"
+        className="czar2-svg w-full h-auto" strokeLinejoin="round" strokeLinecap="round">
+
+        {/* ── DESK ── */}
+        <rect x="15" y="246" width="470" height="5" rx="2.5" fill="#1a1a1a"/>
+        <rect x="34"  y="251" width="7" height="28" rx="3.5" fill="#1a1a1a" opacity="0.55"/>
+        <rect x="459" y="251" width="7" height="28" rx="3.5" fill="#1a1a1a" opacity="0.55"/>
+
+        {/* ── CHAIR ── */}
+        <rect x="57"  y="145" width="84" height="66" rx="13" fill="white" stroke="#1a1a1a" strokeWidth="2.2"/>
+        <rect x="50"  y="204" width="98" height="19" rx="9.5" fill="white" stroke="#1a1a1a" strokeWidth="2.2"/>
+        <line x1="63"  y1="223" x2="52"  y2="246" stroke="#1a1a1a" strokeWidth="3" strokeLinecap="round"/>
+        <line x1="135" y1="223" x2="146" y2="246" stroke="#1a1a1a" strokeWidth="3" strokeLinecap="round"/>
+
+        {/* ── PERSON ── */}
+        {/* Body */}
+        <path d="M 77 122 L 90 126 L 90 188 L 108 188 L 108 126 L 121 122" fill="white" stroke="#1a1a1a" strokeWidth="2.2"/>
+        {/* Collar crease */}
+        <path d="M 82 140 Q 99 145 116 140" fill="none" stroke="#1a1a1a" strokeWidth="1.4" opacity="0.5"/>
+        {/* Neck */}
+        <rect x="93" y="108" width="12" height="16" rx="6" fill="white" stroke="#1a1a1a" strokeWidth="2.2"/>
+        {/* Head */}
+        <circle cx="99" cy="80" r="30" fill="white" stroke="#1a1a1a" strokeWidth="2.2"/>
+        {/* Hair cap */}
+        <path d="M 71 68 Q 71 44 99 42 Q 127 44 127 68 L 127 80 Q 113 82 99 82 Q 85 82 71 80 Z" fill="#1a1a1a"/>
+        {/* Bun */}
+        <circle cx="99" cy="35" r="13" fill="#1a1a1a"/>
+        <path d="M 91 43 Q 99 49 107 43" fill="none" stroke="white" strokeWidth="1.5" opacity="0.35"/>
+        {/* Eyes */}
+        <circle cx="88"  cy="77" r="3.8" fill="#1a1a1a"/>
+        <circle cx="110" cy="77" r="3.8" fill="#1a1a1a"/>
+        <circle cx="89.4"  cy="75.4" r="1.4" fill="white"/>
+        <circle cx="111.4" cy="75.4" r="1.4" fill="white"/>
+        {/* Eyebrows */}
+        <path d="M 81 68 Q 88 65 95 68"  fill="none" stroke="#1a1a1a" strokeWidth="2" opacity="0.7"/>
+        <path d="M 103 68 Q 110 65 117 68" fill="none" stroke="#1a1a1a" strokeWidth="2" opacity="0.7"/>
+        {/* Nose */}
+        <line x1="99" y1="82" x2="99" y2="91" stroke="#1a1a1a" strokeWidth="1.5" opacity="0.38"/>
+        {/* Smile */}
+        <path d="M 86 101 Q 99 111 112 101" fill="none" stroke="#1a1a1a" strokeWidth="2.2"/>
+        {/* Cheeks */}
+        <ellipse cx="81"  cy="93" rx="5" ry="3" fill="#1a1a1a" opacity="0.07"/>
+        <ellipse cx="117" cy="93" rx="5" ry="3" fill="#1a1a1a" opacity="0.07"/>
+        {/* Left arm */}
+        <path d="M 90 134 L 66 168 L 72 234" stroke="#1a1a1a" strokeWidth="3.2"/>
+        <circle cx="72" cy="237" r="5" fill="white" stroke="#1a1a1a" strokeWidth="2"/>
+        {/* Right arm — reaching to keyboard */}
+        <g style={{ animation: "czar-typing 1.4s ease-in-out infinite", transformOrigin: "108px 140px" }}>
+          <path d="M 108 134 L 166 210" stroke="#1a1a1a" strokeWidth="3.2"/>
+          <circle cx="169" cy="213" r="5" fill="white" stroke="#1a1a1a" strokeWidth="2"/>
+        </g>
+
+        {/* ── LAPTOP ── */}
+        {/* Screen */}
+        <rect x="178" y="110" width="224" height="138" rx="8" fill="white" stroke="#1a1a1a" strokeWidth="2.2"/>
+        <rect x="187" y="118" width="206" height="120" rx="4" fill="#f6f6f6" stroke="#1a1a1a" strokeWidth="1.4"/>
+        {/* Text lines */}
+        <line x1="198" y1="133" x2="336" y2="133" stroke="#1a1a1a" strokeWidth="2.2" strokeLinecap="round"/>
+        <line x1="198" y1="146" x2="366" y2="146" stroke="#1a1a1a" strokeWidth="2.2" strokeLinecap="round"/>
+        <line x1="198" y1="159" x2="350" y2="159" stroke="#1a1a1a" strokeWidth="2.2" strokeLinecap="round"/>
+        <line x1="198" y1="172" x2="358" y2="172" stroke="#1a1a1a" strokeWidth="2.2" strokeLinecap="round"/>
+        <line x1="198" y1="185" x2="342" y2="185" stroke="#1a1a1a" strokeWidth="2.2" strokeLinecap="round"/>
+        <line x1="198" y1="198" x2="312" y2="198" stroke="#1a1a1a" strokeWidth="2.2" strokeLinecap="round"/>
+        <line x1="198" y1="211" x2="296" y2="211" stroke="#1a1a1a" strokeWidth="2.2" strokeLinecap="round" opacity="0.45"/>
+        {/* Blinking cursor */}
+        <line x1="298" y1="205" x2="298" y2="219"
+          stroke="#1a1a1a" strokeWidth="2.5" strokeLinecap="round"
+          style={{ animation: "czar2-blink 1s step-end infinite" }}
+        />
+        {/* Hinge shadow */}
+        <rect x="178" y="244" width="224" height="5" rx="2.5" fill="#1a1a1a" opacity="0.14"/>
+        {/* Keyboard base */}
+        <rect x="174" y="247" width="232" height="15" rx="6" fill="white" stroke="#1a1a1a" strokeWidth="2.2"/>
+        <line x1="190" y1="252" x2="392" y2="252" stroke="#1a1a1a" strokeWidth="1" opacity="0.28"/>
+        <line x1="190" y1="257" x2="392" y2="257" stroke="#1a1a1a" strokeWidth="1" opacity="0.28"/>
+        <rect x="264" y="250" width="62" height="9" rx="3" stroke="#1a1a1a" strokeWidth="1" opacity="0.32"/>
+
+        {/* ── BOOKS (right) ── */}
+        <rect x="413" y="213" width="58" height="33" rx="3" fill="white" stroke="#1a1a1a" strokeWidth="2.2"/>
+        <line x1="422" y1="213" x2="422" y2="246" stroke="#1a1a1a" strokeWidth="2.2"/>
+        <rect x="417" y="188" width="50" height="25" rx="3" fill="white" stroke="#1a1a1a" strokeWidth="2.2"/>
+        <line x1="426" y1="188" x2="426" y2="213" stroke="#1a1a1a" strokeWidth="2.2"/>
+        <rect x="419" y="169" width="46" height="19" rx="3" fill="white" stroke="#1a1a1a" strokeWidth="2.2"/>
+        <line x1="428" y1="169" x2="428" y2="188" stroke="#1a1a1a" strokeWidth="2.2"/>
+
+        {/* ── COFFEE CUP (left) ── */}
+        <rect x="34" y="216" width="40" height="30" rx="7" fill="white" stroke="#1a1a1a" strokeWidth="2.2"/>
+        <ellipse cx="54" cy="246" rx="24" ry="5" fill="white" stroke="#1a1a1a" strokeWidth="2"/>
+        <path d="M 74 222 Q 84 225 84 231 Q 84 238 74 241" stroke="#1a1a1a" strokeWidth="2.2" fill="none"/>
+        {/* Steam */}
+        <path d="M 43 213 Q 48 204 43 195" stroke="#1a1a1a" strokeWidth="1.6" fill="none"
+          style={{ animation: "czar2-steam 2.2s ease-in-out infinite", transformOrigin: "43px 213px" }}/>
+        <path d="M 55 213 Q 60 203 55 194" stroke="#1a1a1a" strokeWidth="1.6" fill="none"
+          style={{ animation: "czar2-steam 2.2s 0.65s ease-in-out infinite", transformOrigin: "55px 213px" }}/>
+
+        {/* ── FLOATING PAPER 1 ── */}
+        <g style={{ animation: "czar2-float-a 4.8s ease-in-out infinite", transformOrigin: "396px 72px" }}>
+          <rect x="370" y="46" width="52" height="64" rx="4" fill="white" stroke="#1a1a1a" strokeWidth="2"/>
+          <line x1="380" y1="60" x2="413" y2="60" stroke="#1a1a1a" strokeWidth="1.5" strokeLinecap="round"/>
+          <line x1="380" y1="70" x2="413" y2="70" stroke="#1a1a1a" strokeWidth="1.5" strokeLinecap="round"/>
+          <line x1="380" y1="80" x2="408" y2="80" stroke="#1a1a1a" strokeWidth="1.5" strokeLinecap="round"/>
+          <line x1="380" y1="90" x2="413" y2="90" stroke="#1a1a1a" strokeWidth="1.5" strokeLinecap="round"/>
+          <line x1="380" y1="100" x2="405" y2="100" stroke="#1a1a1a" strokeWidth="1.5" strokeLinecap="round"/>
+        </g>
+
+        {/* ── FLOATING PAPER 2 ── */}
+        <g style={{ animation: "czar2-float-b 5.6s 1.3s ease-in-out infinite", transformOrigin: "454px 105px" }}>
+          <g transform="rotate(14,454,105)">
+            <rect x="432" y="80" width="44" height="52" rx="3" fill="white" stroke="#1a1a1a" strokeWidth="1.8"/>
+            <line x1="440" y1="93"  x2="467" y2="93"  stroke="#1a1a1a" strokeWidth="1.4" strokeLinecap="round"/>
+            <line x1="440" y1="103" x2="467" y2="103" stroke="#1a1a1a" strokeWidth="1.4" strokeLinecap="round"/>
+            <line x1="440" y1="113" x2="462" y2="113" stroke="#1a1a1a" strokeWidth="1.4" strokeLinecap="round"/>
+            {/* Checkmark on this paper */}
+            <path d="M 440 124 L 445 129 L 456 118" stroke="#1a1a1a" strokeWidth="2.2" fill="none" strokeLinecap="round"/>
+          </g>
+        </g>
+
+        {/* ── SPARKLE STAR ── */}
+        <g style={{ animation: "czar2-spin 3.2s ease-in-out infinite", transformOrigin: "162px 48px" }}>
+          <path d="M 162 38 L 162 58 M 152 48 L 172 48 M 154 40 L 170 56 M 170 40 L 154 56"
+            stroke="#1a1a1a" strokeWidth="1.6" strokeLinecap="round"/>
+        </g>
+        {/* Small dot sparkle */}
+        <g style={{ animation: "czar2-spin 2.6s 0.9s ease-in-out infinite", transformOrigin: "355px 38px" }}>
+          <path d="M 355 32 L 355 44 M 349 38 L 361 38"
+            stroke="#1a1a1a" strokeWidth="2.2" strokeLinecap="round"/>
+        </g>
+
+      </svg>
+    </div>
+  );
+}
+
+export function CzarReviewScene() {
+  return (
+    <div className="w-full max-w-[440px] mx-auto select-none" aria-hidden>
+      <style>{SCENE2_CSS}</style>
+      <svg viewBox="0 0 440 278" fill="none" xmlns="http://www.w3.org/2000/svg"
+        className="czar2-svg w-full h-auto" strokeLinejoin="round" strokeLinecap="round">
+
+        {/* ── DESK ── */}
+        <rect x="15" y="246" width="410" height="5" rx="2.5" fill="#1a1a1a"/>
+        <rect x="32"  y="251" width="7" height="28" rx="3.5" fill="#1a1a1a" opacity="0.55"/>
+        <rect x="401" y="251" width="7" height="28" rx="3.5" fill="#1a1a1a" opacity="0.55"/>
+
+        {/* ── CHAIR ── */}
+        <rect x="50" y="148" width="78" height="62" rx="12" fill="white" stroke="#1a1a1a" strokeWidth="2.2"/>
+        <rect x="44" y="203" width="90" height="18" rx="9"  fill="white" stroke="#1a1a1a" strokeWidth="2.2"/>
+        <line x1="56"  y1="221" x2="46"  y2="246" stroke="#1a1a1a" strokeWidth="3" strokeLinecap="round"/>
+        <line x1="122" y1="221" x2="132" y2="246" stroke="#1a1a1a" strokeWidth="3" strokeLinecap="round"/>
+
+        {/* ── PERSON (glasses, academic) ── */}
+        {/* Body */}
+        <path d="M 71 118 L 83 122 L 83 188 L 101 188 L 101 122 L 113 118" fill="white" stroke="#1a1a1a" strokeWidth="2.2"/>
+        <path d="M 76 136 Q 92 140 108 136" fill="none" stroke="#1a1a1a" strokeWidth="1.4" opacity="0.5"/>
+        {/* Neck */}
+        <rect x="86" y="104" width="12" height="16" rx="6" fill="white" stroke="#1a1a1a" strokeWidth="2.2"/>
+        {/* Head */}
+        <circle cx="92" cy="76" r="30" fill="white" stroke="#1a1a1a" strokeWidth="2.2"/>
+        {/* Hair cap */}
+        <path d="M 64 64 Q 64 40 92 38 Q 120 40 120 64 L 120 76 Q 106 78 92 78 Q 78 78 64 76 Z" fill="#1a1a1a"/>
+        {/* Bun */}
+        <circle cx="92" cy="31" r="13" fill="#1a1a1a"/>
+        <path d="M 84 39 Q 92 45 100 39" fill="none" stroke="white" strokeWidth="1.5" opacity="0.35"/>
+        {/* Glasses */}
+        <circle cx="80" cy="74" r="11" fill="none" stroke="#1a1a1a" strokeWidth="2"/>
+        <circle cx="104" cy="74" r="11" fill="none" stroke="#1a1a1a" strokeWidth="2"/>
+        <line x1="91"  y1="74" x2="93"  y2="74" stroke="#1a1a1a" strokeWidth="2"/>
+        <line x1="68"  y1="71" x2="62"  y2="69" stroke="#1a1a1a" strokeWidth="2"/>
+        <line x1="116" y1="71" x2="122" y2="69" stroke="#1a1a1a" strokeWidth="2"/>
+        {/* Eyes inside glasses */}
+        <circle cx="80"  cy="74" r="3.8" fill="#1a1a1a"/>
+        <circle cx="104" cy="74" r="3.8" fill="#1a1a1a"/>
+        <circle cx="81.4"  cy="72.4" r="1.4" fill="white"/>
+        <circle cx="105.4" cy="72.4" r="1.4" fill="white"/>
+        {/* Eyebrows */}
+        <path d="M 72 63 Q 80 60 88 63"  fill="none" stroke="#1a1a1a" strokeWidth="2" opacity="0.7"/>
+        <path d="M 96 63 Q 104 60 112 63" fill="none" stroke="#1a1a1a" strokeWidth="2" opacity="0.7"/>
+        {/* Nose */}
+        <line x1="92" y1="80" x2="92" y2="89" stroke="#1a1a1a" strokeWidth="1.5" opacity="0.38"/>
+        {/* Focused small smile */}
+        <path d="M 80 99 Q 92 107 104 99" fill="none" stroke="#1a1a1a" strokeWidth="2.2"/>
+        {/* Cheeks */}
+        <ellipse cx="74"  cy="91" rx="5" ry="3" fill="#1a1a1a" opacity="0.07"/>
+        <ellipse cx="110" cy="91" rx="5" ry="3" fill="#1a1a1a" opacity="0.07"/>
+        {/* Left arm (resting on desk toward doc) */}
+        <path d="M 83 128 L 62 176 L 72 246" stroke="#1a1a1a" strokeWidth="3.2"/>
+        <circle cx="72" cy="246" r="5" fill="white" stroke="#1a1a1a" strokeWidth="2"/>
+        {/* Right arm — pen, animated bob */}
+        <g style={{ animation: "czar2-pen-bob 2.4s ease-in-out infinite", transformOrigin: "101px 140px" }}>
+          <path d="M 101 128 L 155 188 L 196 228" stroke="#1a1a1a" strokeWidth="3.2"/>
+          <circle cx="198" cy="230" r="5" fill="white" stroke="#1a1a1a" strokeWidth="2"/>
+          {/* Pen */}
+          <line x1="194" y1="226" x2="224" y2="200" stroke="#1a1a1a" strokeWidth="4.5" strokeLinecap="round"/>
+          <line x1="224" y1="200" x2="234" y2="190" stroke="#1a1a1a" strokeWidth="2.5" strokeLinecap="round"/>
+          <path d="M 231 192 L 237 186 L 238 193 Z" fill="#1a1a1a"/>
+        </g>
+
+        {/* ── DOCUMENT ── */}
+        <rect x="180" y="88" width="228" height="158" rx="6" fill="white" stroke="#1a1a1a" strokeWidth="2.5"/>
+        {/* Margin rule */}
+        <line x1="202" y1="88" x2="202" y2="246" stroke="#1a1a1a" strokeWidth="1.4" opacity="0.35"/>
+        {/* Text lines */}
+        <line x1="212" y1="106" x2="380" y2="106" stroke="#1a1a1a" strokeWidth="2"   strokeLinecap="round"/>
+        <line x1="212" y1="118" x2="362" y2="118" stroke="#1a1a1a" strokeWidth="2"   strokeLinecap="round"/>
+        {/* Strikethrough line */}
+        <line x1="212" y1="130" x2="374" y2="130" stroke="#1a1a1a" strokeWidth="2"   strokeLinecap="round" opacity="0.35"/>
+        <line x1="212" y1="130" x2="374" y2="130" stroke="#1a1a1a" strokeWidth="1.5" strokeLinecap="round" opacity="0.9"/>
+        <line x1="212" y1="127" x2="374" y2="133" stroke="#1a1a1a" strokeWidth="1.5" strokeLinecap="round" opacity="0.5"/>
+        {/* More lines */}
+        <line x1="212" y1="142" x2="368" y2="142" stroke="#1a1a1a" strokeWidth="2"   strokeLinecap="round"/>
+        <line x1="212" y1="154" x2="356" y2="154" stroke="#1a1a1a" strokeWidth="2"   strokeLinecap="round"/>
+        <line x1="212" y1="166" x2="375" y2="166" stroke="#1a1a1a" strokeWidth="2"   strokeLinecap="round"/>
+        <line x1="212" y1="178" x2="352" y2="178" stroke="#1a1a1a" strokeWidth="2"   strokeLinecap="round"/>
+        <line x1="212" y1="190" x2="370" y2="190" stroke="#1a1a1a" strokeWidth="2"   strokeLinecap="round"/>
+        <line x1="212" y1="202" x2="348" y2="202" stroke="#1a1a1a" strokeWidth="2"   strokeLinecap="round"/>
+        <line x1="212" y1="214" x2="330" y2="214" stroke="#1a1a1a" strokeWidth="2"   strokeLinecap="round"/>
+        <line x1="212" y1="226" x2="295" y2="226" stroke="#1a1a1a" strokeWidth="2"   strokeLinecap="round" opacity="0.45"/>
+
+        {/* Margin check 1 */}
+        <path d="M 184 103 L 188 107 L 196 99" stroke="#1a1a1a" strokeWidth="2.2" fill="none" strokeLinecap="round"
+          style={{ animation: "czar2-check-pop 3s ease-in-out infinite" }}/>
+        {/* Margin check 2 */}
+        <path d="M 184 139 L 188 143 L 196 135" stroke="#1a1a1a" strokeWidth="2.2" fill="none" strokeLinecap="round"
+          style={{ animation: "czar2-check-pop 3s 1.2s ease-in-out infinite" }}/>
+        {/* Margin check 3 */}
+        <path d="M 184 163 L 188 167 L 196 159" stroke="#1a1a1a" strokeWidth="2.2" fill="none" strokeLinecap="round"
+          style={{ animation: "czar2-check-pop 3s 2.4s ease-in-out infinite" }}/>
+
+        {/* Insertion caret */}
+        <path d="M 246 195 L 252 189 L 258 195" stroke="#1a1a1a" strokeWidth="1.8" fill="none" strokeLinecap="round" opacity="0.7"/>
+        <line x1="252" y1="189" x2="252" y2="184" stroke="#1a1a1a" strokeWidth="1.5" strokeLinecap="round" opacity="0.7"/>
+
+        {/* ── SPARKLE ── */}
+        <g style={{ animation: "czar2-spin 3.4s ease-in-out infinite", transformOrigin: "156px 56px" }}>
+          <path d="M 156 46 L 156 66 M 146 56 L 166 56 M 148 48 L 164 64 M 164 48 L 148 64"
+            stroke="#1a1a1a" strokeWidth="1.6" strokeLinecap="round"/>
+        </g>
+
+      </svg>
+    </div>
+  );
+}

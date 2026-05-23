@@ -29,7 +29,7 @@ import { DashboardSidebar } from "@/components/dashboard/DashboardSidebar";
 import { CorrectionModal } from "@/components/czar/CorrectionModal";
 
 import { lazy, Suspense } from "react";
-import { TeamScene, GreetingLine, AgentActivityDock, FloatingElements, WritingGlow, WelcomeAurora } from "@/components/czar/CzarVisuals";
+import { AgentActivityDock, WritingGlow, CzarTypingScene, CzarReviewScene } from "@/components/czar/CzarVisuals";
 const CommandInput = lazy(() => import("@/components/czar/CommandInput").then(m => ({ default: m.CommandInput })));
 
 // ── Types ──────────────────────────────────────────────────────────
@@ -1061,26 +1061,26 @@ function CzarMessage({
   );
 }
 
-const WELCOME_MODE_CONFIG: Record<string, { greeting: string; left?: string; center: string; right?: string }> = {
-  chat:              { greeting: "What are we working on?",        left: "/chars/char-social.png",      center: "/chars/char-planner.png",    right: "/chars/char-writer.png" },
-  write:             { greeting: "The blank page ends here.",      left: "/chars/char-planner.png",     center: "/chars/char-writer.png",     right: "/chars/char-critic.png" },
-  research:          { greeting: "Let's find the evidence.",       left: "/chars/char-writer.png",      center: "/chars/char-researcher.png", right: "/chars/char-team.png" },
-  plan:              { greeting: "Let's structure this.",          left: "/chars/char-social.png",      center: "/chars/char-planner.png",    right: "/chars/char-team.png" },
-  correct:           { greeting: "Ready to review.",              center: "/chars/char-critic.png" },
-  literature_review: { greeting: "Systematic review mode.",       left: "/chars/char-planner.png",     center: "/chars/char-researcher.png", right: "/chars/char-critic.png" },
-  screenplay:        { greeting: "Action.",                       left: "/chars/char-social.png",      center: "/chars/char-writer.png",     right: "/chars/char-team.png" },
-  legal:             { greeting: "IRAC. Statute. Case law.",      left: "/chars/char-planner.png",     center: "/chars/char-critic.png",     right: "/chars/char-researcher.png" },
+const WELCOME_GREETINGS: Partial<Record<CzarMode, string>> = {
+  chat:              "What are we working on?",
+  write:             "The blank page ends here.",
+  research:          "Let's find the evidence.",
+  plan:              "Let's structure this.",
+  correct:           "Ready to review.",
+  literature_review: "Systematic review mode.",
+  screenplay:        "Action.",
+  legal:             "IRAC. Statute. Case law.",
 };
 
 function WelcomeScreen({ mode, onExample, onOpenCorrectionModal }: { mode: CzarMode; onExample: (text: string) => void; onOpenCorrectionModal?: () => void }) {
   const [visible, setVisible] = useState(false);
   const [typedGreeting, setTypedGreeting] = useState("");
   const typingRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const config = WELCOME_MODE_CONFIG[mode] ?? WELCOME_MODE_CONFIG.chat;
+  const greeting = WELCOME_GREETINGS[mode] ?? "What are we working on?";
 
   useEffect(() => {
-    const t = setTimeout(() => setVisible(true), 80);
+    setVisible(false);
+    const t = setTimeout(() => setVisible(true), 60);
     return () => clearTimeout(t);
   }, [mode]);
 
@@ -1090,70 +1090,72 @@ function WelcomeScreen({ mode, onExample, onOpenCorrectionModal }: { mode: CzarM
     let i = 0;
     const tick = () => {
       i++;
-      setTypedGreeting(config.greeting.slice(0, i));
-      if (i < config.greeting.length) typingRef.current = setTimeout(tick, 30);
+      setTypedGreeting(greeting.slice(0, i));
+      if (i < greeting.length) typingRef.current = setTimeout(tick, 28);
     };
-    const start = setTimeout(tick, 500);
+    const start = setTimeout(tick, 520);
     return () => { clearTimeout(start); if (typingRef.current) clearTimeout(typingRef.current); };
-  }, [visible, config.greeting]);
+  }, [visible, greeting]);
 
   const examples: Partial<Record<CzarMode, { text: string; label: string }[]>> = {
     chat: [
       { label: "Explain a concept", text: "Explain the difference between qualitative and quantitative research methods." },
-      { label: "Quick question", text: "What's the Harvard referencing format for a journal article?" },
-      { label: "Brainstorm", text: "What are some angles I could take for an essay on climate change policy?" },
+      { label: "Quick question",    text: "What's the Harvard referencing format for a journal article?" },
+      { label: "Brainstorm",        text: "What are some angles I could take for an essay on climate change policy?" },
     ],
     write: [
-      { label: "Academic essay", text: "Write a 2,000-word Level 7 essay on transformational leadership in NHS trusts, Harvard references." },
+      { label: "Academic essay",    text: "Write a 2,000-word Level 7 essay on transformational leadership in NHS trusts, Harvard references." },
       { label: "Literature review", text: "Write a systematic literature review on the effectiveness of mindfulness-based stress reduction in the workplace." },
-      { label: "Legal memo", text: "Write a legal memo applying IRAC to whether an employer can monitor employee emails under UK law." },
+      { label: "Legal memo",        text: "Write a legal memo applying IRAC to whether an employer can monitor employee emails under UK law." },
     ],
     research: [
-      { label: "Synthesis", text: "Research and synthesise current academic literature on AI bias in hiring algorithms." },
-      { label: "Topic overview", text: "Find and summarise key academic sources on the digital divide in higher education." },
+      { label: "Synthesis",         text: "Research and synthesise current academic literature on AI bias in hiring algorithms." },
+      { label: "Topic overview",    text: "Find and summarise key academic sources on the digital divide in higher education." },
     ],
     correct: [
-      { label: "Improve draft", text: "Here's my draft introduction — improve the academic tone and citation integration:" },
-      { label: "Fix structure", text: "Review this paragraph for argument coherence and suggest improvements:" },
+      { label: "Improve draft",     text: "Here's my draft introduction — improve the academic tone and citation integration:" },
+      { label: "Fix structure",     text: "Review this paragraph for argument coherence and suggest improvements:" },
     ],
   };
 
   const items = examples[mode] ?? examples.chat!;
+  const isReview = mode === "correct";
 
-  const charStyle = (delay: number, scale = 1): React.CSSProperties => ({
-    opacity: visible ? (scale === 1 ? 1 : 0.72) : 0,
-    transform: visible ? "translateY(0) scale(1)" : "translateY(24px) scale(0.88)",
-    transition: `opacity 0.7s ${delay}ms, transform 0.7s ${delay}ms`,
+  const fadeIn = (delay = 0): React.CSSProperties => ({
+    opacity: visible ? 1 : 0,
+    transform: visible ? "translateY(0)" : "translateY(18px)",
+    transition: `opacity 0.65s ${delay}ms, transform 0.65s ${delay}ms`,
   });
 
-  if (mode === "correct") {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-4 py-6 overflow-hidden">
-        {/* Character with speech bubble */}
-        <div className="relative flex flex-col items-center mb-4" style={charStyle(0)}>
-          {typedGreeting.length > 0 && (
-            <div className="absolute -top-12 left-1/2 -translate-x-1/2 whitespace-nowrap bg-foreground text-background text-[11px] font-semibold px-3 py-1.5 rounded-xl shadow-lg z-10">
-              {typedGreeting}
-              {typedGreeting.length < config.greeting.length && (
-                <span className="inline-block w-0.5 h-3 bg-background/70 ml-0.5 align-middle animate-pulse" />
-              )}
-              <div className="absolute left-1/2 -translate-x-1/2 -bottom-1.5 w-3 h-3 bg-foreground rotate-45 rounded-sm" />
-            </div>
-          )}
-          <img
-            src={config.center}
-            alt="Agent"
-            className="h-48 sm:h-56 object-contain"
-            style={{ animation: visible ? "welcomeBob 3s ease-in-out infinite alternate" : "none" }}
-          />
-        </div>
+  return (
+    <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-4 py-6 overflow-hidden">
 
-        <div style={{ opacity: visible ? 1 : 0, transition: "opacity 0.7s 200ms" }}>
-          <h2 className="text-xl font-bold text-foreground mb-1">Correct &amp; Improve</h2>
-          <p className="text-sm text-muted-foreground mb-3 max-w-sm leading-relaxed">
-            Upload a document or paste your text. CZAR identifies every correction — grammar, style, argument, register — as tracked changes. Accept or reject each one individually, then download the clean document.
-          </p>
-          <div className="flex flex-col items-center gap-1.5 text-[11px] text-muted-foreground/50 mb-7">
+      {/* ── Illustration ── */}
+      <div className="relative w-full mb-2" style={fadeIn(0)}>
+        {/* Speech bubble above illustration */}
+        {typedGreeting.length > 0 && (
+          <div
+            className="inline-flex items-center gap-1 bg-foreground text-background text-[11px] font-semibold px-3 py-1.5 rounded-xl shadow-md mb-3 relative"
+            style={{ opacity: typedGreeting.length > 0 ? 1 : 0, transition: "opacity 0.25s" }}
+          >
+            {typedGreeting}
+            {typedGreeting.length < greeting.length && (
+              <span className="inline-block w-0.5 h-3 bg-background/70 ml-0.5 align-middle animate-pulse" />
+            )}
+          </div>
+        )}
+        {isReview ? <CzarReviewScene /> : <CzarTypingScene />}
+      </div>
+
+      {/* ── Mode label + description ── */}
+      <div className="mb-5" style={fadeIn(180)}>
+        <p className="text-sm text-muted-foreground max-w-xs leading-relaxed">{MODE_DESCRIPTIONS[mode]}</p>
+      </div>
+
+      {/* ── Correct mode CTA ── */}
+      {isReview && (
+        <div style={fadeIn(280)} className="mb-6">
+          <div className="flex flex-col items-center gap-1 text-[11px] text-muted-foreground/50 mb-5">
             <span>Grammar · Style · Structure · Argument · Register</span>
             <span>Color-coded · Accept/Reject per change · Clean download</span>
           </div>
@@ -1164,94 +1166,23 @@ function WelcomeScreen({ mode, onExample, onOpenCorrectionModal }: { mode: CzarM
             Open Document
           </button>
         </div>
-        <style>{`@keyframes welcomeBob { from { transform: translateY(0); } to { transform: translateY(-7px); } }`}</style>
-      </div>
-    );
-  }
+      )}
 
-  return (
-    <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-4 py-4 overflow-hidden">
-      {/* Three characters */}
-      <div className="flex items-end justify-center gap-4 sm:gap-8 mb-8 mt-6">
-        {/* Left character */}
-        {config.left && (
-          <img
-            src={config.left}
-            alt=""
-            className="h-32 sm:h-40 object-contain flex-shrink-0"
-            style={{
-              ...charStyle(200, 0.72),
-              animation: visible ? "welcomeBob 3.5s 0.3s ease-in-out infinite alternate" : "none",
-            }}
-          />
-        )}
-
-        {/* Center character — largest, speech bubble */}
-        <div className="relative flex flex-col items-center flex-shrink-0">
-          {typedGreeting.length > 0 && (
-            <div
-              className="absolute -top-14 left-1/2 -translate-x-1/2 whitespace-nowrap bg-foreground text-background text-[11px] font-semibold px-3 py-1.5 rounded-xl shadow-lg z-10"
-              style={{ opacity: typedGreeting.length > 0 ? 1 : 0, transition: "opacity 0.3s" }}
+      {/* ── Example prompts ── */}
+      {!isReview && (
+        <div className="w-full max-w-lg space-y-2" style={fadeIn(360)}>
+          {items.map((ex) => (
+            <button
+              key={ex.text}
+              onClick={() => onExample(ex.text)}
+              className="w-full text-left px-4 py-3 rounded-xl border border-border bg-background/60 hover:bg-secondary hover:border-primary/20 transition-all text-sm text-foreground group"
             >
-              {typedGreeting}
-              {typedGreeting.length < config.greeting.length && (
-                <span className="inline-block w-0.5 h-3 bg-background/70 ml-0.5 align-middle animate-pulse" />
-              )}
-              <div className="absolute left-1/2 -translate-x-1/2 -bottom-1.5 w-3 h-3 bg-foreground rotate-45 rounded-sm" />
-            </div>
-          )}
-          <img
-            src={config.center}
-            alt="Agent"
-            className="h-44 sm:h-56 object-contain"
-            style={{
-              ...charStyle(0),
-              animation: visible ? "welcomeBob 3s ease-in-out infinite alternate" : "none",
-            }}
-          />
+              <span className="font-semibold text-foreground/70 text-[11.5px] block mb-0.5 group-hover:text-foreground/90 transition-colors">{ex.label}</span>
+              <span className="text-muted-foreground text-[11.5px] leading-snug line-clamp-2 group-hover:text-foreground/60 transition-colors">{ex.text}</span>
+            </button>
+          ))}
         </div>
-
-        {/* Right character */}
-        {config.right && (
-          <img
-            src={config.right}
-            alt=""
-            className="h-32 sm:h-40 object-contain flex-shrink-0"
-            style={{
-              ...charStyle(400, 0.72),
-              animation: visible ? "welcomeBob 4s 0.6s ease-in-out infinite alternate" : "none",
-            }}
-          />
-        )}
-      </div>
-
-      {/* Title & description */}
-      <div
-        className="mb-6"
-        style={{ opacity: visible ? 1 : 0, transform: visible ? "translateY(0)" : "translateY(12px)", transition: "opacity 0.7s 500ms, transform 0.7s 500ms" }}
-      >
-        <h2 className="text-xl font-bold text-foreground mb-1">CZAR</h2>
-        <p className="text-sm text-muted-foreground max-w-xs leading-relaxed">{MODE_DESCRIPTIONS[mode]}</p>
-      </div>
-
-      {/* Example prompts */}
-      <div
-        className="w-full max-w-lg space-y-2"
-        style={{ opacity: visible ? 1 : 0, transform: visible ? "translateY(0)" : "translateY(12px)", transition: "opacity 0.7s 700ms, transform 0.7s 700ms" }}
-      >
-        {items.map((ex) => (
-          <button
-            key={ex.text}
-            onClick={() => onExample(ex.text)}
-            className="w-full text-left px-4 py-3 rounded-xl border border-border bg-background/60 hover:bg-secondary hover:border-primary/20 transition-all text-sm text-foreground group"
-          >
-            <span className="font-semibold text-foreground/70 text-[11.5px] block mb-0.5 group-hover:text-foreground/90 transition-colors">{ex.label}</span>
-            <span className="text-muted-foreground text-[11.5px] leading-snug line-clamp-2 group-hover:text-foreground/60 transition-colors">{ex.text}</span>
-          </button>
-        ))}
-      </div>
-
-      <style>{`@keyframes welcomeBob { from { transform: translateY(0); } to { transform: translateY(-7px); } }`}</style>
+      )}
     </div>
   );
 }
