@@ -102,6 +102,8 @@ export default function CzarPage() {
   const [agents, setAgents] = useState<LiveAgent[]>([]);
   const [mode, setMode] = useState<CzarMode>("chat");
   const [showModeMenu, setShowModeMenu] = useState(false);
+  const modeButtonRef = useRef<HTMLButtonElement>(null);
+  const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0 });
 
   const threadEndRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -382,7 +384,15 @@ export default function CzarPage() {
           {/* Mode selector */}
           <div className="relative">
             <button
-              onClick={() => !streaming && setShowModeMenu(o => !o)}
+              ref={modeButtonRef}
+              onClick={() => {
+                if (streaming) return;
+                if (!showModeMenu && modeButtonRef.current) {
+                  const r = modeButtonRef.current.getBoundingClientRect();
+                  setDropdownPos({ top: r.bottom + 6, left: r.left });
+                }
+                setShowModeMenu(o => !o);
+              }}
               className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[12px] font-semibold transition-colors ${streaming ? "opacity-50 cursor-not-allowed" : "cursor-pointer"} ${MODE_COLOURS[mode]}`}
             >
               {modeIcon(mode)}
@@ -391,8 +401,11 @@ export default function CzarPage() {
             </button>
             {showModeMenu && (
               <>
-                <div className="fixed inset-0 z-[90]" onClick={() => setShowModeMenu(false)} />
-                <div className="absolute top-full mt-1 left-0 z-[100] bg-background border border-border rounded-xl shadow-2xl overflow-hidden w-52 animate-in fade-in slide-in-from-top-1 duration-150">
+                <div className="fixed inset-0 z-[190]" onClick={() => setShowModeMenu(false)} />
+                <div
+                  className="fixed z-[200] bg-background border border-border rounded-xl shadow-2xl overflow-hidden w-52 animate-in fade-in slide-in-from-top-1 duration-150"
+                  style={{ top: dropdownPos.top, left: dropdownPos.left }}
+                >
                   {(["chat", "write", "correct", "research", "plan"] as CzarMode[]).map(m => (
                     <button key={m}
                       onClick={() => { setMode(m); setShowModeMenu(false); }}
@@ -499,6 +512,28 @@ export default function CzarPage() {
                   className="flex-1 min-h-0"
                 />
               </Suspense>
+            </div>
+          )}
+
+          {/* Document tab empty state — shown when not in a document-generating mode */}
+          {mobileTab === "document" && !isDocMode && (
+            <div className="lg:hidden flex-1 flex flex-col items-center justify-center px-6 py-10 text-center">
+              <PenLine size={32} className="text-muted-foreground/25 mb-4" />
+              <p className="text-[13px] font-semibold text-muted-foreground mb-1">Document panel</p>
+              <p className="text-[12px] text-muted-foreground/60 mb-5 leading-relaxed">
+                Switch to Write, Correct, or Research mode to generate a document here.
+              </p>
+              <div className="flex flex-wrap gap-2 justify-center">
+                {(["write", "correct", "research"] as CzarMode[]).map(m => (
+                  <button key={m}
+                    onClick={() => { setMode(m); setMobileTab("chat"); }}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold ${MODE_COLOURS[m]}`}
+                  >
+                    {modeIcon(m)}
+                    {modeLabel(m)}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
 
