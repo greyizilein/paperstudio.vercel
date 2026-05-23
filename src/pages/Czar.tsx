@@ -231,6 +231,12 @@ export default function CzarPage() {
     if (!user || streaming) return;
     if (!text.trim() && files.length === 0) return;
 
+    // In correction mode without a document source: redirect to the modal
+    if (mode === "correct" && files.length === 0 && !extraSettings.correction_paste) {
+      setCorrectionModalOpen(true);
+      return;
+    }
+
     if (agentClearRef.current) {
       clearTimeout(agentClearRef.current);
       agentClearRef.current = null;
