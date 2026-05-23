@@ -29,7 +29,7 @@ import { DashboardSidebar } from "@/components/dashboard/DashboardSidebar";
 import { CorrectionModal } from "@/components/czar/CorrectionModal";
 
 import { lazy, Suspense } from "react";
-import { TeamScene, GreetingLine, AgentActivityDock, FloatingElements, WritingGlow } from "@/components/czar/CzarVisuals";
+import { TeamScene, GreetingLine, AgentActivityDock, FloatingElements, WritingGlow, WelcomeAurora } from "@/components/czar/CzarVisuals";
 const CommandInput = lazy(() => import("@/components/czar/CommandInput").then(m => ({ default: m.CommandInput })));
 
 // ── Types ──────────────────────────────────────────────────────────
@@ -1042,11 +1042,12 @@ function CzarMessage({
 
 function WelcomeScreen({ userName }: { userName?: string }) {
   return (
-    <div className="relative flex flex-col items-center justify-center min-h-[60vh] text-center px-2 py-6 overflow-hidden">
+    <div className="relative flex flex-col items-center justify-center min-h-[70vh] text-center px-4 py-12 overflow-hidden">
+      <WelcomeAurora />
       <FloatingElements />
       <div className="relative z-10 flex flex-col items-center w-full">
-        <GreetingLine userName={userName} />
         <TeamScene />
+        <GreetingLine userName={userName} />
       </div>
     </div>
   );

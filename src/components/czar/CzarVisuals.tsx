@@ -43,6 +43,21 @@ const SCENE_CSS = `
     33%      { transform: translate(3%,-4%) scale(1.04); }
     66%      { transform: translate(-2%,3%) scale(0.97); }
   }
+  @keyframes czar-aurora-a {
+    0%, 100% { transform: translate(0,0)     scale(1);    opacity: 0.22; }
+    25%      { transform: translate(6%,-10%) scale(1.12); opacity: 0.30; }
+    60%      { transform: translate(-4%,6%)  scale(0.94); opacity: 0.18; }
+  }
+  @keyframes czar-aurora-b {
+    0%, 100% { transform: translate(0,0)     scale(1);    opacity: 0.16; }
+    40%      { transform: translate(-8%,12%) scale(1.08); opacity: 0.24; }
+    70%      { transform: translate(5%,-5%)  scale(1.15); opacity: 0.12; }
+  }
+  @keyframes czar-aurora-c {
+    0%, 100% { transform: translate(0,0)    scale(1);    opacity: 0.12; }
+    30%      { transform: translate(10%,4%) scale(0.90); opacity: 0.18; }
+    70%      { transform: translate(-6%,-8%) scale(1.1); opacity: 0.08; }
+  }
 `;
 
 // Helper: arm drawn as double-stroke (white fill with dark outline) to match illustration style
@@ -57,12 +72,9 @@ function Arm({ d, w = 15 }: { d: string; w?: number }) {
 
 // ─── TeamScene — main welcome illustration ─────────────────────────────────
 
-export function TeamScene({ mode = "chat" }: { mode?: string }) {
-  const isResearch = mode === "research";
-  const isPlan     = mode === "plan";
-
+export function TeamScene() {
   return (
-    <div className="w-full max-w-[500px] mx-auto select-none" aria-hidden>
+    <div className="w-full max-w-[560px] mx-auto select-none" aria-hidden>
       <style>{SCENE_CSS}</style>
       <svg viewBox="0 0 500 255" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-auto">
 
@@ -282,24 +294,6 @@ export function TeamScene({ mode = "chat" }: { mode?: string }) {
         <rect x="190" y="210" width="120" height="9" rx="3" fill="#1a1a1a"/>
         <rect x="202" y="212" width="96" height="2.5" rx="1.2" fill="white" opacity="0.1"/>
 
-        {/* Mode-specific extras */}
-        {isResearch && (
-          <g opacity="0.84">
-            <circle cx="306" cy="118" r="17" stroke="#1a1a1a" strokeWidth="3.2" fill="white"/>
-            <circle cx="306" cy="118" r="9"  stroke="#1a1a1a" strokeWidth="1.6" fill="none" opacity="0.35"/>
-            <line x1="319" y1="131" x2="332" y2="146" stroke="#1a1a1a" strokeWidth="4.5" strokeLinecap="round"/>
-          </g>
-        )}
-        {isPlan && (
-          <g>
-            <rect x="148" y="108" width="40" height="34" rx="4" fill="#FDE68A" stroke="#1a1a1a" strokeWidth="2.2"/>
-            <line x1="154" y1="117" x2="180" y2="117" stroke="#1a1a1a" strokeWidth="1.4" opacity="0.5"/>
-            <line x1="154" y1="123" x2="178" y2="123" stroke="#1a1a1a" strokeWidth="1.4" opacity="0.5"/>
-            <rect x="160" y="120" width="32" height="26" rx="4" fill="#D1FAE5" stroke="#1a1a1a" strokeWidth="2.2"/>
-            <line x1="165" y1="130" x2="184" y2="130" stroke="#1a1a1a" strokeWidth="1.4" opacity="0.5"/>
-          </g>
-        )}
-
         {/* ── PAPERS (right edge) ───────────────────────────────── */}
         <rect x="460" y="174" width="34" height="24" rx="3" fill="white" stroke="#1a1a1a" strokeWidth="2"/>
         <rect x="455" y="168" width="34" height="24" rx="3" fill="white" stroke="#1a1a1a" strokeWidth="2"/>
@@ -342,12 +336,17 @@ export function GreetingLine({ userName }: { userName?: string }) {
   }, []);
   const first = userName?.split(" ")[0];
   return (
-    <p
-      className="text-[13px] text-muted-foreground italic transition-all duration-700 mb-3"
-      style={{ opacity: show ? 1 : 0, transform: show ? "none" : "translateY(8px)" }}
+    <div
+      className="text-center transition-all duration-700 mt-6"
+      style={{ opacity: show ? 1 : 0, transform: show ? "none" : "translateY(12px)" }}
     >
-      {first ? `Hey ${first} — your team is ready` : "Your AI writing team is ready"}
-    </p>
+      <h1 className="text-3xl sm:text-4xl font-bold font-heading text-foreground leading-tight">
+        {first ? `Ready for you, ${first}` : "Ready when you are"}
+      </h1>
+      <p className="mt-2 text-sm sm:text-base text-muted-foreground">
+        Your AI writing team is standing by
+      </p>
+    </div>
   );
 }
 
@@ -506,6 +505,40 @@ export function AgentActivityDock({ agents, visible }: { agents: LiveAgent[]; vi
           </div>
         );
       })}
+    </div>
+  );
+}
+
+// ─── Welcome aurora — always-on live background ───────────────────────────
+
+export function WelcomeAurora() {
+  return (
+    <div className="absolute inset-0 pointer-events-none overflow-hidden" aria-hidden>
+      <style>{SCENE_CSS}</style>
+      {/* Terracotta warm blob — bottom left */}
+      <div style={{
+        position: "absolute", bottom: "-25%", left: "-15%",
+        width: "75vw", maxWidth: 560, height: "75vw", maxHeight: 560,
+        borderRadius: "50%",
+        background: "radial-gradient(circle, hsl(18 65% 58%) 0%, transparent 62%)",
+        animation: "czar-aurora-a 20s ease-in-out infinite",
+      }} />
+      {/* Sage/teal blob — top right */}
+      <div style={{
+        position: "absolute", top: "-20%", right: "-15%",
+        width: "60vw", maxWidth: 480, height: "60vw", maxHeight: 480,
+        borderRadius: "50%",
+        background: "radial-gradient(circle, hsl(153 28% 48%) 0%, transparent 62%)",
+        animation: "czar-aurora-b 26s ease-in-out infinite",
+      }} />
+      {/* Warm gold accent — upper center */}
+      <div style={{
+        position: "absolute", top: "-5%", left: "25%",
+        width: "50vw", maxWidth: 380, height: "50vw", maxHeight: 380,
+        borderRadius: "50%",
+        background: "radial-gradient(circle, hsl(37 56% 52%) 0%, transparent 62%)",
+        animation: "czar-aurora-c 30s ease-in-out 6s infinite",
+      }} />
     </div>
   );
 }
