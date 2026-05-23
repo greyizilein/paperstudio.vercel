@@ -44,15 +44,15 @@ function StepBar({ step }: { step: Step }) {
   ];
   const idx = { upload: 0, scanning: 1, confirm: 2, applying: 3, done: 3 }[step];
   return (
-    <div className="flex items-center gap-0 mb-5">
+    <div className="flex items-center mb-5 w-full">
       {steps.map((s, i) => (
-        <div key={s.id} className="flex items-center">
+        <div key={s.id} className="flex items-center min-w-0" style={{ flex: i < steps.length - 1 ? "1 1 0" : "0 0 auto" }}>
           <div className={cn(
-            "flex items-center gap-1.5 text-[11px] font-bold transition-colors",
+            "flex items-center gap-1 text-[11px] font-bold transition-colors flex-shrink-0",
             i <= idx ? "text-foreground" : "text-muted-foreground/40"
           )}>
             <div className={cn(
-              "w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-black transition-all",
+              "w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-black transition-all flex-shrink-0",
               i < idx ? "bg-primary text-white" :
               i === idx ? "bg-foreground text-background" :
               "bg-border text-muted-foreground"
@@ -62,7 +62,7 @@ function StepBar({ step }: { step: Step }) {
             <span>{s.label}</span>
           </div>
           {i < steps.length - 1 && (
-            <div className={cn("h-px mx-3 w-8 transition-colors", i < idx ? "bg-primary" : "bg-border")} />
+            <div className={cn("h-px flex-1 mx-1.5 transition-colors min-w-[8px]", i < idx ? "bg-primary" : "bg-border")} />
           )}
         </div>
       ))}
