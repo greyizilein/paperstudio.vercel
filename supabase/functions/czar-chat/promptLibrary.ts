@@ -106,7 +106,74 @@ After the deck, wait for the user to say continue. Then produce a separate narra
 // Cheap, deterministic, runs before the writing call.
 // ─────────────────────────────────────────────────────────────────────
 
-export type CzarPlaybook = "basic" | "superior" | "slides" | "none";
+export const LITERATURE_REVIEW_PROMPT = `# TASK PLAYBOOK — SYSTEMATIC LITERATURE REVIEW
+
+Use this for all literature reviews: systematic, narrative, scoping, integrative, or rapid reviews.
+
+**Phase 1 — Protocol:** State the review question in PICO/SPIDER format. Define: population/phenomenon, concept, context. State inclusion criteria (publication date range, study types, languages, databases). State exclusion criteria. Note total sources reviewed vs. included (PRISMA reporting where appropriate).
+
+**Phase 2 — Search Strategy:** Report search terms used (Boolean operators, MeSH terms, field-specific vocabulary). Databases searched. Grey literature considered. Date of search.
+
+**Phase 3 — Thematic Synthesis:** Organise findings by THEME not by individual study. Each theme section: (a) what the evidence shows, (b) how strong the evidence is, (c) contradictions or debates, (d) methodological quality of key studies. Do NOT write separate summaries of each paper — synthesise across papers.
+
+**Phase 4 — Quality Assessment:** Note the dominant research designs and their limitations. Acknowledge publication bias. Identify heterogeneity in findings. Rate overall evidence quality (GRADE levels or equivalent).
+
+**Phase 5 — Gaps and Future Directions:** State clearly what the literature does NOT yet know. Frame gaps as specific research questions. Distinguish: (a) methodological gaps, (b) population gaps, (c) context gaps.
+
+**Citation rules:** Minimum 1 source per 100 words. Narrative and parenthetical citations mixed. No source repeated more than twice. All sources genuine and verifiable. Complete Harvard reference list at end.
+
+**Output discipline:** No "this review aims to…" preamble. Begin with the first substantive sentence of the review. No closing meta-commentary.`;
+
+export const SCREENPLAY_PROMPT = `# TASK PLAYBOOK — SCREENPLAY
+
+Use this for feature films, short films, television episodes, and stage plays.
+
+**Format (Fountain standard):**
+- Scene headings: INT./EXT. LOCATION — TIME (all caps, e.g. INT. OFFICE — DAY)
+- Action lines: present tense, active voice, only what the camera sees/hears
+- Character names: all caps, centred (or left of centre in Fountain)
+- Dialogue: beneath character name, indented
+- Parentheticals: sparingly, only when delivery cannot be inferred
+- Transitions: FADE IN:, CUT TO: (use minimally — editors decide cuts)
+
+**Craft standards:**
+- Every scene must: (a) advance plot, (b) reveal character, or (c) establish world — preferably all three
+- Dialogue must do at least two things simultaneously: advance plot AND reveal character AND/OR create subtext
+- Show, never tell. If a character is angry, show it — do not write "he is angry"
+- Enter scenes late, leave early — skip the small talk
+- Subtext: characters rarely say what they mean directly. Write around it.
+- Economy: 1 page ≈ 1 minute. Feature = 90–120 pages. Short = brief as needed.
+
+**Structure (three-act unless specified otherwise):**
+- Act I (~25%): establish world, protagonist, want vs. need, inciting incident, into act II
+- Act II (~50%): escalating obstacles, midpoint reversal, dark night of the soul, into act III
+- Act III (~25%): climax, resolution, denouement
+
+**Output discipline:** Begin with FADE IN:. End with FADE OUT. No prose summaries between scenes.`;
+
+export const LEGAL_BRIEF_PROMPT = `# TASK PLAYBOOK — LEGAL WRITING
+
+Use this for legal memos, case analyses, court briefs, legal essays, and regulatory commentary.
+
+**Structure (IRAC for each legal issue):**
+1. ISSUE: State the precise legal question. One sentence. Avoid vagueness.
+2. RULE: State the applicable legal rule — statute, common law, regulation. Cite the source exactly. Distinguish mandatory from persuasive authority.
+3. APPLICATION: Apply the rule to the specific facts. This is the longest section. Address counter-arguments explicitly before rebutting them. Be precise — cite specific subsections, paragraphs of statutes; specific paragraphs of cases.
+4. CONCLUSION: State the legal outcome clearly. Hedge where the law is unsettled — never overstate certainty.
+
+**Citation standards (OSCOLA unless otherwise specified):**
+- Cases: *Smith v Jones* [2020] UKSC 12 (UK) or 530 US 428 (US)
+- Statutes: Companies Act 2006, s 994 (UK) or 17 USC § 101 (US)
+- Secondary sources: Author, 'Title' (Year) Volume Journal page
+- Footnotes for all citations — not in-text parenthetical
+
+**Authority hierarchy:** Primary > Secondary. Binding > Persuasive. Statute > Common law (unless constitutional override). Distinguish obiter dicta from ratio decidendi.
+
+**Reasoning standards:** Distinguish facts → analogise to precedent → apply rule → conclude. Flag where the law is unsettled, conflicting, or evolving. Anticipate the strongest counter-argument and address it directly.
+
+**Output discipline:** Legal writing is precise and formal. No rhetorical questions. No colloquialisms. Every legal claim cites authority.`;
+
+export type CzarPlaybook = "basic" | "superior" | "slides" | "literature_review" | "screenplay" | "legal" | "none";
 
 export interface RouterSignals {
   user_message: string;
@@ -119,6 +186,17 @@ export function pickPlaybook(s: RouterSignals): CzarPlaybook {
   const m = (s.user_message || "").toLowerCase();
   const fnames = (s.filenames || []).map((n) => n.toLowerCase()).join(" ");
 
+  // Mode-specific playbooks take precedence
+  if (/\b(literature review|systematic review|scoping review|integrative review|narrative review|prisma)\b/.test(m)) {
+    return "literature_review";
+  }
+  if (/\b(screenplay|script|scene heading|fade in|ext\.|int\.|feature film|short film|pilot|teleplay)\b/.test(m)) {
+    return "screenplay";
+  }
+  if (/\b(legal brief|legal memo|legal analysis|irac|case law|statute|tort|contract law|judicial|appellant|respondent|claimant|defendant brief)\b/.test(m)) {
+    return "legal";
+  }
+
   // Slides intent
   if (/\b(slides?|powerpoint|pptx?|deck|presentation|pitch deck|pitch presentation)\b/.test(m)
       || /\b(pptx?|keynote)\b/.test(fnames)) {
@@ -130,22 +208,24 @@ export function pickPlaybook(s: RouterSignals): CzarPlaybook {
     return "none";
   }
 
-  // Superior: brief uploaded OR explicit blueprint/marking-scheme intent OR very long brief
+  // Superior: brief uploaded OR explicit blueprint/marking-scheme intent
   if (s.total_attachment_words >= 800
       || /(marking scheme|rubric|brief\.|assignment brief|requirements doc|blueprint|a\+|level seven|postgraduate brief|dissertation chapter|thesis chapter|white paper|journal article)/.test(m)
       || /(brief|marking|rubric|assignment)/.test(fnames)) {
     return "superior";
   }
 
-  // Default for any other writing/editing/analysis task
   return "basic";
 }
 
 export function playbookText(p: CzarPlaybook): string {
   switch (p) {
-    case "basic":    return BASIC_ASSIGNMENT_PROMPT;
-    case "superior": return SUPERIOR_PROMPT;
-    case "slides":   return SLIDES_PROMPT;
-    default:         return "";
+    case "basic":             return BASIC_ASSIGNMENT_PROMPT;
+    case "superior":          return SUPERIOR_PROMPT;
+    case "slides":            return SLIDES_PROMPT;
+    case "literature_review": return LITERATURE_REVIEW_PROMPT;
+    case "screenplay":        return SCREENPLAY_PROMPT;
+    case "legal":             return LEGAL_BRIEF_PROMPT;
+    default:                  return "";
   }
 }

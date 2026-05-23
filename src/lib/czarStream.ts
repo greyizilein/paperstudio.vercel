@@ -99,7 +99,7 @@ export interface CzarHandlers {
 // Request types
 // ---------------------------------------------------------------------------
 
-export type CzarMode = "chat" | "write" | "correct" | "research" | "plan";
+export type CzarMode = "chat" | "write" | "correct" | "research" | "plan" | "literature_review" | "screenplay" | "legal";
 
 export interface CzarRequest {
   conversation_id: string | null;

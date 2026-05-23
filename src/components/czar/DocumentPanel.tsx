@@ -1,14 +1,18 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { Feather, Download } from "lucide-react";
+import { Feather, Download, Volume2, VolumeX, Edit3, Eye, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
+import {
+  Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType,
+} from "docx";
 
 interface DocumentPanelProps {
   content: string;
   streaming: boolean;
   mode: string;
   onSelectionAction?: (action: string, selectedText: string) => void;
+  onContentChange?: (content: string) => void;
   className?: string;
 }
 
@@ -125,17 +129,203 @@ const markdownComponents = {
   ),
 };
 
+function stripMarkdown(text: string): string {
+  return text
+    .replace(/^#{1,6}\s+/gm, "")
+    .replace(/\*\*(.+?)\*\*/g, "$1")
+    .replace(/\*(.+?)\*/g, "$1")
+    .replace(/~~(.+?)~~/g, "$1")
+    .replace(/`{1,3}[^`]*`{1,3}/g, "")
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+    .replace(/^[-*+]\s+/gm, "")
+    .replace(/^\d+\.\s+/gm, "")
+    .replace(/^>\s+/gm, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function buildDocx(markdown: string): Document {
+  const lines = markdown.split("\n");
+  const paragraphs: Paragraph[] = [];
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+
+    if (/^### /.test(trimmed)) {
+      paragraphs.push(new Paragraph({
+        text: trimmed.replace(/^### /, ""),
+        heading: HeadingLevel.HEADING_3,
+      }));
+    } else if (/^## /.test(trimmed)) {
+      paragraphs.push(new Paragraph({
+        text: trimmed.replace(/^## /, ""),
+        heading: HeadingLevel.HEADING_2,
+      }));
+    } else if (/^# /.test(trimmed)) {
+      paragraphs.push(new Paragraph({
+        text: trimmed.replace(/^# /, ""),
+        heading: HeadingLevel.HEADING_1,
+      }));
+    } else if (/^[-*+] /.test(trimmed)) {
+      const text = trimmed.replace(/^[-*+] /, "");
+      paragraphs.push(new Paragraph({
+        bullet: { level: 0 },
+        children: parseInlineRuns(text),
+      }));
+    } else if (/^\d+\. /.test(trimmed)) {
+      const text = trimmed.replace(/^\d+\. /, "");
+      paragraphs.push(new Paragraph({
+        numbering: { reference: "default-numbering", level: 0 },
+        children: parseInlineRuns(text),
+      }));
+    } else if (trimmed === "") {
+      paragraphs.push(new Paragraph({ text: "" }));
+    } else {
+      paragraphs.push(new Paragraph({
+        children: parseInlineRuns(trimmed),
+        alignment: AlignmentType.LEFT,
+      }));
+    }
+  }
+
+  return new Document({
+    numbering: {
+      config: [
+        {
+          reference: "default-numbering",
+          levels: [
+            {
+              level: 0,
+              format: "decimal" as any,
+              text: "%1.",
+              alignment: AlignmentType.LEFT,
+            },
+          ],
+        },
+      ],
+    },
+    sections: [{ children: paragraphs }],
+  });
+}
+
+function parseInlineRuns(text: string): TextRun[] {
+  const runs: TextRun[] = [];
+  const pattern = /(\*\*(.+?)\*\*|\*(.+?)\*|`(.+?)`)/g;
+  let last = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = pattern.exec(text)) !== null) {
+    if (match.index > last) {
+      runs.push(new TextRun({ text: text.slice(last, match.index) }));
+    }
+    if (match[0].startsWith("**")) {
+      runs.push(new TextRun({ text: match[2], bold: true }));
+    } else if (match[0].startsWith("*")) {
+      runs.push(new TextRun({ text: match[3], italics: true }));
+    } else {
+      runs.push(new TextRun({ text: match[4], font: "Courier New" }));
+    }
+    last = match.index + match[0].length;
+  }
+
+  if (last < text.length) {
+    runs.push(new TextRun({ text: text.slice(last) }));
+  }
+
+  return runs.length > 0 ? runs : [new TextRun({ text })];
+}
+
 export function DocumentPanel({
   content,
   streaming,
   mode,
   onSelectionAction,
+  onContentChange,
   className,
 }: DocumentPanelProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const [selectionToolbar, setSelectionToolbar] = useState<SelectionToolbar | null>(null);
   const isUserScrolledUpRef = useRef(false);
+
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [editContent, setEditContent] = useState(content);
+  const [showDownloadMenu, setShowDownloadMenu] = useState(false);
+
+  // Keep editContent in sync with incoming content when not in edit mode
+  useEffect(() => {
+    if (!isEditMode) {
+      setEditContent(content);
+    }
+  }, [content, isEditMode]);
+
+  // Cancel speech on unmount or content change
+  useEffect(() => {
+    return () => { window.speechSynthesis.cancel(); };
+  }, []);
+  useEffect(() => {
+    if (isSpeaking) {
+      window.speechSynthesis.cancel();
+      setIsSpeaking(false);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [content]);
+
+  const handleSpeak = useCallback(() => {
+    if (isSpeaking) {
+      window.speechSynthesis.cancel();
+      setIsSpeaking(false);
+      return;
+    }
+    const text = stripMarkdown(content);
+    if (!text) return;
+
+    const utterance = new SpeechSynthesisUtterance(text);
+    const voices = window.speechSynthesis.getVoices();
+    const ukVoice = voices.find(v => v.lang === "en-GB") ?? voices.find(v => v.lang.startsWith("en"));
+    if (ukVoice) utterance.voice = ukVoice;
+    utterance.lang = "en-GB";
+    utterance.onend = () => setIsSpeaking(false);
+    utterance.onerror = () => setIsSpeaking(false);
+    window.speechSynthesis.speak(utterance);
+    setIsSpeaking(true);
+  }, [isSpeaking, content]);
+
+  // Voices may not be loaded synchronously; retry once they load
+  useEffect(() => {
+    window.speechSynthesis.onvoiceschanged = () => {};
+  }, []);
+
+  const handleToggleEdit = useCallback(() => {
+    if (isEditMode) {
+      onContentChange?.(editContent);
+    }
+    setIsEditMode(e => !e);
+  }, [isEditMode, editContent, onContentChange]);
+
+  const handleTextareaChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setEditContent(e.target.value);
+  }, []);
+
+  const handleDownloadMd = useCallback(() => {
+    const blob = new Blob([content], { type: "text/markdown" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = "czar-document.md"; a.click();
+    URL.revokeObjectURL(url);
+    setShowDownloadMenu(false);
+  }, [content]);
+
+  const handleDownloadDocx = useCallback(async () => {
+    setShowDownloadMenu(false);
+    const doc = buildDocx(content);
+    const blob = await Packer.toBlob(doc);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = "czar-document.docx"; a.click();
+    URL.revokeObjectURL(url);
+  }, [content]);
 
   // Track if user has scrolled up manually
   const handleScroll = useCallback(() => {
@@ -154,6 +344,7 @@ export function DocumentPanel({
 
   // Text selection toolbar
   const handleMouseUp = useCallback(() => {
+    if (isEditMode) return;
     const selection = window.getSelection();
     if (!selection || selection.isCollapsed || !selection.toString().trim()) {
       setSelectionToolbar(null);
@@ -170,7 +361,7 @@ export function DocumentPanel({
       y: rect.top - containerRect.top - 8,
       text: selectedText,
     });
-  }, []);
+  }, [isEditMode]);
 
   // Dismiss toolbar when selection is cleared
   useEffect(() => {
@@ -193,10 +384,6 @@ export function DocumentPanel({
     },
     [selectionToolbar, onSelectionAction]
   );
-
-  const handleExport = useCallback(() => {
-    onSelectionAction?.("export", "");
-  }, [onSelectionAction]);
 
   return (
     <div className={cn("flex flex-col h-full bg-background", className)}>
@@ -223,12 +410,54 @@ export function DocumentPanel({
           )}
           <button
             type="button"
-            onClick={handleExport}
+            onClick={handleSpeak}
             className="flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+            title={isSpeaking ? "Stop reading" : "Listen"}
           >
-            <Download className="w-3 h-3" />
-            Download
+            {isSpeaking ? <VolumeX className="w-3 h-3" /> : <Volume2 className="w-3 h-3" />}
+            {isSpeaking ? "Stop" : "Listen"}
           </button>
+          <button
+            type="button"
+            onClick={handleToggleEdit}
+            className="flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+            title={isEditMode ? "Switch to view mode" : "Switch to edit mode"}
+          >
+            {isEditMode ? <Eye className="w-3 h-3" /> : <Edit3 className="w-3 h-3" />}
+            {isEditMode ? "View" : "Edit"}
+          </button>
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setShowDownloadMenu(o => !o)}
+              className="flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+            >
+              <Download className="w-3 h-3" />
+              Download
+              <ChevronDown className="w-2.5 h-2.5" />
+            </button>
+            {showDownloadMenu && (
+              <>
+                <div className="fixed inset-0 z-[190]" onClick={() => setShowDownloadMenu(false)} />
+                <div className="absolute right-0 mt-1 z-[200] bg-background border border-border rounded-lg shadow-xl overflow-hidden w-36 animate-in fade-in duration-100">
+                  <button
+                    type="button"
+                    onClick={handleDownloadMd}
+                    className="w-full text-left px-3 py-2 text-xs text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+                  >
+                    Download .md
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleDownloadDocx}
+                    className="w-full text-left px-3 py-2 text-xs text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+                  >
+                    Download .docx
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </div>
 
@@ -259,20 +488,31 @@ export function DocumentPanel({
         {/* Document content */}
         {(content || streaming) && (
           <div className="max-w-2xl mx-auto">
-            <ReactMarkdown
-              remarkPlugins={[remarkGfm]}
-              components={markdownComponents as React.ComponentProps<typeof ReactMarkdown>["components"]}
-            >
-              {content}
-            </ReactMarkdown>
-
-            {/* Blinking cursor while streaming */}
-            {streaming && (
-              <span
-                className="inline-block w-0.5 h-4 bg-foreground/70 align-text-bottom ml-0.5"
-                style={{ animation: "czarCursor 1s step-end infinite" }}
-                aria-hidden="true"
+            {isEditMode ? (
+              <textarea
+                value={editContent}
+                onChange={handleTextareaChange}
+                className="w-full min-h-[60vh] bg-transparent text-sm text-foreground font-mono leading-relaxed resize-none outline-none border border-border rounded-md p-4 focus:border-primary/50 transition-colors"
+                spellCheck
               />
+            ) : (
+              <>
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm]}
+                  components={markdownComponents as React.ComponentProps<typeof ReactMarkdown>["components"]}
+                >
+                  {isEditMode ? editContent : content}
+                </ReactMarkdown>
+
+                {/* Blinking cursor while streaming */}
+                {streaming && (
+                  <span
+                    className="inline-block w-0.5 h-4 bg-foreground/70 align-text-bottom ml-0.5"
+                    style={{ animation: "czarCursor 1s step-end infinite" }}
+                    aria-hidden="true"
+                  />
+                )}
+              </>
             )}
           </div>
         )}

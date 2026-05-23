@@ -4,6 +4,7 @@ import {
   PanelLeftClose, PanelLeftOpen, Loader2, Square,
   User, Bot, AlertCircle, Search, PenLine, Cpu,
   ChevronDown, LayoutPanelLeft, FileSearch, Clock, X,
+  BookOpen, Film, Scale,
 } from "lucide-react";
 import { PsThemeToggle } from "@/components/ps/PsThemeToggle";
 import ReactMarkdown from "react-markdown";
@@ -48,7 +49,16 @@ type MobileTab = "chat" | "document" | "agents";
 // ── Helpers ────────────────────────────────────────────────────────
 
 function modeLabel(mode: CzarMode): string {
-  return { chat: "Chat", write: "Write", correct: "Correct", research: "Research", plan: "Plan" }[mode] ?? mode;
+  return {
+    chat: "Chat",
+    write: "Write",
+    correct: "Correct",
+    research: "Research",
+    plan: "Plan",
+    literature_review: "Lit Review",
+    screenplay: "Screenplay",
+    legal: "Legal",
+  }[mode] ?? mode;
 }
 
 function modeIcon(mode: CzarMode) {
@@ -59,6 +69,9 @@ function modeIcon(mode: CzarMode) {
     correct: <FileSearch className={cls} />,
     research: <Search className={cls} />,
     plan: <LayoutPanelLeft className={cls} />,
+    literature_review: <BookOpen className={cls} />,
+    screenplay: <Film className={cls} />,
+    legal: <Scale className={cls} />,
   }[mode] ?? <Cpu className={cls} />;
 }
 
@@ -68,6 +81,9 @@ const MODE_COLOURS: Record<CzarMode, string> = {
   correct: "bg-amber-500/15 text-amber-600 dark:text-amber-400",
   research: "bg-purple-500/15 text-purple-600 dark:text-purple-400",
   plan: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
+  literature_review: "bg-rose-500/15 text-rose-600 dark:text-rose-400",
+  screenplay: "bg-orange-500/15 text-orange-600 dark:text-orange-400",
+  legal: "bg-slate-500/15 text-slate-600 dark:text-slate-400",
 };
 
 const MODE_DESCRIPTIONS: Record<CzarMode, string> = {
@@ -76,6 +92,9 @@ const MODE_DESCRIPTIONS: Record<CzarMode, string> = {
   correct: "Fix and improve your draft",
   research: "Find and synthesise sources",
   plan: "Structure before you write",
+  literature_review: "Systematic review, PRISMA, synthesis",
+  screenplay: "Fountain format, scene headings, dialogue",
+  legal: "IRAC structure, statute and case law",
 };
 
 // ── Main component ─────────────────────────────────────────────────
@@ -205,7 +224,7 @@ export default function CzarPage() {
     setDocStreaming(true);
     setAgents([]);
 
-    if (["write", "correct", "research", "plan"].includes(mode)) {
+    if (["write", "correct", "research", "plan", "literature_review", "legal"].includes(mode)) {
       setMobileTab("document");
     }
 
@@ -234,7 +253,7 @@ export default function CzarPage() {
           setMessages(prev => prev.map(m =>
             m.id === assistantMsgId ? { ...m, content: accText } : m
           ));
-          if (["write", "correct", "research"].includes(mode)) {
+          if (["write", "correct", "research", "literature_review", "legal"].includes(mode)) {
             setDocContent(accText);
           }
         },
@@ -307,10 +326,20 @@ export default function CzarPage() {
 
   const handleSelectionAction = useCallback((action: string, selectedText: string) => {
     if (action === "export") {
-      const blob = new Blob([docContent], { type: "text/plain" });
+      const fileNames: Partial<Record<CzarMode, string>> = {
+        write: "czar-essay.md",
+        research: "czar-research.md",
+        correct: "czar-corrected.md",
+        literature_review: "czar-lit-review.md",
+        legal: "czar-legal.md",
+        screenplay: "czar-screenplay.md",
+        plan: "czar-plan.md",
+      };
+      const filename = fileNames[mode] ?? "czar-document.md";
+      const blob = new Blob([docContent], { type: "text/markdown" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
-      a.href = url; a.download = "czar-document.txt"; a.click();
+      a.href = url; a.download = filename; a.click();
       URL.revokeObjectURL(url);
       return;
     }
@@ -326,7 +355,7 @@ export default function CzarPage() {
 
   if (!user) return null;
 
-  const isDocMode = ["write", "correct", "research"].includes(mode);
+  const isDocMode = ["write", "correct", "research", "literature_review", "legal"].includes(mode);
   const activeAgents = agents.filter(a => a.status !== "idle");
 
   return (
@@ -407,6 +436,22 @@ export default function CzarPage() {
                   style={{ top: dropdownPos.top, left: dropdownPos.left }}
                 >
                   {(["chat", "write", "correct", "research", "plan"] as CzarMode[]).map(m => (
+                    <button key={m}
+                      onClick={() => { setMode(m); setShowModeMenu(false); }}
+                      className={`w-full flex items-start gap-3 px-3 py-2.5 text-left hover:bg-secondary transition-colors ${mode === m ? "bg-secondary/60" : ""}`}
+                    >
+                      <span className={`mt-0.5 ${mode === m ? "text-foreground" : "text-muted-foreground"}`}>{modeIcon(m)}</span>
+                      <div className="min-w-0">
+                        <div className={`text-[12px] font-semibold ${mode === m ? "text-foreground" : "text-muted-foreground"}`}>{modeLabel(m)}</div>
+                        <div className="text-[10.5px] text-muted-foreground/60 leading-snug">{MODE_DESCRIPTIONS[m]}</div>
+                      </div>
+                      {mode === m && <span className="ml-auto mt-1 w-1.5 h-1.5 rounded-full bg-primary flex-shrink-0" />}
+                    </button>
+                  ))}
+                  <div className="px-3 py-1.5 border-t border-border mt-0.5">
+                    <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/40">Specialist</span>
+                  </div>
+                  {(["literature_review", "screenplay", "legal"] as CzarMode[]).map(m => (
                     <button key={m}
                       onClick={() => { setMode(m); setShowModeMenu(false); }}
                       className={`w-full flex items-start gap-3 px-3 py-2.5 text-left hover:bg-secondary transition-colors ${mode === m ? "bg-secondary/60" : ""}`}
@@ -509,6 +554,7 @@ export default function CzarPage() {
                   streaming={docStreaming}
                   mode={mode}
                   onSelectionAction={handleSelectionAction}
+                  onContentChange={setDocContent}
                   className="flex-1 min-h-0"
                 />
               </Suspense>
@@ -521,10 +567,10 @@ export default function CzarPage() {
               <PenLine size={32} className="text-muted-foreground/25 mb-4" />
               <p className="text-[13px] font-semibold text-muted-foreground mb-1">Document panel</p>
               <p className="text-[12px] text-muted-foreground/60 mb-5 leading-relaxed">
-                Switch to Write, Correct, or Research mode to generate a document here.
+                Switch to Write, Correct, Research, Lit Review, or Legal mode to generate a document here.
               </p>
               <div className="flex flex-wrap gap-2 justify-center">
-                {(["write", "correct", "research"] as CzarMode[]).map(m => (
+                {(["write", "correct", "research", "literature_review", "legal"] as CzarMode[]).map(m => (
                   <button key={m}
                     onClick={() => { setMode(m); setMobileTab("chat"); }}
                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold ${MODE_COLOURS[m]}`}
@@ -636,6 +682,21 @@ function WelcomeScreen({ mode, onExample }: { mode: CzarMode; onExample: (t: str
       "Create a detailed outline for a systematic literature review",
       "Structure a business report on the impact of remote work on productivity",
     ],
+    literature_review: [
+      "Write a PRISMA-compliant systematic review of CBT for treatment-resistant depression",
+      "Synthesise the literature on machine learning in early cancer detection",
+      "Produce a scoping review of renewable energy adoption barriers in developing nations",
+    ],
+    screenplay: [
+      "Write the opening scene of a noir thriller set in 1940s Los Angeles",
+      "Draft a tense two-character dialogue scene for a courtroom drama",
+      "Write a montage sequence showing a scientist's decade-long research obsession",
+    ],
+    legal: [
+      "Draft an IRAC analysis of a negligence claim arising from a data breach",
+      "Analyse the legal implications of non-compete clauses under UK employment law",
+      "Write a case summary applying R v Cunningham recklessness to a novel set of facts",
+    ],
   };
 
   const icons: Record<CzarMode, React.ReactNode> = {
@@ -644,6 +705,9 @@ function WelcomeScreen({ mode, onExample }: { mode: CzarMode; onExample: (t: str
     correct: <FileSearch size={28} className="text-amber-400/30" />,
     research: <Search size={28} className="text-purple-400/30" />,
     plan: <LayoutPanelLeft size={28} className="text-emerald-400/30" />,
+    literature_review: <BookOpen size={28} className="text-rose-400/30" />,
+    screenplay: <Film size={28} className="text-orange-400/30" />,
+    legal: <Scale size={28} className="text-slate-400/30" />,
   };
 
   const titles: Record<CzarMode, string> = {
@@ -652,6 +716,9 @@ function WelcomeScreen({ mode, onExample }: { mode: CzarMode; onExample: (t: str
     correct: "Upload content to correct",
     research: "What shall I research?",
     plan: "What shall I plan?",
+    literature_review: "What shall I review?",
+    screenplay: "What shall I script?",
+    legal: "What shall I analyse?",
   };
 
   return (
@@ -684,5 +751,8 @@ function modePlaceholder(mode: CzarMode): string {
     correct: "Attach your document and describe what to improve…",
     research: "What topic should I research?",
     plan: "Describe the document you want to plan…",
+    literature_review: "Describe the review — topic, scope, inclusion criteria…",
+    screenplay: "Describe the scene, characters, or story beat…",
+    legal: "Describe the legal issue, jurisdiction, and key facts…",
   }[mode] ?? "Ask CZAR…";
 }
