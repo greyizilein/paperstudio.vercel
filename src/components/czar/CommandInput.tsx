@@ -181,8 +181,8 @@ export function CommandInput({
   return (
     <div
       className={cn(
-        "relative flex flex-col rounded-2xl bg-background shadow-md transition-shadow",
-        isDraggingOver && "ring-2 ring-primary/40 shadow-lg",
+        "relative flex flex-col rounded-2xl bg-background border-2 border-border shadow-lg transition-shadow",
+        isDraggingOver && "ring-2 ring-primary/40 shadow-xl border-primary/40",
         isDisabled && "opacity-60"
       )}
       onDragEnter={handleDragEnter}
