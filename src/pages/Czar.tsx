@@ -17,7 +17,7 @@ import {
   type CzarRequest, type CzarMode, type CzarHandlers,
   type CzarMetaEvent, type CzarAgentEvent, type CzarToolEvent,
 } from "@/lib/czarStream";
-import { buildDocx, stripMarkdown, markdownComponents } from "@/lib/czarDocUtils";
+import { buildDocx, stripMarkdown, markdownComponents } from "@/lib/czarDocUtils.tsx";
 import { ConvSidebar } from "@/components/czar/ConvSidebar";
 import { UpgradeModal } from "@/components/czar/UpgradeModal";
 import { DashboardSidebar } from "@/components/dashboard/DashboardSidebar";
