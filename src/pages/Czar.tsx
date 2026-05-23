@@ -1095,12 +1095,11 @@ function WelcomeScreen({ userName, userInitials, avatarUrl }: {
   });
 
   return (
-    <div className="absolute inset-0 flex flex-col md:flex-row items-start px-6 py-7 gap-5 md:gap-12 md:px-14 md:items-center">
+    <div className="absolute inset-0 flex flex-col md:flex-row items-start px-5 py-6 gap-4 md:gap-10 md:px-14 md:items-center">
 
-      {/* ── Left: Greeting (always left-aligned) ── */}
-      <div className="flex flex-col items-start text-left md:flex-1 md:max-w-sm">
-        {/* Avatar + Hi name */}
-        <div className="flex items-center gap-2.5 mb-5" style={fadeIn(0)}>
+      {/* ── Greeting — always left-aligned, compact on mobile ── */}
+      <div className="flex flex-col items-start text-left flex-shrink-0 md:flex-1 md:max-w-sm">
+        <div className="flex items-center gap-2.5 mb-4" style={fadeIn(0)}>
           {avatarUrl ? (
             <img src={avatarUrl} alt="" className="w-9 h-9 rounded-full object-cover ring-2 ring-border" />
           ) : (
@@ -1112,7 +1111,6 @@ function WelcomeScreen({ userName, userInitials, avatarUrl }: {
             <span className="text-sm text-muted-foreground font-medium">Hi {firstName}</span>
           )}
         </div>
-        {/* Large greeting */}
         <h1
           className="text-3xl sm:text-4xl md:text-5xl font-bold font-heading text-foreground leading-tight"
           style={fadeIn(120)}
@@ -1121,9 +1119,9 @@ function WelcomeScreen({ userName, userInitials, avatarUrl }: {
         </h1>
       </div>
 
-      {/* ── SVG Scene — compact on mobile, full on desktop ── */}
+      {/* ── SVG Tour — fills remaining space on both mobile and desktop ── */}
       <div
-        className="w-full max-w-[310px] mx-auto md:mx-0 md:max-w-none md:flex-1 flex items-center justify-center"
+        className="w-full flex-1 min-h-0 md:max-w-[480px] flex items-center justify-center"
         style={fadeIn(260)}
       >
         <CzarObjectScene />
