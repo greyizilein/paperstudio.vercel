@@ -29,6 +29,7 @@ import { DashboardSidebar } from "@/components/dashboard/DashboardSidebar";
 import { CorrectionModal } from "@/components/czar/CorrectionModal";
 
 import { lazy, Suspense } from "react";
+import { GreetingAgents, AgentActivityDock, FloatingElements, WritingGlow } from "@/components/czar/CzarVisuals";
 const CommandInput = lazy(() => import("@/components/czar/CommandInput").then(m => ({ default: m.CommandInput })));
 
 // ── Types ──────────────────────────────────────────────────────────
@@ -552,11 +553,13 @@ export default function CzarPage() {
         </header>
 
         {/* Thread */}
-        <div className="flex-1 overflow-y-auto">
-          <div className="max-w-3xl mx-auto px-4 py-6 space-y-8">
+        <div className="flex-1 overflow-y-auto relative">
+          <WritingGlow visible={streaming || messages.length > 0} />
+          <div className="relative max-w-3xl mx-auto px-4 py-6 space-y-8">
             {messages.length === 0 && (
               <WelcomeScreen
                 mode={mode}
+                userName={userName}
                 onExample={(text) => sendMessage(text, [])}
                 onOpenCorrectionModal={() => setCorrectionModalOpen(true)}
               />
@@ -615,6 +618,8 @@ export default function CzarPage() {
           </div>
         </div>
       </div>
+
+      <AgentActivityDock agents={agents} visible={streaming} />
 
       <UpgradeModal open={showUpgrade} onClose={() => setShowUpgrade(false)} reason={upgradeReason} />
 
@@ -1149,7 +1154,7 @@ function CzarMessage({
   );
 }
 
-function WelcomeScreen({ mode, onExample, onOpenCorrectionModal }: { mode: CzarMode; onExample: (text: string) => void; onOpenCorrectionModal?: () => void }) {
+function WelcomeScreen({ mode, userName, onExample, onOpenCorrectionModal }: { mode: CzarMode; userName?: string; onExample: (text: string) => void; onOpenCorrectionModal?: () => void }) {
   const examples: Partial<Record<CzarMode, { text: string; label: string }[]>> = {
     chat: [
       { label: "Explain a concept", text: "Explain the difference between qualitative and quantitative research methods." },
@@ -1175,21 +1180,22 @@ function WelcomeScreen({ mode, onExample, onOpenCorrectionModal }: { mode: CzarM
 
   if (mode === "correct") {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-4 py-8">
-        <div className="w-12 h-12 rounded-2xl bg-amber-500/10 flex items-center justify-center mb-4">
+      <div className="relative flex flex-col items-center justify-center min-h-[60vh] text-center px-4 py-8 overflow-hidden">
+        <FloatingElements />
+        <div className="relative z-10 w-12 h-12 rounded-2xl bg-amber-500/10 flex items-center justify-center mb-4">
           <FileSearch className="w-5 h-5 text-amber-600 dark:text-amber-400" />
         </div>
-        <h2 className="text-xl font-bold text-foreground mb-1">Correct & Improve</h2>
-        <p className="text-sm text-muted-foreground mb-3 max-w-sm leading-relaxed">
+        <h2 className="relative z-10 text-xl font-bold text-foreground mb-1">Correct & Improve</h2>
+        <p className="relative z-10 text-sm text-muted-foreground mb-3 max-w-sm leading-relaxed">
           Upload a document or paste your text. CZAR identifies every correction — grammar, style, argument, register — as tracked changes. Accept or reject each one individually, then download the clean document.
         </p>
-        <div className="flex flex-col items-center gap-2 text-[11px] text-muted-foreground/60 mb-8">
+        <div className="relative z-10 flex flex-col items-center gap-2 text-[11px] text-muted-foreground/60 mb-8">
           <span>Grammar · Style · Structure · Argument · Register</span>
           <span>Color-coded · Accept/Reject per change · Clean download</span>
         </div>
         <button
           onClick={onOpenCorrectionModal}
-          className="px-6 py-3 rounded-xl bg-primary text-primary-foreground font-medium hover:bg-primary/90 transition-colors text-sm"
+          className="relative z-10 px-6 py-3 rounded-xl bg-primary text-primary-foreground font-medium hover:bg-primary/90 transition-colors text-sm"
         >
           Open Document
         </button>
@@ -1198,25 +1204,30 @@ function WelcomeScreen({ mode, onExample, onOpenCorrectionModal }: { mode: CzarM
   }
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-4 py-8">
-      <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center mb-4">
-        {modeIcon(mode)}
-      </div>
-      <h2 className="text-xl font-bold text-foreground mb-1">CZAR</h2>
-      <p className="text-sm text-muted-foreground mb-8 max-w-sm">
-        {MODE_DESCRIPTIONS[mode]}
-      </p>
-      <div className="w-full max-w-lg space-y-2">
-        {items.map((ex) => (
-          <button
-            key={ex.text}
-            onClick={() => onExample(ex.text)}
-            className="w-full text-left px-4 py-3 rounded-xl border border-border bg-secondary/30 hover:bg-secondary transition-colors text-sm text-foreground"
-          >
-            <span className="font-medium text-foreground/80 text-[12px] block mb-0.5">{ex.label}</span>
-            <span className="text-muted-foreground text-[12px] leading-snug line-clamp-2">{ex.text}</span>
-          </button>
-        ))}
+    <div className="relative flex flex-col items-center justify-center min-h-[60vh] text-center px-4 py-8 overflow-hidden">
+      <FloatingElements />
+      <div className="relative z-10 flex flex-col items-center w-full">
+        <GreetingAgents userName={userName} />
+
+        <div className="w-10 h-10 rounded-2xl bg-primary/10 flex items-center justify-center mb-3">
+          {modeIcon(mode)}
+        </div>
+        <h2 className="text-xl font-bold text-foreground mb-1">CZAR</h2>
+        <p className="text-sm text-muted-foreground mb-7 max-w-sm">
+          {MODE_DESCRIPTIONS[mode]}
+        </p>
+        <div className="w-full max-w-lg space-y-2">
+          {items.map((ex) => (
+            <button
+              key={ex.text}
+              onClick={() => onExample(ex.text)}
+              className="w-full text-left px-4 py-3 rounded-xl border border-border bg-secondary/30 hover:bg-secondary hover:border-primary/30 transition-colors text-sm text-foreground"
+            >
+              <span className="font-medium text-foreground/80 text-[12px] block mb-0.5">{ex.label}</span>
+              <span className="text-muted-foreground text-[12px] leading-snug line-clamp-2">{ex.text}</span>
+            </button>
+          ))}
+        </div>
       </div>
     </div>
   );
