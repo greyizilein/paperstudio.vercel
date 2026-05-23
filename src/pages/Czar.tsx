@@ -4,7 +4,7 @@ import {
   PanelLeftClose, PanelLeftOpen, Loader2, Square,
   Bot, AlertCircle, Search, PenLine, Cpu,
   ChevronDown, ChevronRight, LayoutPanelLeft, FileSearch, Clock, X,
-  BookOpen, Film, Scale, Download, Volume2, VolumeX, Edit3, Eye, FileText,
+  BookOpen, Film, Scale, Download, Volume2, VolumeX, Edit3, Eye, FileText, Sparkles,
 } from "lucide-react";
 import { PsThemeToggle } from "@/components/ps/PsThemeToggle";
 import ReactMarkdown from "react-markdown";
@@ -16,6 +16,7 @@ import {
   streamCzar, loadMessages,
   type CzarRequest, type CzarMode, type CzarHandlers,
   type CzarMetaEvent, type CzarAgentEvent, type CzarToolEvent,
+  type CzarClarificationEvent,
 } from "@/lib/czarStream";
 import { buildDocx, stripMarkdown, markdownComponents, chatMarkdownComponents } from "@/lib/czarDocUtils.tsx";
 import { computeParaDiff, type DiffParagraph } from "@/lib/diffUtils";
@@ -48,6 +49,8 @@ interface UIMessage {
   correctionApplied?: boolean;
   correctionDiff?: DiffParagraph[];
   correctionOriginalText?: string;
+  clarificationQuestions?: string[];
+  clarificationTitle?: string;
 }
 
 // ── Constants ──────────────────────────────────────────────────────
@@ -150,6 +153,8 @@ export default function CzarPage() {
   useEffect(() => { agentsRef.current = agents; }, [agents]);
 
   const [mode, setMode] = useState<CzarMode>("chat");
+  const [previousMode, setPreviousMode] = useState<CzarMode | null>(null);
+  const [modeTransition, setModeTransition] = useState<{ from: CzarMode; to: CzarMode } | null>(null);
   const [showModeMenu, setShowModeMenu] = useState(false);
   const modeButtonRef = useRef<HTMLButtonElement>(null);
   const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0 });
@@ -322,6 +327,19 @@ export default function CzarPage() {
               : m
           ));
         },
+        onClarification: (e: CzarClarificationEvent) => {
+          setMessages(prev => prev.map(m =>
+            m.id === assistantMsgId
+              ? { ...m, clarificationQuestions: e.questions, clarificationTitle: e.title }
+              : m
+          ));
+        },
+        onReplace: (e) => {
+          accText = e.content;
+          setMessages(prev => prev.map(m =>
+            m.id === assistantMsgId ? { ...m, content: e.content } : m
+          ));
+        },
         onDone: (e) => {
           const agentSnapshot = agentsRef.current.filter(a => a.name);
           setMessages(prev => prev.map(m =>
@@ -341,7 +359,16 @@ export default function CzarPage() {
         },
       };
 
-      await streamCzar({ conversation_id: convId, user_message: text, attachments, mode, settings: extraSettings }, handlers, ctrl.signal);
+      // Clear mode transition banner now that the message is being sent
+      setModeTransition(null);
+      await streamCzar({
+        conversation_id: convId,
+        user_message: text,
+        attachments,
+        mode,
+        previousMode: previousMode ?? undefined,
+        settings: extraSettings,
+      }, handlers, ctrl.signal);
     } catch (err: any) {
       if (err?.name !== "AbortError") {
         setMessages(prev => prev.map(m =>
@@ -475,6 +502,10 @@ export default function CzarPage() {
                   {(["chat", "write", "correct", "research", "plan"] as CzarMode[]).map(m => (
                     <button key={m}
                       onClick={() => {
+                        if (m !== mode) {
+                          setPreviousMode(mode);
+                          setModeTransition({ from: mode, to: m });
+                        }
                         setMode(m);
                         setShowModeMenu(false);
                         if (m === "correct") setCorrectionModalOpen(true);
@@ -523,6 +554,18 @@ export default function CzarPage() {
                 onOpenCorrectionModal={() => setCorrectionModalOpen(true)}
               />
             )}
+
+            {/* Mode transition banner */}
+            {modeTransition && messages.length > 0 && !streaming && (
+              <div className="flex items-center gap-3 px-4 py-2.5 rounded-xl border border-border bg-secondary/40 text-[12px] text-muted-foreground animate-in fade-in duration-200">
+                <span className="font-medium text-foreground">Switched to {modeLabel(modeTransition.to)}</span>
+                <span className="text-muted-foreground/50">·</span>
+                <span>Context from previous conversation is available. Type your {modeTransition.to === "research" || modeTransition.to === "write" ? "topic or task" : "message"} below.</span>
+                <button onClick={() => setModeTransition(null)} className="ml-auto text-muted-foreground/60 hover:text-foreground transition-colors">
+                  <X size={12} />
+                </button>
+              </div>
+            )}
             {messages.map(msg => (
               <CzarMessage
                 key={msg.id}
@@ -532,6 +575,7 @@ export default function CzarPage() {
                 onContentChange={handleMessageContentChange}
                 onSelectionAction={handleSelectionAction}
                 onDismissDiff={handleDismissDiff}
+                onClarificationAnswer={(answer) => sendMessage(answer, [])}
               />
             ))}
             <div ref={threadEndRef} />
@@ -577,14 +621,70 @@ export default function CzarPage() {
 
 // ── Sub-components ─────────────────────────────────────────────────
 
+function ClarificationCard({ questions, title, onAnswer }: {
+  questions: string[];
+  title?: string;
+  onAnswer: (answer: string) => void;
+}) {
+  const [answers, setAnswers] = useState<Record<number, string>>({});
+  const allAnswered = questions.every((_, i) => (answers[i] || "").trim().length > 0);
+
+  const handleSubmit = () => {
+    const combined = questions.map((q, i) => `${q}\n${answers[i] || ""}`).join("\n\n");
+    onAnswer(combined);
+  };
+
+  return (
+    <div className="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50/60 dark:bg-amber-950/20 p-4 space-y-3">
+      <div className="flex items-center gap-2">
+        <Sparkles size={13} className="text-amber-600 dark:text-amber-400 flex-shrink-0" />
+        <p className="text-[12px] font-bold text-amber-700 dark:text-amber-400">
+          A few details will help me write this better
+          {title ? ` — "${title}"` : ""}
+        </p>
+      </div>
+      {questions.map((q, i) => (
+        <div key={i} className="space-y-1">
+          <label className="block text-[11px] font-semibold text-foreground/80">{q}</label>
+          <input
+            type="text"
+            value={answers[i] || ""}
+            onChange={e => setAnswers(prev => ({ ...prev, [i]: e.target.value }))}
+            onKeyDown={e => { if (e.key === "Enter" && allAnswered) handleSubmit(); }}
+            className="w-full px-2.5 py-1.5 rounded-lg border border-border text-[12px] bg-background text-foreground outline-none focus:border-amber-400 dark:focus:border-amber-600 placeholder:text-muted-foreground/40"
+            placeholder="Your answer…"
+          />
+        </div>
+      ))}
+      <button
+        onClick={handleSubmit}
+        disabled={!allAnswered}
+        className="px-4 py-1.5 rounded-lg text-[12px] font-bold bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-40 transition-colors"
+      >
+        Continue →
+      </button>
+    </div>
+  );
+}
+
+const AGENT_ICONS: Record<string, string> = {
+  planner: "🏛",
+  architect: "🏛",
+  researcher: "🔬",
+  writer: "✍️",
+  editor: "📚",
+  critic: "⚖️",
+  revision: "🔄",
+  illustrator: "🎨",
+};
+
 function AgentStepsBlock({ agents, isLive }: { agents: LiveAgent[]; isLive: boolean }) {
   const named = agents.filter(a => a.name);
   const [open, setOpen] = useState(isLive);
 
-  // Auto-collapse when streaming ends
   useEffect(() => {
     if (!isLive) {
-      const t = setTimeout(() => setOpen(false), 800);
+      const t = setTimeout(() => setOpen(false), 2000);
       return () => clearTimeout(t);
     }
   }, [isLive]);
@@ -593,6 +693,7 @@ function AgentStepsBlock({ agents, isLive }: { agents: LiveAgent[]; isLive: bool
 
   const working = named.filter(a => a.status === "working");
   const allDone = named.every(a => a.status === "done" || a.status === "error");
+  const hasRevision = named.some(a => a.id === "revision");
 
   return (
     <div className="mb-4">
@@ -600,15 +701,12 @@ function AgentStepsBlock({ agents, isLive }: { agents: LiveAgent[]; isLive: bool
         onClick={() => setOpen(o => !o)}
         className="flex items-center gap-1.5 text-[12px] text-muted-foreground hover:text-foreground transition-colors group"
       >
-        {open
-          ? <ChevronDown size={12} className="transition-transform" />
-          : <ChevronRight size={12} className="transition-transform" />
-        }
+        {open ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
         <span className="font-medium">
           {allDone
-            ? `${named.length} step${named.length !== 1 ? "s" : ""}`
+            ? `${named.length} agent${named.length !== 1 ? "s" : ""}${hasRevision ? " · revised" : ""}`
             : working.length > 0
-            ? `Working — ${working[0].name}${working[0].action ? ` · ${working[0].action}` : ""}`
+            ? `${working[0].name}${working[0].action ? ` · ${working[0].action}` : ""}`
             : "Preparing…"
           }
         </span>
@@ -617,19 +715,28 @@ function AgentStepsBlock({ agents, isLive }: { agents: LiveAgent[]; isLive: bool
         )}
       </button>
       {open && (
-        <div className="mt-2 ml-3 border-l-2 border-border pl-3 space-y-2">
+        <div className="mt-2 ml-3 border-l-2 border-border pl-3 space-y-1.5">
           {named.map(a => (
-            <div key={a.id} className="flex items-center gap-2 min-w-0">
-              <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
+            <div key={a.id} className="flex items-start gap-2 min-w-0">
+              <span className={`mt-0.5 w-1.5 h-1.5 rounded-full flex-shrink-0 ${
                 a.status === "done" ? "bg-emerald-500"
                 : a.status === "working" ? "bg-blue-500 animate-pulse"
                 : a.status === "error" ? "bg-destructive"
+                : a.status === "clarification" ? "bg-amber-500 animate-pulse"
                 : "bg-muted-foreground/30"
               }`} />
-              <span className="text-[12px] font-medium text-foreground/80 flex-shrink-0">{a.name}</span>
-              {a.action && (
-                <span className="text-[11px] text-muted-foreground/60 truncate">{a.action}</span>
-              )}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px]">{AGENT_ICONS[a.id.toLowerCase()] ?? "·"}</span>
+                  <span className="text-[12px] font-medium text-foreground/80">{a.name}</span>
+                  {a.action && (
+                    <span className="text-[11px] text-muted-foreground/60 truncate">{a.action}</span>
+                  )}
+                </div>
+                {a.detail && a.status === "done" && (
+                  <p className="text-[10.5px] text-muted-foreground/50 mt-0.5 leading-snug">{a.detail}</p>
+                )}
+              </div>
             </div>
           ))}
         </div>
@@ -867,7 +974,7 @@ function InlineDocMessage({ msg, onContentChange, onSelectionAction, onDismissDi
 
 function CzarMessage({
   msg, currentAgents, userInitials,
-  onContentChange, onSelectionAction, onDismissDiff,
+  onContentChange, onSelectionAction, onDismissDiff, onClarificationAnswer,
 }: {
   msg: UIMessage;
   currentAgents: LiveAgent[];
@@ -875,6 +982,7 @@ function CzarMessage({
   onContentChange: (id: string, content: string) => void;
   onSelectionAction: (action: string, text: string) => void;
   onDismissDiff: (id: string) => void;
+  onClarificationAnswer: (answer: string) => void;
 }) {
   const isDocMsg = DOC_MODES.includes(msg.mode ?? "");
 
@@ -905,6 +1013,15 @@ function CzarMessage({
         {/* Agent steps */}
         {agentsToShow.filter(a => a.name).length > 0 && (
           <AgentStepsBlock agents={agentsToShow} isLive={!!msg.streaming} />
+        )}
+
+        {/* Clarification card — shown when planner needs more info */}
+        {msg.clarificationQuestions && msg.clarificationQuestions.length > 0 && (
+          <ClarificationCard
+            questions={msg.clarificationQuestions}
+            title={msg.clarificationTitle}
+            onAnswer={onClarificationAnswer}
+          />
         )}
 
         {/* Mode badge */}

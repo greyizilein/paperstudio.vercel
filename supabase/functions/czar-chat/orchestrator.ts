@@ -1,5 +1,5 @@
 // orchestrator.ts — Multi-agent pipeline for CZAR write and research modes
-// Planner → Researcher → Writer → Critic → Illustrator, with verified citations.
+// Planner → Researcher → Writer → Critic → Revision → Illustrator, with verified citations.
 
 import {
   discoverSources,
@@ -49,6 +49,36 @@ type StreamQwenFn = (
 ) => Promise<string>;
 
 // ---------------------------------------------------------------------------
+// AgentWorkspace — shared state threaded through all agents
+// ---------------------------------------------------------------------------
+
+interface AgentWorkspace {
+  userMessage: string;
+  mode: CzarMode;
+  fileContext: string;
+
+  // Planner
+  plan: PlannerOutput | null;
+  needsClarification: boolean;
+  clarificationQuestions: string[];
+
+  // Researcher
+  sources: VerifiedSource[];
+  sectionSources: Record<string, VerifiedSource[]>; // section heading → sources that best match it
+
+  // Writer
+  draft: string;
+
+  // Critic
+  criticQuality: "high" | "medium" | "low";
+  criticIssues: Array<{ issue: string; severity: "low" | "high"; target?: string }>;
+
+  // Revision
+  revised: boolean;
+  finalDraft: string;
+}
+
+// ---------------------------------------------------------------------------
 // Planner agent — produces a structured execution plan via Gemini Flash
 // ---------------------------------------------------------------------------
 
@@ -58,6 +88,8 @@ interface PlannerOutput {
   discipline: string;
   citationStyle: string;
   mainThesis: string;
+  briefQuality: "clear" | "needs_clarification";
+  clarificationQuestions: string[];
   sections: Array<{
     heading: string;
     words: number;
@@ -161,6 +193,8 @@ Schema:
   "discipline": "sociology",
   "citationStyle": "Harvard",
   "mainThesis": "One precise thesis sentence",
+  "briefQuality": "clear",
+  "clarificationQuestions": [],
   "sections": [
     {
       "heading": "Introduction",
@@ -171,7 +205,11 @@ Schema:
   ]
 }
 
-Rules:
+Brief quality rules:
+- If the brief is fewer than 8 words, highly ambiguous, or lacks any discipline or topic information, set "briefQuality": "needs_clarification" and populate "clarificationQuestions" with 2–3 concise questions such as "What discipline or subject area is this for?", "How long should the document be?", "Are there specific sources or arguments to include?".
+- Otherwise set "briefQuality": "clear" and "clarificationQuestions": [].
+
+Other rules:
 - citationStyle: one of Harvard, APA, Chicago, MLA, OSCOLA, Vancouver, IEEE
 - Each section needs 1–3 highly specific academic search queries (not generic)
 - totalWords: use stated word count from brief or default to 2500
@@ -183,6 +221,7 @@ async function runPlannerAgent(
   fileContext: string,
   write: WriteFunction,
   signal: AbortSignal,
+  workspace: AgentWorkspace,
 ): Promise<PlannerOutput | null> {
   write("agent", {
     id: "planner",
@@ -210,6 +249,27 @@ async function runPlannerAgent(
       return null;
     }
 
+    // Normalise fields that the model may omit
+    if (!plan.briefQuality) plan.briefQuality = "clear";
+    if (!Array.isArray(plan.clarificationQuestions)) plan.clarificationQuestions = [];
+
+    // Write plan to workspace
+    workspace.plan = plan;
+
+    if (plan.briefQuality === "needs_clarification") {
+      workspace.needsClarification = true;
+      workspace.clarificationQuestions = plan.clarificationQuestions;
+
+      // Emit clarification event — informational; pipeline still continues
+      write("clarification", {
+        questions: plan.clarificationQuestions,
+        title: plan.title,
+      });
+    } else {
+      workspace.needsClarification = false;
+      workspace.clarificationQuestions = [];
+    }
+
     write("agent", {
       id: "planner",
       name: "Architect",
@@ -230,6 +290,76 @@ async function runPlannerAgent(
 }
 
 // ---------------------------------------------------------------------------
+// Section source mapping — word-overlap scoring, no API call
+// ---------------------------------------------------------------------------
+
+function tokenise(text: string): Set<string> {
+  return new Set(
+    text
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, " ")
+      .split(/\s+/)
+      .filter((w) => w.length > 3),
+  );
+}
+
+function intersectionCount(a: Set<string>, b: Set<string>): number {
+  let count = 0;
+  for (const tok of a) {
+    if (b.has(tok)) count++;
+  }
+  return count;
+}
+
+function assignSourcesToSections(
+  sources: VerifiedSource[],
+  plan: PlannerOutput,
+): Record<string, VerifiedSource[]> {
+  const result: Record<string, VerifiedSource[]> = {};
+
+  // Build a token set for each section from keyPoints + searchQueries + heading
+  const sectionTokens: Array<{ heading: string; tokens: Set<string> }> = plan.sections.map((sec) => {
+    const text = [
+      sec.heading,
+      ...(sec.keyPoints ?? []),
+      ...(sec.searchQueries ?? []),
+    ].join(" ");
+    return { heading: sec.heading, tokens: tokenise(text) };
+  });
+
+  for (const source of sources) {
+    const sourceText = [source.title, source.snippet ?? ""].join(" ");
+    const sourceToks = tokenise(sourceText);
+
+    // Score this source against every section
+    let bestScore = 0;
+    const matchedSections: string[] = [];
+
+    for (const { heading, tokens } of sectionTokens) {
+      const score = intersectionCount(sourceToks, tokens);
+      if (score > bestScore) bestScore = score;
+    }
+
+    // Assign to all sections whose score is at least 50% of the best score
+    // (sources that span multiple sections get assigned to all of them)
+    const threshold = Math.max(1, bestScore * 0.5);
+    for (const { heading, tokens } of sectionTokens) {
+      const score = intersectionCount(sourceToks, tokens);
+      if (score >= threshold) {
+        matchedSections.push(heading);
+      }
+    }
+
+    for (const heading of matchedSections) {
+      if (!result[heading]) result[heading] = [];
+      result[heading].push(source);
+    }
+  }
+
+  return result;
+}
+
+// ---------------------------------------------------------------------------
 // Researcher agent — real search via Tavily + Serper + CrossRef
 // ---------------------------------------------------------------------------
 
@@ -237,6 +367,7 @@ async function runResearcherAgent(
   plan: PlannerOutput,
   write: WriteFunction,
   signal: AbortSignal,
+  workspace: AgentWorkspace,
 ): Promise<VerifiedSource[]> {
   const tavilyKey = Deno.env.get("TAVILY_API_KEY") ?? null;
   const serperKey = Deno.env.get("SERPER_API_KEY") ?? null;
@@ -272,14 +403,20 @@ async function runResearcherAgent(
       signal,
     );
 
+    // Build section → source mapping
+    const sectionSources = assignSourcesToSections(sources, plan);
+    workspace.sources = sources;
+    workspace.sectionSources = sectionSources;
+
     const verifiedCount = sources.filter((s) => s.confidence === "verified").length;
     const probableCount = sources.filter((s) => s.confidence === "probable").length;
+    const sectionsCovered = Object.keys(sectionSources).length;
 
     write("agent", {
       id: "researcher",
       name: "Researcher",
       status: "done",
-      action: `${sources.length} sources · ${verifiedCount} DOI-verified · ${probableCount} probable`,
+      action: `${sources.length} sources · ${verifiedCount} DOI-verified · ${probableCount} probable · ${sectionsCovered} sections covered`,
     });
 
     return sources;
@@ -303,6 +440,7 @@ function buildAugmentedUserMessage(
   fileContext: string,
   plan: PlannerOutput | null,
   sources: VerifiedSource[],
+  workspace: AgentWorkspace,
 ): string {
   let msg = originalMessage;
 
@@ -325,13 +463,46 @@ function buildAugmentedUserMessage(
   }
 
   if (sources.length > 0) {
-    msg += `\n\n---\n## VERIFIED SOURCES\n`;
+    msg += `\n\n---\n## VERIFIED SOURCES (by section)\n`;
     msg += `These sources have been verified as real. Use them. Cite using ${plan?.citationStyle ?? "Harvard"} format.\n`;
     msg += `For each citation, use the EXACT author surnames and year shown below.\n`;
     msg += `Do NOT fabricate sources. Only cite from this list.\n\n`;
-    for (const s of sources) {
-      msg += formatSourceForWriter(s) + "\n";
+
+    const sectionSources = workspace.sectionSources;
+    const hasSectionMapping = Object.keys(sectionSources).length > 0;
+
+    if (hasSectionMapping) {
+      // Track which sources have been placed under a section heading
+      const placedSourceUrls = new Set<string>();
+
+      for (const section of (plan?.sections ?? [])) {
+        const secSources = sectionSources[section.heading];
+        if (secSources && secSources.length > 0) {
+          msg += `### ${section.heading}\n`;
+          for (const s of secSources) {
+            msg += formatSourceForWriter(s) + "\n";
+            placedSourceUrls.add(s.url ?? s.title);
+          }
+          msg += "\n";
+        }
+      }
+
+      // Sources that didn't match any section strongly enough
+      const ungrouped = sources.filter((s) => !placedSourceUrls.has(s.url ?? s.title));
+      if (ungrouped.length > 0) {
+        msg += `### (Ungrouped — general use)\n`;
+        for (const s of ungrouped) {
+          msg += formatSourceForWriter(s) + "\n";
+        }
+        msg += "\n";
+      }
+    } else {
+      // Fallback: flat list
+      for (const s of sources) {
+        msg += formatSourceForWriter(s) + "\n";
+      }
     }
+
     msg += `\n**Every evidence-based claim must cite one or more of the above sources.**\n`;
     msg += `---\n`;
   } else {
@@ -428,7 +599,8 @@ async function runCriticAgent(
   userMessage: string,
   write: WriteFunction,
   signal: AbortSignal,
-): Promise<{ quality: string; issueCount: number }> {
+  workspace: AgentWorkspace,
+): Promise<void> {
   write("agent", {
     id: "critic",
     name: "Critic",
@@ -438,7 +610,7 @@ async function runCriticAgent(
 
   const system = `You are CZAR Critic. Assess argument quality only — banned phrase stripping is handled separately.
 Review for: (1) evidence-based claims without citations, (2) logical gaps or circular reasoning, (3) structural problems, (4) register inconsistency.
-Return ONLY valid JSON: { "quality": "high|medium|low", "issues": [{ "issue": "concise description", "severity": "low|high" }] }
+Return ONLY valid JSON: { "quality": "high|medium|low", "issues": [{ "issue": "concise description", "severity": "low|high", "target": "verbatim phrase from draft (max 120 chars, optional)" }] }
 Maximum 4 issues. If argument is solid, return { "quality": "high", "issues": [] }.`;
 
   const userMsg = `Brief: ${userMessage.slice(0, 250)}\n\nDraft (first 3500 chars):\n${draft.slice(0, 3500)}`;
@@ -452,24 +624,97 @@ Maximum 4 issues. If argument is solid, return { "quality": "high", "issues": []
 
     const match = raw.match(/\{[\s\S]*\}/);
     if (!match) {
+      workspace.criticQuality = "medium";
+      workspace.criticIssues = [];
       write("agent", { id: "critic", name: "Critic", status: "done", action: "Review complete" });
-      return { quality: "medium", issueCount: 0 };
+      return;
     }
 
     const result = JSON.parse(match[0]);
-    const highCount = (result.issues ?? []).filter((i: any) => i.severity === "high").length;
+    const issues: Array<{ issue: string; severity: "low" | "high"; target?: string }> =
+      (result.issues ?? []).map((i: any) => ({
+        issue: i.issue ?? "",
+        severity: i.severity === "high" ? "high" : "low",
+        target: typeof i.target === "string" && i.target.length > 0
+          ? i.target.slice(0, 120)
+          : undefined,
+      }));
+
+    const quality: "high" | "medium" | "low" =
+      result.quality === "high" ? "high" : result.quality === "low" ? "low" : "medium";
+
+    workspace.criticQuality = quality;
+    workspace.criticIssues = issues;
+
+    const highCount = issues.filter((i) => i.severity === "high").length;
     const action =
-      result.quality === "high"
+      quality === "high"
         ? "Argument quality: strong"
         : highCount > 0
-        ? `${highCount} quality issue${highCount > 1 ? "s" : ""} flagged`
+        ? `${highCount} high-priority issue${highCount > 1 ? "s" : ""}`
         : "Minor issues only";
 
     write("agent", { id: "critic", name: "Critic", status: "done", action });
-    return { quality: result.quality ?? "medium", issueCount: highCount };
   } catch {
+    workspace.criticQuality = "medium";
+    workspace.criticIssues = [];
     write("agent", { id: "critic", name: "Critic", status: "done", action: "Review skipped" });
-    return { quality: "medium", issueCount: 0 };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Revision agent — surgical targeted fixes based on critic issues
+// ---------------------------------------------------------------------------
+
+async function runRevisionAgent(
+  write: WriteFunction,
+  signal: AbortSignal,
+  workspace: AgentWorkspace,
+): Promise<void> {
+  const highIssues = workspace.criticIssues.filter((i) => i.severity === "high");
+
+  write("agent", {
+    id: "revision",
+    name: "Revision",
+    status: "working",
+    action: `Fixing ${highIssues.length} high-priority issue${highIssues.length > 1 ? "s" : ""}`,
+  });
+
+  const system = `You are a surgical document editor. Apply ONLY the listed targeted corrections to the document. Change only the flagged text — do not rewrite, expand, or alter anything else. Return the COMPLETE corrected document.`;
+
+  const issueList = highIssues
+    .map((i) => `• ${i.issue}${i.target ? ` [in: "${i.target}"]` : ""}`)
+    .join("\n");
+
+  const userMsg = `Issues to fix:\n${issueList}\n\n---\nDOCUMENT:\n${workspace.draft.slice(0, 12000)}`;
+
+  try {
+    const revisedText = await callGeminiSync(system, userMsg, signal, MODEL_PLANNER);
+
+    if (revisedText && revisedText.length > 100) {
+      // Emit replace event — frontend replaces the accumulated document content
+      write("replace", { content: revisedText });
+
+      workspace.revised = true;
+      workspace.finalDraft = revisedText;
+
+      write("agent", {
+        id: "revision",
+        name: "Revision",
+        status: "done",
+        action: `Applied ${highIssues.length} fix${highIssues.length > 1 ? "es" : ""}`,
+      });
+    } else {
+      // Revision returned empty or too short — skip silently
+      write("agent", {
+        id: "revision",
+        name: "Revision",
+        status: "done",
+        action: "No changes applied",
+      });
+    }
+  } catch {
+    // Revision failed — skip silently, original draft remains
   }
 }
 
@@ -653,19 +898,39 @@ export async function runOrchestrator(opts: OrchestratorOptions): Promise<string
     userId,
   } = opts;
 
+  // ── Initialise shared workspace ──────────────────────────────────────────
+  const workspace: AgentWorkspace = {
+    userMessage,
+    mode,
+    fileContext,
+    plan: null,
+    needsClarification: false,
+    clarificationQuestions: [],
+    sources: [],
+    sectionSources: {},
+    draft: "",
+    criticQuality: "medium",
+    criticIssues: [],
+    revised: false,
+    finalDraft: "",
+  };
+
   // ── Phase 1: Planner ─────────────────────────────────────────────────────
-  const plan = await runPlannerAgent(userMessage, fileContext, write, signal);
+  const plan = await runPlannerAgent(userMessage, fileContext, write, signal, workspace);
   if (signal.aborted) return "";
 
-  // ── Phase 2: Researcher ──────────────────────────────────────────────────
-  let sources: VerifiedSource[] = [];
+  // Clarification is informational — pipeline always continues regardless of
+  // workspace.needsClarification; the frontend decides what to show the user.
 
+  // ── Phase 2: Researcher ──────────────────────────────────────────────────
   const fallbackPlan: PlannerOutput = {
     title: userMessage.slice(0, 80),
     totalWords: 2500,
     discipline: "general",
     citationStyle: "Harvard",
     mainThesis: userMessage.slice(0, 100),
+    briefQuality: "clear",
+    clarificationQuestions: [],
     sections: [{
       heading: "Main",
       words: 2500,
@@ -674,7 +939,8 @@ export async function runOrchestrator(opts: OrchestratorOptions): Promise<string
     }],
   };
 
-  sources = await runResearcherAgent(plan ?? fallbackPlan, write, signal);
+  const effectivePlan = plan ?? fallbackPlan;
+  const sources = await runResearcherAgent(effectivePlan, write, signal, workspace);
   if (signal.aborted) return "";
 
   // ── Phase 3: Writer ──────────────────────────────────────────────────────
@@ -690,6 +956,7 @@ export async function runOrchestrator(opts: OrchestratorOptions): Promise<string
     fileContext,
     plan,
     sources,
+    workspace,
   );
 
   // For orchestrated document tasks (write/research/lit-review/legal) the
@@ -745,6 +1012,9 @@ export async function runOrchestrator(opts: OrchestratorOptions): Promise<string
     action: `${wordCount} words generated`,
   });
 
+  // Store draft in workspace so later agents can reference it
+  workspace.draft = fullResponse;
+
   // ── Phase 4: References ──────────────────────────────────────────────────
   if (sources.length > 0 && !fullResponse.includes("## References") && !signal.aborted) {
     write("agent", { id: "editor", name: "Editor", status: "starting", action: "Compiling references" });
@@ -753,6 +1023,7 @@ export async function runOrchestrator(opts: OrchestratorOptions): Promise<string
     if (refsSection) {
       write("delta", { text: refsSection });
       fullResponse += refsSection;
+      workspace.draft = fullResponse;
     }
 
     write("agent", { id: "editor", name: "Editor", status: "done", action: "References compiled with live links" });
@@ -760,18 +1031,38 @@ export async function runOrchestrator(opts: OrchestratorOptions): Promise<string
 
   // ── Phase 5: Critic — quality review ────────────────────────────────────
   if (!signal.aborted && fullResponse.length > 200) {
-    await runCriticAgent(fullResponse, userMessage, write, signal);
+    await runCriticAgent(fullResponse, userMessage, write, signal, workspace);
+  }
+
+  // ── Phase 5b: Revision — fix high-priority critic issues ─────────────────
+  if (
+    !signal.aborted &&
+    workspace.criticQuality !== "high" &&
+    workspace.criticIssues.some((i) => i.severity === "high")
+  ) {
+    await runRevisionAgent(write, signal, workspace);
+    // If revision succeeded, update fullResponse so Illustrator gets the revised text
+    if (workspace.revised && workspace.finalDraft) {
+      fullResponse = workspace.finalDraft;
+    }
   }
 
   // ── Phase 6: Illustrator — figure generation ─────────────────────────────
   if (!signal.aborted && (mode === "write" || mode === "literature_review") && fullResponse.length > 500) {
     const discipline = plan?.discipline ?? "general";
     fullResponse = await runIllustratorAgent(fullResponse, discipline, write, svc, userId, signal);
+    // Keep workspace in sync if illustrator appended figures
+    if (!workspace.revised) {
+      workspace.draft = fullResponse;
+    } else {
+      workspace.finalDraft = fullResponse;
+    }
   }
 
   // ── Phase 7: Banned-phrase strip — silent post-processing ───────────────
   // Cleans the saved version even if the streamed version had phrases.
-  const cleanedResponse = stripBannedPhrases(fullResponse);
+  const activeDraft = workspace.finalDraft || workspace.draft;
+  const cleanedResponse = stripBannedPhrases(activeDraft || fullResponse);
 
   return cleanedResponse;
 }

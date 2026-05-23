@@ -31,7 +31,9 @@ export type CzarEventType =
   | "done"
   | "ping"
   | "correction_summary"
-  | "correction_change";
+  | "correction_change"
+  | "clarification"
+  | "replace";
 
 export interface CzarMetaEvent {
   conversation_id: string;
@@ -43,9 +45,18 @@ export interface CzarMetaEvent {
 export interface CzarAgentEvent {
   id: string;
   name: string;
-  status: "starting" | "working" | "done" | "error";
+  status: "starting" | "working" | "done" | "error" | "clarification";
   action?: string;
   detail?: string;
+}
+
+export interface CzarClarificationEvent {
+  questions: string[];
+  title?: string;
+}
+
+export interface CzarReplaceEvent {
+  content: string;
 }
 
 export interface CzarDeltaEvent {
@@ -116,6 +127,8 @@ export interface CzarHandlers {
   onDone?: (e: CzarDoneEvent) => void;
   onCorrectionSummary?: (e: CorrectionSummaryEvent) => void;
   onCorrectionChange?: (e: CorrectionChangeEvent) => void;
+  onClarification?: (e: CzarClarificationEvent) => void;
+  onReplace?: (e: CzarReplaceEvent) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -129,6 +142,7 @@ export interface CzarRequest {
   user_message: string;
   attachments?: { storage_path: string; filename: string; size: number; mime: string }[];
   mode?: CzarMode;
+  previousMode?: CzarMode;
   settings?: Record<string, any>;
 }
 
@@ -174,6 +188,12 @@ function dispatch(eventType: string, payload: any, handlers: CzarHandlers): void
       break;
     case "correction_change":
       handlers.onCorrectionChange?.(payload as CorrectionChangeEvent);
+      break;
+    case "clarification":
+      handlers.onClarification?.(payload as CzarClarificationEvent);
+      break;
+    case "replace":
+      handlers.onReplace?.(payload as CzarReplaceEvent);
       break;
   }
 }
