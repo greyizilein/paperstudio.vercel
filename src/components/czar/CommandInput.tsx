@@ -232,8 +232,8 @@ export function CommandInput({
           type="button"
           onClick={openFilePicker}
           className={cn(
-            "flex items-center justify-center gap-2 py-1.5 text-xs text-muted-foreground/50 hover:text-muted-foreground transition-colors border-b border-dashed border-border/50 mx-3 mt-2",
-            "hover:border-border"
+            "flex items-center justify-center gap-2 py-1.5 text-xs text-muted-foreground/50 hover:text-muted-foreground transition-colors mx-3 mt-2",
+            ""
           )}
           aria-label="Attach files"
         >

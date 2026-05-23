@@ -29,7 +29,7 @@ import { DashboardSidebar } from "@/components/dashboard/DashboardSidebar";
 import { CorrectionModal } from "@/components/czar/CorrectionModal";
 
 import { lazy, Suspense } from "react";
-import { GreetingAgents, AgentActivityDock, FloatingElements, WritingGlow } from "@/components/czar/CzarVisuals";
+import { TeamScene, GreetingLine, AgentActivityDock, FloatingElements, WritingGlow } from "@/components/czar/CzarVisuals";
 const CommandInput = lazy(() => import("@/components/czar/CommandInput").then(m => ({ default: m.CommandInput })));
 
 // ── Types ──────────────────────────────────────────────────────────
@@ -560,7 +560,6 @@ export default function CzarPage() {
               <WelcomeScreen
                 mode={mode}
                 userName={userName}
-                onExample={(text) => sendMessage(text, [])}
                 onOpenCorrectionModal={() => setCorrectionModalOpen(true)}
               />
             )}
@@ -1154,80 +1153,21 @@ function CzarMessage({
   );
 }
 
-function WelcomeScreen({ mode, userName, onExample, onOpenCorrectionModal }: { mode: CzarMode; userName?: string; onExample: (text: string) => void; onOpenCorrectionModal?: () => void }) {
-  const examples: Partial<Record<CzarMode, { text: string; label: string }[]>> = {
-    chat: [
-      { label: "Explain a concept", text: "Explain the difference between qualitative and quantitative research methods." },
-      { label: "Quick question", text: "What's the Harvard referencing format for a journal article?" },
-      { label: "Brainstorm", text: "What are some angles I could take for an essay on climate change policy?" },
-    ],
-    write: [
-      { label: "Academic essay", text: "Write a 2,000-word Level 7 essay on transformational leadership in NHS trusts, Harvard references." },
-      { label: "Literature review", text: "Write a systematic literature review on the effectiveness of mindfulness-based stress reduction in the workplace." },
-      { label: "Legal memo", text: "Write a legal memo applying IRAC to whether an employer can monitor employee emails under UK law." },
-    ],
-    research: [
-      { label: "Synthesis", text: "Research and synthesise current academic literature on AI bias in hiring algorithms." },
-      { label: "Topic overview", text: "Find and summarise key academic sources on the digital divide in higher education." },
-    ],
-    correct: [
-      { label: "Improve draft", text: "Here's my draft introduction — improve the academic tone and citation integration:" },
-      { label: "Fix structure", text: "Review this paragraph for argument coherence and suggest improvements:" },
-    ],
-  };
-
-  const items = examples[mode] ?? examples.chat!;
-
-  if (mode === "correct") {
-    return (
-      <div className="relative flex flex-col items-center justify-center min-h-[60vh] text-center px-4 py-8 overflow-hidden">
-        <FloatingElements />
-        <div className="relative z-10 w-12 h-12 rounded-2xl bg-amber-500/10 flex items-center justify-center mb-4">
-          <FileSearch className="w-5 h-5 text-amber-600 dark:text-amber-400" />
-        </div>
-        <h2 className="relative z-10 text-xl font-bold text-foreground mb-1">Correct & Improve</h2>
-        <p className="relative z-10 text-sm text-muted-foreground mb-3 max-w-sm leading-relaxed">
-          Upload a document or paste your text. CZAR identifies every correction — grammar, style, argument, register — as tracked changes. Accept or reject each one individually, then download the clean document.
-        </p>
-        <div className="relative z-10 flex flex-col items-center gap-2 text-[11px] text-muted-foreground/60 mb-8">
-          <span>Grammar · Style · Structure · Argument · Register</span>
-          <span>Color-coded · Accept/Reject per change · Clean download</span>
-        </div>
-        <button
-          onClick={onOpenCorrectionModal}
-          className="relative z-10 px-6 py-3 rounded-xl bg-primary text-primary-foreground font-medium hover:bg-primary/90 transition-colors text-sm"
-        >
-          Open Document
-        </button>
-      </div>
-    );
-  }
-
+function WelcomeScreen({ mode, userName, onOpenCorrectionModal }: { mode: CzarMode; userName?: string; onExample?: (text: string) => void; onOpenCorrectionModal?: () => void }) {
   return (
-    <div className="relative flex flex-col items-center justify-center min-h-[60vh] text-center px-4 py-8 overflow-hidden">
+    <div className="relative flex flex-col items-center justify-center min-h-[60vh] text-center px-2 py-6 overflow-hidden">
       <FloatingElements />
       <div className="relative z-10 flex flex-col items-center w-full">
-        <GreetingAgents userName={userName} />
-
-        <div className="w-10 h-10 rounded-2xl bg-primary/10 flex items-center justify-center mb-3">
-          {modeIcon(mode)}
-        </div>
-        <h2 className="text-xl font-bold text-foreground mb-1">CZAR</h2>
-        <p className="text-sm text-muted-foreground mb-7 max-w-sm">
-          {MODE_DESCRIPTIONS[mode]}
-        </p>
-        <div className="w-full max-w-lg space-y-2">
-          {items.map((ex) => (
-            <button
-              key={ex.text}
-              onClick={() => onExample(ex.text)}
-              className="w-full text-left px-4 py-3 rounded-xl border border-border bg-secondary/30 hover:bg-secondary hover:border-primary/30 transition-colors text-sm text-foreground"
-            >
-              <span className="font-medium text-foreground/80 text-[12px] block mb-0.5">{ex.label}</span>
-              <span className="text-muted-foreground text-[12px] leading-snug line-clamp-2">{ex.text}</span>
-            </button>
-          ))}
-        </div>
+        <GreetingLine userName={userName} />
+        <TeamScene mode={mode} />
+        {mode === "correct" && (
+          <button
+            onClick={onOpenCorrectionModal}
+            className="mt-6 px-6 py-3 rounded-xl bg-primary text-primary-foreground font-medium hover:bg-primary/90 transition-colors text-sm"
+          >
+            Open Document
+          </button>
+        )}
       </div>
     </div>
   );
