@@ -19,68 +19,98 @@ const getSpeechRecognitionCtor = (): (new () => AnySpeechRecognition) | null => 
   return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null;
 };
 
+// How long of silence (ms) before auto-stopping after the user pauses
+const SILENCE_TIMEOUT_MS = 2500;
+
 export function VoiceInput({ onTranscript, onInterim, disabled = false }: VoiceInputProps) {
   const [isRecording, setIsRecording] = useState(false);
   const [isSupported] = useState(() => getSpeechRecognitionCtor() !== null);
   const [showTooltip, setShowTooltip] = useState(false);
   const recognitionRef = useRef<AnySpeechRecognition>(null);
+  const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const accTextRef = useRef("");  // accumulated final transcript across continuous segments
 
-  const stopRecognition = useCallback(() => {
+  const clearSilenceTimer = useCallback(() => {
+    if (silenceTimerRef.current) {
+      clearTimeout(silenceTimerRef.current);
+      silenceTimerRef.current = null;
+    }
+  }, []);
+
+  const stopRecognition = useCallback((emitTranscript = false) => {
+    clearSilenceTimer();
     if (recognitionRef.current) {
-      try {
-        recognitionRef.current.stop();
-      } catch {
-        // ignore errors on stop
-      }
+      try { recognitionRef.current.stop(); } catch { /* ignore */ }
       recognitionRef.current = null;
     }
+    if (emitTranscript && accTextRef.current.trim()) {
+      onTranscript(accTextRef.current.trim());
+    }
+    accTextRef.current = "";
     setIsRecording(false);
-  }, []);
+    if (onInterim) onInterim("");
+  }, [clearSilenceTimer, onTranscript, onInterim]);
 
   const startRecognition = useCallback(() => {
     const SpeechRecognitionCtor = getSpeechRecognitionCtor();
     if (!SpeechRecognitionCtor) return;
 
+    accTextRef.current = "";
     const recognition = new SpeechRecognitionCtor();
-    recognition.continuous = false;
+    recognition.continuous = true;   // keep listening across natural pauses
     recognition.interimResults = true;
     recognition.lang = "en-US";
 
-    recognition.onstart = () => {
-      setIsRecording(true);
-    };
+    recognition.onstart = () => { setIsRecording(true); };
 
     recognition.onresult = (event: AnySpeechRecognition) => {
       let interimText = "";
-      let finalText = "";
+      let newFinal = "";
 
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const result = event.results[i];
         if (result.isFinal) {
-          finalText += result[0].transcript;
+          newFinal += result[0].transcript;
         } else {
           interimText += result[0].transcript;
         }
       }
 
-      if (interimText && onInterim) {
-        onInterim(interimText);
+      if (newFinal) {
+        accTextRef.current += (accTextRef.current ? " " : "") + newFinal.trim();
       }
 
-      if (finalText) {
-        onTranscript(finalText);
-        stopRecognition();
+      // Show everything so far (confirmed + live interim) as the preview
+      if (onInterim) {
+        const preview = accTextRef.current + (interimText ? (accTextRef.current ? " " : "") + interimText : "");
+        onInterim(preview);
       }
+
+      // Reset silence timer on every speech event
+      clearSilenceTimer();
+      silenceTimerRef.current = setTimeout(() => {
+        stopRecognition(true);
+      }, SILENCE_TIMEOUT_MS);
     };
 
     recognition.onerror = (event: AnySpeechRecognition) => {
+      // "no-speech" is not a real error — just no input detected yet; keep going
+      if (event.error === "no-speech") return;
       console.error("[VoiceInput] Speech recognition error:", event.error);
-      stopRecognition();
+      stopRecognition(false);
     };
 
     recognition.onend = () => {
+      // onend fires when recognition stops (manually or browser auto-stop)
+      // If we still have accumulated text and it wasn't emitted yet, emit it
+      if (accTextRef.current.trim()) {
+        onTranscript(accTextRef.current.trim());
+        accTextRef.current = "";
+      }
+      clearSilenceTimer();
       setIsRecording(false);
       recognitionRef.current = null;
+      if (onInterim) onInterim("");
     };
 
     recognitionRef.current = recognition;
@@ -88,14 +118,14 @@ export function VoiceInput({ onTranscript, onInterim, disabled = false }: VoiceI
       recognition.start();
     } catch (err) {
       console.error("[VoiceInput] Failed to start recognition:", err);
-      stopRecognition();
+      stopRecognition(false);
     }
-  }, [onTranscript, onInterim, stopRecognition]);
+  }, [onTranscript, onInterim, clearSilenceTimer, stopRecognition]);
 
   const handleClick = useCallback(() => {
     if (disabled) return;
     if (isRecording) {
-      stopRecognition();
+      stopRecognition(true);  // emit whatever was accumulated when user manually stops
     } else {
       startRecognition();
     }
@@ -103,9 +133,7 @@ export function VoiceInput({ onTranscript, onInterim, disabled = false }: VoiceI
 
   // Cleanup on unmount
   useEffect(() => {
-    return () => {
-      stopRecognition();
-    };
+    return () => { stopRecognition(false); };
   }, [stopRecognition]);
 
   const tooltipText = !isSupported
