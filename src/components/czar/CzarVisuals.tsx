@@ -513,7 +513,7 @@ export function AgentActivityDock({ agents, visible }: { agents: LiveAgent[]; vi
 
 export function WelcomeAurora() {
   return (
-    <div className="absolute inset-0 pointer-events-none overflow-hidden" aria-hidden>
+    <div className="fixed inset-0 z-[-1] pointer-events-none" aria-hidden>
       <style>{SCENE_CSS}</style>
       {/* Terracotta warm blob — bottom left */}
       <div style={{
