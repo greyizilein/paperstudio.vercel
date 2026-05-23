@@ -428,7 +428,7 @@ export default function CzarPage() {
   }, [sendMessage]);
 
   const handleCorrectionModalSubmit = useCallback(({ text, notes, file }: { text?: string; notes: string; file?: File }) => {
-    setCorrectionModalOpen(false);
+    // Don't close immediately — modal shows "Scanning…" while streaming, then auto-closes
     const files = file ? [file] : [];
     const settings: Record<string, any> = {};
     if (notes) settings.correction_notes = notes;

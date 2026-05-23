@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 import { FileText, Loader2, Upload, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -28,28 +28,32 @@ export function CorrectionModal({
   initialText = "",
 }: CorrectionModalProps) {
   const [tab, setTab] = useState<"upload" | "paste">(initialText ? "paste" : "upload");
-  const [file, setFile] = useState<File | null>(null);
   const [pastedText, setPastedText] = useState(initialText);
   const [notes, setNotes] = useState("");
   const [isDragging, setIsDragging] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const prevSubmittingRef = useRef(false);
+
+  // Auto-close when scanning finishes
+  useEffect(() => {
+    if (prevSubmittingRef.current && !isSubmitting && open) {
+      onClose();
+    }
+    prevSubmittingRef.current = isSubmitting;
+  }, [isSubmitting]);
 
   if (!open) return null;
 
-  const isDisabled =
-    isSubmitting ||
-    (tab === "upload" && file === null) ||
-    (tab === "paste" && pastedText.trim() === "");
-
   function handleTabSwitch(next: "upload" | "paste") {
-    if (next === "upload") setPastedText("");
-    if (next === "paste") setFile(null);
+    if (next === "paste") setPastedText(initialText);
     setTab(next);
   }
 
-  function handleFileSelect(selected: File | null) {
-    if (selected) setFile(selected);
+  function handleFileSelect(file: File | null) {
+    if (!file) return;
+    // Immediately trigger analysis — no button needed
+    onSubmit({ file, notes });
   }
 
   function handleDragOver(e: React.DragEvent<HTMLDivElement>) {
@@ -68,13 +72,9 @@ export function CorrectionModal({
     handleFileSelect(dropped);
   }
 
-  function handleSubmit() {
-    if (isDisabled) return;
-    onSubmit({
-      file: tab === "upload" ? (file ?? undefined) : undefined,
-      text: tab === "paste" ? pastedText : undefined,
-      notes,
-    });
+  function handlePasteScan() {
+    if (!pastedText.trim()) return;
+    onSubmit({ text: pastedText, notes });
   }
 
   return (
@@ -118,10 +118,15 @@ export function CorrectionModal({
           ))}
         </div>
 
-        {/* Upload tab */}
+        {/* Upload tab — drop triggers analysis instantly */}
         {tab === "upload" && (
           <div className="mb-5">
-            {file === null ? (
+            {isSubmitting ? (
+              <div className="flex flex-col items-center justify-center h-36 rounded-xl border border-border bg-secondary/20 gap-3">
+                <Loader2 size={22} className="animate-spin text-primary" />
+                <p className="text-sm text-muted-foreground">Scanning document for corrections…</p>
+              </div>
+            ) : (
               <div
                 onDragOver={handleDragOver}
                 onDragLeave={handleDragLeave}
@@ -142,30 +147,11 @@ export function CorrectionModal({
                   )}
                 />
                 <p className="text-sm font-medium text-foreground">
-                  Drag a file here or click to browse
+                  Drop a file to scan instantly
                 </p>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  .docx&nbsp;&middot;&nbsp;.pdf&nbsp;&middot;&nbsp;.txt
+                  .docx&nbsp;&middot;&nbsp;.pdf&nbsp;&middot;&nbsp;.txt — analysis starts on drop
                 </p>
-              </div>
-            ) : (
-              <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-border bg-secondary/40">
-                <FileText size={20} className="shrink-0 text-primary" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-foreground truncate">
-                    {file.name}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {formatBytes(file.size)}
-                  </p>
-                </div>
-                <button
-                  onClick={() => setFile(null)}
-                  className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
-                  aria-label="Remove file"
-                >
-                  <X size={14} />
-                </button>
               </div>
             )}
             <input
@@ -193,40 +179,51 @@ export function CorrectionModal({
           </div>
         )}
 
-        {/* Notes section */}
-        <div className="mb-6">
-          <label className="block text-sm font-medium text-foreground mb-1.5">
-            Additional notes{" "}
-            <span className="font-normal text-muted-foreground">(optional)</span>
-          </label>
-          <textarea
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            placeholder="e.g. Focus on argument clarity, maintain formal academic register…"
-            rows={2}
-            className="w-full resize-none rounded-xl border border-border bg-background px-3 py-2.5 text-sm font-sans text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-colors dark:bg-background"
-          />
-        </div>
+        {/* Notes — only shown on paste tab or upload tab when not submitting */}
+        {(tab === "paste" || (tab === "upload" && !isSubmitting)) && (
+          <div className="mb-6">
+            <label className="block text-sm font-medium text-foreground mb-1.5">
+              Editor notes{" "}
+              <span className="font-normal text-muted-foreground">(optional)</span>
+            </label>
+            <textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="e.g. Focus on argument clarity, maintain formal academic register…"
+              rows={2}
+              className="w-full resize-none rounded-xl border border-border bg-background px-3 py-2.5 text-sm font-sans text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-colors dark:bg-background"
+            />
+          </div>
+        )}
 
-        {/* Submit */}
-        <button
-          onClick={handleSubmit}
-          disabled={isDisabled}
-          className={cn(
-            "w-full h-11 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-opacity",
-            "bg-primary text-primary-foreground",
-            isDisabled ? "opacity-40 cursor-not-allowed" : "hover:opacity-90"
-          )}
-        >
-          {isSubmitting ? (
-            <>
-              <Loader2 size={16} className="animate-spin" />
-              Analyzing…
-            </>
-          ) : (
-            "Analyze Document →"
-          )}
-        </button>
+        {/* Paste tab scan button */}
+        {tab === "paste" && (
+          <button
+            onClick={handlePasteScan}
+            disabled={isSubmitting || !pastedText.trim()}
+            className={cn(
+              "w-full h-11 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-opacity",
+              "bg-primary text-primary-foreground",
+              isSubmitting || !pastedText.trim() ? "opacity-40 cursor-not-allowed" : "hover:opacity-90"
+            )}
+          >
+            {isSubmitting ? (
+              <>
+                <Loader2 size={16} className="animate-spin" />
+                Scanning…
+              </>
+            ) : (
+              "Scan for corrections →"
+            )}
+          </button>
+        )}
+
+        {/* Upload tab: hint when not submitting */}
+        {tab === "upload" && !isSubmitting && (
+          <p className="text-center text-xs text-muted-foreground">
+            Analysis starts the moment you drop or select a file
+          </p>
+        )}
       </div>
     </div>
   );
