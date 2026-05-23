@@ -16,11 +16,15 @@ import {
   streamCzar, loadMessages,
   type CzarRequest, type CzarMode, type CzarHandlers,
   type CzarMetaEvent, type CzarAgentEvent, type CzarToolEvent,
+  type CorrectionChangeEvent, type CorrectionSummaryEvent,
 } from "@/lib/czarStream";
 import { buildDocx, stripMarkdown, markdownComponents } from "@/lib/czarDocUtils.tsx";
+import { type CorrectionChange, type CorrectionSummary } from "@/lib/czarCorrection";
 import { ConvSidebar } from "@/components/czar/ConvSidebar";
 import { UpgradeModal } from "@/components/czar/UpgradeModal";
 import { DashboardSidebar } from "@/components/dashboard/DashboardSidebar";
+import { CorrectionModal } from "@/components/czar/CorrectionModal";
+import { CorrectionDiffView } from "@/components/czar/CorrectionDiffView";
 
 import { lazy, Suspense } from "react";
 const CommandInput = lazy(() => import("@/components/czar/CommandInput").then(m => ({ default: m.CommandInput })));
@@ -43,6 +47,8 @@ interface UIMessage {
   streaming?: boolean;
   error?: boolean;
   agents?: LiveAgent[];
+  correctionChanges?: CorrectionChange[];
+  correctionSummary?: CorrectionSummary | null;
 }
 
 // ── Constants ──────────────────────────────────────────────────────
@@ -157,6 +163,9 @@ export default function CzarPage() {
   const [showUpgrade, setShowUpgrade] = useState(false);
   const [upgradeReason, setUpgradeReason] = useState("");
 
+  const [correctionModalOpen, setCorrectionModalOpen] = useState(false);
+  const [correctionModalInitialText, setCorrectionModalInitialText] = useState("");
+
   const [userName, setUserName] = useState("");
   const [userInitials, setUserInitials] = useState("U");
   const [userTier, setUserTier] = useState("free");
@@ -218,7 +227,7 @@ export default function CzarPage() {
     return results;
   }, [user]);
 
-  const sendMessage = useCallback(async (text: string, files: File[]) => {
+  const sendMessage = useCallback(async (text: string, files: File[], extraSettings: Record<string, any> = {}) => {
     if (!user || streaming) return;
     if (!text.trim() && files.length === 0) return;
 
@@ -290,6 +299,24 @@ export default function CzarPage() {
           setMessages(prev => prev.filter(m => m.id !== assistantMsgId));
           setStreaming(false);
         },
+        onCorrectionSummary: (e: CorrectionSummaryEvent) => {
+          setMessages(prev => prev.map(m =>
+            m.id === assistantMsgId ? { ...m, correctionSummary: e } : m
+          ));
+        },
+        onCorrectionChange: (e: CorrectionChangeEvent) => {
+          setMessages(prev => prev.map(m =>
+            m.id === assistantMsgId
+              ? {
+                  ...m,
+                  correctionChanges: [
+                    ...(m.correctionChanges ?? []),
+                    { ...e, status: "pending" as const },
+                  ],
+                }
+              : m
+          ));
+        },
         onDone: (e) => {
           const agentSnapshot = agentsRef.current.filter(a => a.name);
           setMessages(prev => prev.map(m =>
@@ -309,7 +336,7 @@ export default function CzarPage() {
         },
       };
 
-      await streamCzar({ conversation_id: convId, user_message: text, attachments, mode, settings: {} }, handlers, ctrl.signal);
+      await streamCzar({ conversation_id: convId, user_message: text, attachments, mode, settings: extraSettings }, handlers, ctrl.signal);
     } catch (err: any) {
       if (err?.name !== "AbortError") {
         setMessages(prev => prev.map(m =>
@@ -343,6 +370,67 @@ export default function CzarPage() {
   const handleMessageContentChange = useCallback((id: string, content: string) => {
     setMessages(prev => prev.map(m => m.id === id ? { ...m, content } : m));
   }, []);
+
+  const handleCorrectionAccept = useCallback((msgId: string, changeId: string) => {
+    setMessages(prev => prev.map(m =>
+      m.id === msgId
+        ? { ...m, correctionChanges: m.correctionChanges?.map(c => c.id === changeId ? { ...c, status: "accepted" as const } : c) }
+        : m
+    ));
+  }, []);
+
+  const handleCorrectionReject = useCallback((msgId: string, changeId: string) => {
+    setMessages(prev => prev.map(m =>
+      m.id === msgId
+        ? { ...m, correctionChanges: m.correctionChanges?.map(c => c.id === changeId ? { ...c, status: "rejected" as const } : c) }
+        : m
+    ));
+  }, []);
+
+  const handleCorrectionAcceptAll = useCallback((msgId: string) => {
+    setMessages(prev => prev.map(m =>
+      m.id === msgId
+        ? { ...m, correctionChanges: m.correctionChanges?.map(c => ({ ...c, status: "accepted" as const })) }
+        : m
+    ));
+  }, []);
+
+  const handleCorrectionRejectAll = useCallback((msgId: string) => {
+    setMessages(prev => prev.map(m =>
+      m.id === msgId
+        ? { ...m, correctionChanges: m.correctionChanges?.map(c => ({ ...c, status: "rejected" as const })) }
+        : m
+    ));
+  }, []);
+
+  const handleCorrectionDownload = useCallback(async (cleanText: string) => {
+    const doc = buildDocx(cleanText);
+    const blob = await Packer.toBlob(doc);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = "czar-corrected-clean.docx"; a.click();
+    URL.revokeObjectURL(url);
+  }, []);
+
+  const handleCorrectionFinalPass = useCallback((cleanText: string) => {
+    setCorrectionModalInitialText(cleanText);
+    setCorrectionModalOpen(true);
+  }, []);
+
+  const handleCorrectionModalSubmit = useCallback(({ text, notes, file }: { text?: string; notes: string; file?: File }) => {
+    setCorrectionModalOpen(false);
+    const files = file ? [file] : [];
+    const settings: Record<string, any> = {};
+    if (notes) settings.correction_notes = notes;
+    const docText = text ?? correctionModalInitialText;
+    if (docText) settings.correction_paste = docText;
+    setCorrectionModalInitialText("");
+    sendMessage(
+      "Correct this document" + (notes ? `. Editor notes: ${notes.slice(0, 120)}` : ""),
+      files,
+      settings,
+    );
+  }, [sendMessage, correctionModalInitialText]);
 
   if (!user) return null;
 
@@ -424,7 +512,11 @@ export default function CzarPage() {
                 >
                   {(["chat", "write", "correct", "research", "plan"] as CzarMode[]).map(m => (
                     <button key={m}
-                      onClick={() => { setMode(m); setShowModeMenu(false); }}
+                      onClick={() => {
+                        setMode(m);
+                        setShowModeMenu(false);
+                        if (m === "correct") setCorrectionModalOpen(true);
+                      }}
                       className={`w-full flex items-start gap-3 px-3 py-2.5 text-left hover:bg-secondary transition-colors ${mode === m ? "bg-secondary/60" : ""}`}
                     >
                       <span className={`mt-0.5 ${mode === m ? "text-foreground" : "text-muted-foreground"}`}>{modeIcon(m)}</span>
@@ -463,7 +555,11 @@ export default function CzarPage() {
         <div className="flex-1 overflow-y-auto">
           <div className="max-w-3xl mx-auto px-4 py-6 space-y-8">
             {messages.length === 0 && (
-              <WelcomeScreen mode={mode} onExample={(text) => sendMessage(text, [])} />
+              <WelcomeScreen
+                mode={mode}
+                onExample={(text) => sendMessage(text, [])}
+                onOpenCorrectionModal={() => setCorrectionModalOpen(true)}
+              />
             )}
             {messages.map(msg => (
               <CzarMessage
@@ -473,6 +569,12 @@ export default function CzarPage() {
                 userInitials={userInitials}
                 onContentChange={handleMessageContentChange}
                 onSelectionAction={handleSelectionAction}
+                onCorrectionAccept={(changeId) => handleCorrectionAccept(msg.id, changeId)}
+                onCorrectionReject={(changeId) => handleCorrectionReject(msg.id, changeId)}
+                onCorrectionAcceptAll={() => handleCorrectionAcceptAll(msg.id)}
+                onCorrectionRejectAll={() => handleCorrectionRejectAll(msg.id)}
+                onCorrectionDownload={handleCorrectionDownload}
+                onCorrectionFinalPass={handleCorrectionFinalPass}
               />
             ))}
             <div ref={threadEndRef} />
@@ -482,6 +584,17 @@ export default function CzarPage() {
         {/* Input */}
         <div className="flex-shrink-0 border-t border-border bg-background/95 backdrop-blur-sm">
           <div className="max-w-3xl mx-auto px-4 py-3">
+            {mode === "correct" && !streaming && (
+              <div className="mb-2">
+                <button
+                  onClick={() => setCorrectionModalOpen(true)}
+                  className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border-2 border-dashed border-border text-muted-foreground hover:text-foreground hover:border-primary/50 hover:bg-secondary/30 transition-colors text-sm font-medium"
+                >
+                  <FileSearch size={15} />
+                  Correct a document — upload or paste text
+                </button>
+              </div>
+            )}
             <Suspense fallback={<InputFallback />}>
               <CommandInput
                 onSend={sendMessage}
@@ -495,6 +608,14 @@ export default function CzarPage() {
       </div>
 
       <UpgradeModal open={showUpgrade} onClose={() => setShowUpgrade(false)} reason={upgradeReason} />
+
+      <CorrectionModal
+        open={correctionModalOpen}
+        onClose={() => { setCorrectionModalOpen(false); setCorrectionModalInitialText(""); }}
+        onSubmit={handleCorrectionModalSubmit}
+        isSubmitting={streaming}
+        initialText={correctionModalInitialText}
+      />
     </div>
   );
 }
@@ -736,12 +857,23 @@ function InlineDocMessage({ msg, onContentChange, onSelectionAction }: {
   );
 }
 
-function CzarMessage({ msg, currentAgents, userInitials, onContentChange, onSelectionAction }: {
+function CzarMessage({
+  msg, currentAgents, userInitials,
+  onContentChange, onSelectionAction,
+  onCorrectionAccept, onCorrectionReject, onCorrectionAcceptAll, onCorrectionRejectAll,
+  onCorrectionDownload, onCorrectionFinalPass,
+}: {
   msg: UIMessage;
   currentAgents: LiveAgent[];
   userInitials: string;
   onContentChange: (id: string, content: string) => void;
   onSelectionAction: (action: string, text: string) => void;
+  onCorrectionAccept: (changeId: string) => void;
+  onCorrectionReject: (changeId: string) => void;
+  onCorrectionAcceptAll: () => void;
+  onCorrectionRejectAll: () => void;
+  onCorrectionDownload: (cleanText: string) => void;
+  onCorrectionFinalPass: (cleanText: string) => void;
 }) {
   const isDocMsg = DOC_MODES.includes(msg.mode ?? "");
 
@@ -790,8 +922,30 @@ function CzarMessage({ msg, currentAgents, userInitials, onContentChange, onSele
           </div>
         )}
 
-        {/* Content */}
-        {!msg.error && isDocMsg && (
+        {/* Correction diff view */}
+        {!msg.error && msg.mode === "correct" && (msg.correctionSummary || msg.streaming) && (
+          <CorrectionDiffView
+            summary={msg.correctionSummary ?? null}
+            changes={msg.correctionChanges ?? []}
+            isAnalyzing={!!msg.streaming}
+            onAccept={onCorrectionAccept}
+            onReject={onCorrectionReject}
+            onAcceptAll={onCorrectionAcceptAll}
+            onRejectAll={onCorrectionRejectAll}
+            onDownload={onCorrectionDownload}
+            onFinalPass={onCorrectionFinalPass}
+          />
+        )}
+
+        {/* Correction history placeholder (no live data available) */}
+        {!msg.error && msg.mode === "correct" && !msg.correctionSummary && !msg.streaming && msg.content && (
+          <div className="text-sm text-muted-foreground px-4 py-3 rounded-xl border border-border bg-secondary/20">
+            Correction session complete. Reload a new document to see tracked changes.
+          </div>
+        )}
+
+        {/* Standard doc content (non-correction doc modes) */}
+        {!msg.error && isDocMsg && msg.mode !== "correct" && (
           <InlineDocMessage
             msg={msg}
             onContentChange={onContentChange}
@@ -814,7 +968,7 @@ function CzarMessage({ msg, currentAgents, userInitials, onContentChange, onSele
   );
 }
 
-function WelcomeScreen({ mode, onExample }: { mode: CzarMode; onExample: (text: string) => void }) {
+function WelcomeScreen({ mode, onExample, onOpenCorrectionModal }: { mode: CzarMode; onExample: (text: string) => void; onOpenCorrectionModal?: () => void }) {
   const examples: Partial<Record<CzarMode, { text: string; label: string }[]>> = {
     chat: [
       { label: "Explain a concept", text: "Explain the difference between qualitative and quantitative research methods." },
@@ -837,6 +991,30 @@ function WelcomeScreen({ mode, onExample }: { mode: CzarMode; onExample: (text: 
   };
 
   const items = examples[mode] ?? examples.chat!;
+
+  if (mode === "correct") {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-4 py-8">
+        <div className="w-12 h-12 rounded-2xl bg-amber-500/10 flex items-center justify-center mb-4">
+          <FileSearch className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+        </div>
+        <h2 className="text-xl font-bold text-foreground mb-1">Correct & Improve</h2>
+        <p className="text-sm text-muted-foreground mb-3 max-w-sm leading-relaxed">
+          Upload a document or paste your text. CZAR identifies every correction — grammar, style, argument, register — as tracked changes. Accept or reject each one individually, then download the clean document.
+        </p>
+        <div className="flex flex-col items-center gap-2 text-[11px] text-muted-foreground/60 mb-8">
+          <span>Grammar · Style · Structure · Argument · Register</span>
+          <span>Color-coded · Accept/Reject per change · Clean download</span>
+        </div>
+        <button
+          onClick={onOpenCorrectionModal}
+          className="px-6 py-3 rounded-xl bg-primary text-primary-foreground font-medium hover:bg-primary/90 transition-colors text-sm"
+        >
+          Open Document
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-4 py-8">
