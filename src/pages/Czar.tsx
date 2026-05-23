@@ -111,29 +111,6 @@ const MODE_COLOURS: Record<CzarMode, string> = {
   legal: "bg-slate-500/15 text-slate-600 dark:text-slate-400",
 };
 
-const MODE_DESCRIPTIONS: Record<CzarMode, string> = {
-  chat: "Ask questions, get explanations",
-  write: "Generate full documents",
-  correct: "Fix and improve your draft",
-  research: "Find and synthesise sources",
-  plan: "Structure before you write",
-  literature_review: "Systematic review, PRISMA, synthesis",
-  screenplay: "Fountain format, scene headings, dialogue",
-  legal: "IRAC structure, statute and case law",
-};
-
-function modePlaceholder(mode: CzarMode): string {
-  return {
-    chat: "Ask CZAR anything…",
-    write: "Describe what you need written — topic, length, audience…",
-    correct: "Paste your draft here or upload a file to correct…",
-    research: "What topic should CZAR research?",
-    plan: "Describe your assignment and CZAR will plan it…",
-    literature_review: "Describe the research question for your literature review…",
-    screenplay: "Describe the story, genre, and any specific scenes…",
-    legal: "Describe the legal issue — CZAR will apply IRAC…",
-  }[mode] ?? "Ask CZAR anything…";
-}
 
 // ── Main component ─────────────────────────────────────────────────
 
@@ -157,11 +134,6 @@ export default function CzarPage() {
   useEffect(() => { agentsRef.current = agents; }, [agents]);
 
   const [mode, setMode] = useState<CzarMode>("chat");
-  const [previousMode, setPreviousMode] = useState<CzarMode | null>(null);
-  const [modeTransition, setModeTransition] = useState<{ from: CzarMode; to: CzarMode } | null>(null);
-  const [showModeMenu, setShowModeMenu] = useState(false);
-  const modeButtonRef = useRef<HTMLButtonElement>(null);
-  const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0 });
 
   const threadEndRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -238,12 +210,6 @@ export default function CzarPage() {
     if (!user || streaming) return;
     if (!text.trim() && files.length === 0) return;
 
-    // Correction mode is handled entirely by the modal — redirect any attempt to send
-    if (mode === "correct") {
-      setCorrectionModalOpen(true);
-      return;
-    }
-
     if (agentClearRef.current) {
       clearTimeout(agentClearRef.current);
       agentClearRef.current = null;
@@ -269,7 +235,10 @@ export default function CzarPage() {
       const attachments = await uploadFiles(files);
 
       const handlers: CzarHandlers = {
-        onMeta: (e: CzarMetaEvent) => { setConvId(e.conversation_id); },
+        onMeta: (e: CzarMetaEvent) => {
+          setConvId(e.conversation_id);
+          if (e.mode) setMode(e.mode as CzarMode);
+        },
         onAgent: (e: CzarAgentEvent) => {
           setAgents(prev => {
             const idx = prev.findIndex(a => a.id === e.id);
@@ -363,14 +332,10 @@ export default function CzarPage() {
         },
       };
 
-      // Clear mode transition banner now that the message is being sent
-      setModeTransition(null);
       await streamCzar({
         conversation_id: convId,
         user_message: text,
         attachments,
-        mode,
-        previousMode: previousMode ?? undefined,
         settings: extraSettings,
       }, handlers, ctrl.signal);
     } catch (err: any) {
@@ -482,57 +447,6 @@ export default function CzarPage() {
             <Clock size={16} />
           </button>
 
-          {/* Mode selector */}
-          <div className="relative">
-            <button
-              ref={modeButtonRef}
-              onClick={() => {
-                if (streaming) return;
-                if (!showModeMenu && modeButtonRef.current) {
-                  const r = modeButtonRef.current.getBoundingClientRect();
-                  setDropdownPos({ top: r.bottom + 6, left: r.left });
-                }
-                setShowModeMenu(o => !o);
-              }}
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[12px] font-semibold transition-colors ${streaming ? "opacity-50 cursor-not-allowed" : "cursor-pointer"} ${MODE_COLOURS[mode]}`}
-            >
-              {modeIcon(mode)}
-              <span>{modeLabel(mode)}</span>
-              <ChevronDown size={11} className={`transition-transform ${showModeMenu ? "rotate-180" : ""}`} />
-            </button>
-            {showModeMenu && (
-              <>
-                <div className="fixed inset-0 z-[190]" onClick={() => setShowModeMenu(false)} />
-                <div
-                  className="fixed z-[200] bg-background border border-border rounded-xl shadow-2xl overflow-hidden w-52 animate-in fade-in duration-150"
-                  style={{ top: dropdownPos.top, left: dropdownPos.left }}
-                >
-                  {(["chat", "write", "correct", "research", "plan"] as CzarMode[]).map(m => (
-                    <button key={m}
-                      onClick={() => {
-                        if (m !== mode) {
-                          setPreviousMode(mode);
-                          setModeTransition({ from: mode, to: m });
-                        }
-                        setMode(m);
-                        setShowModeMenu(false);
-                        if (m === "correct") setCorrectionModalOpen(true);
-                      }}
-                      className={`w-full flex items-start gap-3 px-3 py-2.5 text-left hover:bg-secondary transition-colors ${mode === m ? "bg-secondary/60" : ""}`}
-                    >
-                      <span className={`mt-0.5 ${mode === m ? "text-foreground" : "text-muted-foreground"}`}>{modeIcon(m)}</span>
-                      <div className="min-w-0">
-                        <div className={`text-[12px] font-semibold ${mode === m ? "text-foreground" : "text-muted-foreground"}`}>{modeLabel(m)}</div>
-                        <div className="text-[10.5px] text-muted-foreground/60 leading-snug">{MODE_DESCRIPTIONS[m]}</div>
-                      </div>
-                      {mode === m && <span className="ml-auto mt-1 w-1.5 h-1.5 rounded-full bg-primary flex-shrink-0" />}
-                    </button>
-                  ))}
-                </div>
-              </>
-            )}
-          </div>
-
           {/* Right: stop + status + theme */}
           <div className="ml-auto flex items-center gap-1">
             {streaming && (
@@ -557,24 +471,9 @@ export default function CzarPage() {
           <WritingGlow visible={streaming || messages.length > 0} />
           <div className="relative max-w-3xl mx-auto px-4 py-6 space-y-8">
             {messages.length === 0 && (
-              <WelcomeScreen
-                mode={mode}
-                userName={userName}
-                onOpenCorrectionModal={() => setCorrectionModalOpen(true)}
-              />
+              <WelcomeScreen userName={userName} />
             )}
 
-            {/* Mode transition banner */}
-            {modeTransition && messages.length > 0 && !streaming && (
-              <div className="flex items-center gap-3 px-4 py-2.5 rounded-xl border border-border bg-secondary/40 text-[12px] text-muted-foreground animate-in fade-in duration-200">
-                <span className="font-medium text-foreground">Switched to {modeLabel(modeTransition.to)}</span>
-                <span className="text-muted-foreground/50">·</span>
-                <span>Context from previous conversation is available. Type your {modeTransition.to === "research" || modeTransition.to === "write" ? "topic or task" : "message"} below.</span>
-                <button onClick={() => setModeTransition(null)} className="ml-auto text-muted-foreground/60 hover:text-foreground transition-colors">
-                  <X size={12} />
-                </button>
-              </div>
-            )}
             {messages.map(msg => (
               <CzarMessage
                 key={msg.id}
@@ -595,23 +494,11 @@ export default function CzarPage() {
         {/* Input */}
         <div className="flex-shrink-0 bg-background/95 backdrop-blur-sm">
           <div className="max-w-3xl mx-auto px-4 py-3">
-            {mode === "correct" && !streaming && (
-              <div className="mb-2">
-                <button
-                  onClick={() => setCorrectionModalOpen(true)}
-                  className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border-2 border-dashed border-border text-muted-foreground hover:text-foreground hover:border-primary/50 hover:bg-secondary/30 transition-colors text-sm font-medium"
-                >
-                  <FileSearch size={15} />
-                  Correct a document — upload or paste text
-                </button>
-              </div>
-            )}
             <Suspense fallback={<InputFallback />}>
               <CommandInput
                 onSend={sendMessage}
                 onStop={stopStream}
                 streaming={streaming}
-                placeholder={modePlaceholder(mode)}
               />
             </Suspense>
           </div>
@@ -1153,21 +1040,13 @@ function CzarMessage({
   );
 }
 
-function WelcomeScreen({ mode, userName, onOpenCorrectionModal }: { mode: CzarMode; userName?: string; onExample?: (text: string) => void; onOpenCorrectionModal?: () => void }) {
+function WelcomeScreen({ userName }: { userName?: string }) {
   return (
     <div className="relative flex flex-col items-center justify-center min-h-[60vh] text-center px-2 py-6 overflow-hidden">
       <FloatingElements />
       <div className="relative z-10 flex flex-col items-center w-full">
         <GreetingLine userName={userName} />
-        <TeamScene mode={mode} />
-        {mode === "correct" && (
-          <button
-            onClick={onOpenCorrectionModal}
-            className="mt-6 px-6 py-3 rounded-xl bg-primary text-primary-foreground font-medium hover:bg-primary/90 transition-colors text-sm"
-          >
-            Open Document
-          </button>
-        )}
+        <TeamScene />
       </div>
     </div>
   );
