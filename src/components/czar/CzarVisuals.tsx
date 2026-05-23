@@ -58,6 +58,12 @@ const SCENE_CSS = `
     30%      { transform: translate(10%,4%) scale(0.90); opacity: 0.18; }
     70%      { transform: translate(-6%,-8%) scale(1.1); opacity: 0.08; }
   }
+
+  /* ── Dark-mode colour overrides for all czar-svg elements ── */
+  .dark .czar-svg [fill="white"]   { fill:   hsl(var(--background)); }
+  .dark .czar-svg [fill="#1a1a1a"] { fill:   hsl(var(--foreground)); }
+  .dark .czar-svg [stroke="#1a1a1a"] { stroke: hsl(var(--foreground)); }
+  .dark .czar-svg [stroke="white"]   { stroke: hsl(var(--background)); }
 `;
 
 // Helper: arm drawn as double-stroke (white fill with dark outline) to match illustration style
@@ -76,7 +82,7 @@ export function TeamScene() {
   return (
     <div className="w-full max-w-[560px] mx-auto select-none" aria-hidden>
       <style>{SCENE_CSS}</style>
-      <svg viewBox="0 0 500 255" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-auto">
+      <svg viewBox="0 0 500 255" fill="none" xmlns="http://www.w3.org/2000/svg" className="czar-svg w-full h-auto">
 
         {/* ── TABLE ─────────────────────────────────────────────── */}
         <rect x="0" y="210" width="500" height="22" rx="5" fill="#1a1a1a" opacity="0.88"/>
@@ -355,7 +361,7 @@ export function GreetingLine({ userName }: { userName?: string }) {
 // Compact mini-face SVGs for the dock (same style: white fill + dark outline)
 function MiniWriter() {
   return (
-    <svg viewBox="0 0 80 82" fill="none" width="40" height="41">
+    <svg viewBox="0 0 80 82" fill="none" width="40" height="41" className="czar-svg">
       <path d="M14 40 C12 20 17 5 40 5 C63 5 68 20 66 40 C70 56 68 78 62 82 L40 70 L18 82 C12 78 10 56 14 40Z" fill="#1a1a1a"/>
       <circle cx="40" cy="44" r="22" fill="white" stroke="#1a1a1a" strokeWidth="2.2"/>
       <circle cx="32" cy="41" r="4.5" fill="#1a1a1a"/>
@@ -370,7 +376,7 @@ function MiniWriter() {
 }
 function MiniResearcher() {
   return (
-    <svg viewBox="0 0 80 80" fill="none" width="40" height="40">
+    <svg viewBox="0 0 80 80" fill="none" width="40" height="40" className="czar-svg">
       <circle cx="40" cy="28" r="12" fill="#1a1a1a"/>
       <circle cx="25" cy="36" r="11" fill="#1a1a1a"/>
       <circle cx="55" cy="36" r="11" fill="#1a1a1a"/>
@@ -389,7 +395,7 @@ function MiniResearcher() {
 }
 function MiniPlanner() {
   return (
-    <svg viewBox="0 0 80 80" fill="none" width="40" height="40">
+    <svg viewBox="0 0 80 80" fill="none" width="40" height="40" className="czar-svg">
       <path d="M18 44 C16 22 20 6 40 6 C60 6 64 22 62 44 L60 55 C52 49 28 49 20 55Z" fill="#1a1a1a"/>
       <circle cx="40" cy="50" r="22" fill="white" stroke="#1a1a1a" strokeWidth="2.2"/>
       <circle cx="32" cy="47" r="4.5" fill="#1a1a1a"/>
@@ -402,7 +408,7 @@ function MiniPlanner() {
 }
 function MiniEditor() {
   return (
-    <svg viewBox="0 0 80 80" fill="none" width="40" height="40">
+    <svg viewBox="0 0 80 80" fill="none" width="40" height="40" className="czar-svg">
       <path d="M16 44 C14 20 18 4 40 4 C62 4 66 20 64 44 C66 58 64 76 58 80 L40 68 L22 80 C16 76 14 58 16 44Z" fill="#1a1a1a"/>
       <circle cx="40" cy="46" r="22" fill="white" stroke="#1a1a1a" strokeWidth="2.2"/>
       <ellipse cx="31" cy="43" rx="10" ry="9" stroke="#1a1a1a" strokeWidth="2" fill="none"/>
@@ -417,7 +423,7 @@ function MiniEditor() {
 }
 function MiniCritic() {
   return (
-    <svg viewBox="0 0 80 80" fill="none" width="40" height="40">
+    <svg viewBox="0 0 80 80" fill="none" width="40" height="40" className="czar-svg">
       <circle cx="40" cy="16" r="10" fill="#1a1a1a"/>
       <circle cx="22" cy="24" r="9"  fill="#1a1a1a"/>
       <circle cx="58" cy="24" r="9"  fill="#1a1a1a"/>
