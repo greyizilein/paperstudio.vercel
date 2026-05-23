@@ -403,7 +403,7 @@ export default function CzarPage() {
               <>
                 <div className="fixed inset-0 z-[190]" onClick={() => setShowModeMenu(false)} />
                 <div
-                  className="fixed z-[200] bg-background border border-border rounded-xl shadow-2xl overflow-hidden w-52 animate-in fade-in slide-in-from-top-1 duration-150"
+                  className="fixed z-[200] bg-background border border-border rounded-xl shadow-2xl overflow-hidden w-52 animate-in fade-in duration-150"
                   style={{ top: dropdownPos.top, left: dropdownPos.left }}
                 >
                   {(["chat", "write", "correct", "research", "plan"] as CzarMode[]).map(m => (
