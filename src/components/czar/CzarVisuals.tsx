@@ -5,7 +5,7 @@ import React, { useState, useEffect } from "react";
 const SCENE_CSS = `
   @keyframes czar-typing {
     0%, 100% { transform: translateY(0px); }
-    50%       { transform: translateY(-5px); }
+    50%       { transform: translateY(-3px); }
   }
   @keyframes czar-cursor {
     0%, 44%  { opacity: 1; }
@@ -66,273 +66,159 @@ const SCENE_CSS = `
   .dark .czar-svg [stroke="white"]   { stroke: hsl(var(--background)); }
 `;
 
-// Helper: arm drawn as double-stroke (white fill with dark outline) to match illustration style
-function Arm({ d, w = 15 }: { d: string; w?: number }) {
-  return (
-    <>
-      <path d={d} stroke="#1a1a1a" strokeWidth={w + 3} strokeLinecap="round" fill="none"/>
-      <path d={d} stroke="white"   strokeWidth={w - 1} strokeLinecap="round" fill="none"/>
-    </>
-  );
-}
-
-// ─── TeamScene — main welcome illustration ─────────────────────────────────
+// ─── TeamScene — main welcome illustration (natural proportions) ─────────────
 
 export function TeamScene() {
   return (
     <div className="w-full max-w-[560px] mx-auto select-none" aria-hidden>
       <style>{SCENE_CSS}</style>
-      <svg viewBox="0 0 500 255" fill="none" xmlns="http://www.w3.org/2000/svg" className="czar-svg w-full h-auto">
+      <svg viewBox="0 0 520 280" fill="none" xmlns="http://www.w3.org/2000/svg" className="czar-svg w-full h-auto" strokeLinejoin="round" strokeLinecap="round">
 
-        {/* ── TABLE ─────────────────────────────────────────────── */}
-        <rect x="0" y="210" width="500" height="22" rx="5" fill="#1a1a1a" opacity="0.88"/>
-
-        {/* ── COFFEE MUG (far left on table) ────────────────────── */}
-        <rect x="8" y="162" width="24" height="28" rx="5" fill="white" stroke="#1a1a1a" strokeWidth="2.2"/>
-        <ellipse cx="20" cy="162" rx="12" ry="4" fill="#1a1a1a" opacity="0.2"/>
-        <path d="M33 170 Q41 173 33 180" stroke="#1a1a1a" strokeWidth="2.2" fill="none" strokeLinecap="round"/>
-        <path d="M14 156 Q11 148 14 140" stroke="#1a1a1a" strokeWidth="1.8" fill="none" strokeLinecap="round"
-              style={{ animation: "czar-steam 2.6s ease-out infinite", opacity: 0.4 }}/>
-        <path d="M21 153 Q18 145 21 137" stroke="#1a1a1a" strokeWidth="1.8" fill="none" strokeLinecap="round"
-              style={{ animation: "czar-steam 2.6s ease-out 0.9s infinite", opacity: 0.4 }}/>
+        {/* ── DESK ──────────────────────────────────────────────── */}
+        <rect x="10" y="240" width="500" height="2" fill="#1a1a1a"/>
+        <rect x="20" y="240" width="8" height="35" rx="3" fill="#1a1a1a" opacity="0.6"/>
+        <rect x="492" y="240" width="8" height="35" rx="3" fill="#1a1a1a" opacity="0.6"/>
 
         {/* ══════════════════════════════════════════════════════════
-            LEFT CHARACTER — Researcher
-            Big bubble afro · Round glasses · White shirt · Holds cube
+            LEFT CHARACTER — Glasses wearer, compact build
         ══════════════════════════════════════════════════════════ */}
-        {/* Afro: clustered circles */}
-        <circle cx="82"  cy="55"  r="15" fill="#1a1a1a"/>
-        <circle cx="63"  cy="66"  r="14" fill="#1a1a1a"/>
-        <circle cx="101" cy="66"  r="14" fill="#1a1a1a"/>
-        <circle cx="56"  cy="85"  r="12" fill="#1a1a1a"/>
-        <circle cx="108" cy="85"  r="12" fill="#1a1a1a"/>
-        <circle cx="69"  cy="51"  r="13" fill="#1a1a1a"/>
-        <circle cx="95"  cy="51"  r="13" fill="#1a1a1a"/>
-        <circle cx="50"  cy="100" r="9"  fill="#1a1a1a"/>
-        <circle cx="114" cy="100" r="9"  fill="#1a1a1a"/>
 
-        {/* Face */}
-        <circle cx="82" cy="103" r="31" fill="white" stroke="#1a1a1a" strokeWidth="2.8"/>
+        {/* Head outline */}
+        <circle cx="90" cy="85" r="28" fill="white" stroke="#1a1a1a" strokeWidth="2.2"/>
+
+        {/* Hair (short, neat) */}
+        <path d="M62 75 Q62 50 90 48 Q118 50 118 75 L118 85 Q118 88 115 88 Q112 82 90 82 Q68 82 65 88 Q62 88 62 85 Z" fill="#1a1a1a"/>
+
+        {/* Glasses */}
+        <circle cx="78" cy="82" r="11" fill="none" stroke="#1a1a1a" strokeWidth="2"/>
+        <circle cx="102" cy="82" r="11" fill="none" stroke="#1a1a1a" strokeWidth="2"/>
+        <line x1="89" y1="82" x2="91" y2="82" stroke="#1a1a1a" strokeWidth="2"/>
+        <line x1="66" y1="80" x2="60" y2="78" stroke="#1a1a1a" strokeWidth="2"/>
+
+        {/* Eyes (small, natural) */}
+        <circle cx="78" cy="82" r="3.5" fill="#1a1a1a"/>
+        <circle cx="102" cy="82" r="3.5" fill="#1a1a1a"/>
+        <circle cx="79" cy="80" r="1.2" fill="white"/>
+        <circle cx="103" cy="80" r="1.2" fill="white"/>
+
+        {/* Nose (simple line) */}
+        <line x1="90" y1="88" x2="90" y2="98" stroke="#1a1a1a" strokeWidth="1.5" opacity="0.5"/>
+
+        {/* Smile */}
+        <path d="M75 105 Q90 115 105 105" fill="none" stroke="#1a1a1a" strokeWidth="2.2"/>
+
+        {/* Neck */}
+        <rect x="85" y="110" width="10" height="15" fill="white"/>
+
+        {/* Body — simple line art style */}
+        <path d="M65 125 L75 130 L75 170 L105 170 L105 130 L115 125" fill="white" stroke="#1a1a1a" strokeWidth="2.2"/>
+
+        {/* Left arm */}
+        <path d="M75 135 L50 160" stroke="#1a1a1a" strokeWidth="3.2"/>
+        <circle cx="48" cy="162" r="5" fill="white" stroke="#1a1a1a" strokeWidth="2"/>
+
+        {/* Right arm — resting */}
+        <path d="M105 135 L130 155" stroke="#1a1a1a" strokeWidth="3.2"/>
+        <circle cx="132" cy="157" r="5" fill="white" stroke="#1a1a1a" strokeWidth="2"/>
+
+
+        {/* ══════════════════════════════════════════════════════════
+            CENTER CHARACTER — Friendly, engaged, at laptop
+        ══════════════════════════════════════════════════════════ */}
+
+        {/* Head */}
+        <circle cx="260" cy="80" r="30" fill="white" stroke="#1a1a1a" strokeWidth="2.2"/>
+
+        {/* Hair (dark, natural) */}
+        <path d="M230 65 Q230 40 260 38 Q290 40 290 65 L290 80 Q290 85 285 85 L235 85 Q230 85 230 80 Z" fill="#1a1a1a"/>
+
+        {/* Eyes (normal, warm) */}
+        <circle cx="248" cy="78" r="4" fill="#1a1a1a"/>
+        <circle cx="272" cy="78" r="4" fill="#1a1a1a"/>
+        <circle cx="249.5" cy="76" r="1.4" fill="white"/>
+        <circle cx="273.5" cy="76" r="1.4" fill="white"/>
 
         {/* Eyebrows */}
-        <path d="M64 90 Q72 85 80 90"  stroke="#1a1a1a" strokeWidth="2.8" fill="none" strokeLinecap="round"/>
-        <path d="M84 90 Q92 85 100 90" stroke="#1a1a1a" strokeWidth="2.8" fill="none" strokeLinecap="round"/>
+        <path d="M240 72 Q248 68 256 72" fill="none" stroke="#1a1a1a" strokeWidth="2" opacity="0.6"/>
+        <path d="M264 72 Q272 68 280 72" fill="none" stroke="#1a1a1a" strokeWidth="2" opacity="0.6"/>
 
-        {/* Big round glasses */}
-        <circle cx="71" cy="99" r="13" stroke="#1a1a1a" strokeWidth="2.8" fill="none"/>
-        <circle cx="93" cy="99" r="13" stroke="#1a1a1a" strokeWidth="2.8" fill="none"/>
-        <line x1="58" y1="99" x2="53"  y2="97" stroke="#1a1a1a" strokeWidth="2.4" strokeLinecap="round"/>
-        <line x1="106" y1="99" x2="111" y2="97" stroke="#1a1a1a" strokeWidth="2.4" strokeLinecap="round"/>
-        <line x1="84" y1="99" x2="80"  y2="99" stroke="#1a1a1a" strokeWidth="2.8" strokeLinecap="round"/>
+        {/* Nose */}
+        <line x1="260" y1="82" x2="260" y2="92" stroke="#1a1a1a" strokeWidth="1.5" opacity="0.4"/>
 
-        {/* Eyes (behind lenses) */}
-        <circle cx="71" cy="99" r="6"   fill="#1a1a1a"/>
-        <circle cx="93" cy="99" r="6"   fill="#1a1a1a"/>
-        <circle cx="73" cy="97" r="2.3" fill="white"/>
-        <circle cx="95" cy="97" r="2.3" fill="white"/>
-
-        {/* Nose (two soft dots) */}
-        <circle cx="78"  cy="110" r="2.2" fill="#1a1a1a" opacity="0.22"/>
-        <circle cx="86"  cy="110" r="2.2" fill="#1a1a1a" opacity="0.22"/>
-
-        {/* Wide smile */}
-        <path d="M68 118 Q82 128 96 118" stroke="#1a1a1a" strokeWidth="2.8" fill="none" strokeLinecap="round"/>
-
-        {/* Cheek blush */}
-        <circle cx="59"  cy="113" r="7"  fill="#1a1a1a" opacity="0.09"/>
-        <circle cx="105" cy="113" r="7"  fill="#1a1a1a" opacity="0.09"/>
+        {/* Smile (happy, engaged) */}
+        <path d="M242 100 Q260 110 278 100" fill="none" stroke="#1a1a1a" strokeWidth="2.2"/>
 
         {/* Neck */}
-        <rect x="77" y="131" width="10" height="26" fill="white"/>
+        <rect x="255" y="108" width="10" height="12" fill="white"/>
 
-        {/* White shirt (body) */}
-        <path d="M44 210 C44 166 58 153 82 151 C106 153 120 166 120 210Z"
-              fill="white" stroke="#1a1a1a" strokeWidth="2.8"/>
-        <path d="M74 151 L82 164 L90 151" stroke="#1a1a1a" strokeWidth="2.4" fill="none"/>
+        {/* Body — sitting at desk */}
+        <path d="M238 120 L252 125 L252 180 L268 180 L268 125 L282 120" fill="white" stroke="#1a1a1a" strokeWidth="2.2"/>
 
-        {/* Left arm — holding a small cube */}
-        <Arm d="M46 176 C38 188 30 199 24 208" w={15}/>
+        {/* Arms — typing motion */}
+        <g style={{ animation: "czar-typing 1.2s ease-in-out infinite", transformOrigin: "260px 130px" }}>
+          <path d="M252 130 L240 155" stroke="#1a1a1a" strokeWidth="3"/>
+          <circle cx="238" cy="157" r="5" fill="white" stroke="#1a1a1a" strokeWidth="2"/>
+          <path d="M268 130 L280 155" stroke="#1a1a1a" strokeWidth="3"/>
+          <circle cx="282" cy="157" r="5" fill="white" stroke="#1a1a1a" strokeWidth="2"/>
+        </g>
 
-        {/* Small cube/eraser held in left hand */}
-        <rect x="9" y="198" width="22" height="20" rx="4" fill="white" stroke="#1a1a1a" strokeWidth="2.2"/>
-        <line x1="9"  y1="205" x2="31" y2="205" stroke="#1a1a1a" strokeWidth="1.4" opacity="0.45"/>
-        <line x1="20" y1="198" x2="20" y2="218" stroke="#1a1a1a" strokeWidth="1.4" opacity="0.45"/>
-
-        {/* Right arm — resting on table */}
-        <Arm d="M118 176 C126 188 130 199 132 208" w={15}/>
+        {/* Laptop in front (simplified) */}
+        <rect x="230" y="160" width="60" height="35" rx="3" fill="#1a1a1a" stroke="#1a1a1a" strokeWidth="1.5"/>
+        <rect x="235" y="165" width="50" height="26" fill="#2a2a2a"/>
+        <line x1="240" y1="172" x2="280" y2="172" stroke="white" strokeWidth="2" opacity="0.5"/>
+        <line x1="240" y1="178" x2="275" y2="178" stroke="white" strokeWidth="1.5" opacity="0.4"/>
 
 
         {/* ══════════════════════════════════════════════════════════
-            CENTER CHARACTER — Writer
-            Short neat cap hair · No glasses · Bright big eyes · Typing
+            RIGHT CHARACTER — Long hair, elegant pose
         ══════════════════════════════════════════════════════════ */}
-        {/* Short hair cap */}
-        <path d="M225 83 C223 57 229 40 250 40 C271 40 277 57 275 83 C275 68 271 54 250 54 C229 54 225 68 225 83Z"
-              fill="#1a1a1a"/>
-        <ellipse cx="225" cy="77" rx="5.5" ry="8" fill="#1a1a1a"/>
-        <ellipse cx="275" cy="77" rx="5.5" ry="8" fill="#1a1a1a"/>
 
-        {/* Face */}
-        <circle cx="250" cy="90" r="31" fill="white" stroke="#1a1a1a" strokeWidth="2.8"/>
+        {/* Head */}
+        <circle cx="420" cy="88" r="28" fill="white" stroke="#1a1a1a" strokeWidth="2.2"/>
 
-        {/* Eyebrows — friendly raised arch */}
-        <path d="M236 78 Q244 73 252 78" stroke="#1a1a1a" strokeWidth="2.8" fill="none" strokeLinecap="round"/>
-        <path d="M248 78 Q256 73 264 78" stroke="#1a1a1a" strokeWidth="2.8" fill="none" strokeLinecap="round"/>
+        {/* Hair (long, flowing) */}
+        <path d="M392 70 Q390 45 420 43 Q450 45 448 70
+                 L448 90 Q448 115 442 145
+                 L398 145 Q392 115 392 90 Z" fill="#1a1a1a"/>
+        <path d="M398 65 Q405 60 420 60 Q435 60 442 65" fill="none" stroke="white" strokeWidth="1.2" opacity="0.2"/>
 
-        {/* Big eyes — no glasses, very expressive */}
-        <circle cx="241" cy="89" r="7.5" fill="#1a1a1a"/>
-        <circle cx="259" cy="89" r="7.5" fill="#1a1a1a"/>
-        <circle cx="243" cy="86.5" r="2.8" fill="white"/>
-        <circle cx="261" cy="86.5" r="2.8" fill="white"/>
-        {/* Eyelid line (makes eyes look more human) */}
-        <path d="M233 83 Q241 78 249 83" stroke="#1a1a1a" strokeWidth="1.8" fill="none" strokeLinecap="round" opacity="0.4"/>
-        <path d="M251 83 Q259 78 267 83" stroke="#1a1a1a" strokeWidth="1.8" fill="none" strokeLinecap="round" opacity="0.4"/>
+        {/* Eyes (expressive, smart) */}
+        <circle cx="408" cy="85" r="4" fill="#1a1a1a"/>
+        <circle cx="432" cy="85" r="4" fill="#1a1a1a"/>
+        <circle cx="409.5" cy="83" r="1.4" fill="white"/>
+        <circle cx="433.5" cy="83" r="1.4" fill="white"/>
+
+        {/* Eyebrows */}
+        <path d="M400 78 Q408 74 416 78" fill="none" stroke="#1a1a1a" strokeWidth="2" opacity="0.6"/>
+        <path d="M424 78 Q432 74 440 78" fill="none" stroke="#1a1a1a" strokeWidth="2" opacity="0.6"/>
 
         {/* Nose */}
-        <circle cx="246" cy="100" r="2.2" fill="#1a1a1a" opacity="0.22"/>
-        <circle cx="254" cy="100" r="2.2" fill="#1a1a1a" opacity="0.22"/>
+        <line x1="420" y1="90" x2="420" y2="99" stroke="#1a1a1a" strokeWidth="1.5" opacity="0.4"/>
 
-        {/* Wide bright smile */}
-        <path d="M238 107 Q250 118 262 107" stroke="#1a1a1a" strokeWidth="2.8" fill="none" strokeLinecap="round"/>
-
-        {/* Cheeks */}
-        <circle cx="232" cy="101" r="7"  fill="#1a1a1a" opacity="0.09"/>
-        <circle cx="268" cy="101" r="7"  fill="#1a1a1a" opacity="0.09"/>
-
-        {/* Energy burst marks — shows focus/excitement */}
-        <line x1="216" y1="67" x2="206" y2="57" stroke="#1a1a1a" strokeWidth="2.8" strokeLinecap="round"/>
-        <line x1="208" y1="77" x2="196" y2="77" stroke="#1a1a1a" strokeWidth="2.8" strokeLinecap="round"/>
-        <line x1="284" y1="67" x2="294" y2="57" stroke="#1a1a1a" strokeWidth="2.8" strokeLinecap="round"/>
-        <line x1="292" y1="77" x2="304" y2="77" stroke="#1a1a1a" strokeWidth="2.8" strokeLinecap="round"/>
+        {/* Smile (subtle, confident) */}
+        <path d="M405 107 Q420 115 435 107" fill="none" stroke="#1a1a1a" strokeWidth="2.2"/>
 
         {/* Neck */}
-        <rect x="245" y="119" width="10" height="32" fill="white"/>
+        <rect x="415" y="114" width="10" height="12" fill="white"/>
 
-        {/* White shirt */}
-        <path d="M214 210 C214 163 228 149 250 147 C272 149 286 163 286 210Z"
-              fill="white" stroke="#1a1a1a" strokeWidth="2.8"/>
-        <path d="M242 147 L250 161 L258 147" stroke="#1a1a1a" strokeWidth="2.4" fill="none"/>
+        {/* Body — confident posture */}
+        <path d="M398 126 L412 131 L412 180 L428 180 L428 131 L442 126" fill="white" stroke="#1a1a1a" strokeWidth="2.2"/>
 
-        {/* Typing arms — animated */}
-        <g style={{ animation: "czar-typing 1.3s ease-in-out infinite", transformOrigin: "250px 162px" }}>
-          <Arm d="M216 164 C219 179 223 193 230 207" w={15}/>
-          <Arm d="M284 164 C281 179 277 193 270 207" w={15}/>
-        </g>
+        {/* Left arm — resting */}
+        <path d="M412 138 L390 165" stroke="#1a1a1a" strokeWidth="3"/>
+        <circle cx="388" cy="167" r="5" fill="white" stroke="#1a1a1a" strokeWidth="2"/>
 
-
-        {/* ══════════════════════════════════════════════════════════
-            RIGHT CHARACTER — Editor
-            Long straight hair (clearly different from both others)
-            Oval/rounder glasses · White shirt · Pen in hand
-        ══════════════════════════════════════════════════════════ */}
-        {/* Long straight hair — flows well past shoulders */}
-        <path d="M380 93 C378 62 382 40 408 40 C434 40 438 62 436 93
-                 C438 114 436 160 430 170
-                 C418 152 398 152 386 170
-                 C380 160 378 114 380 93Z"
-              fill="#1a1a1a"/>
-        {/* Inner wave / sheen on hair */}
-        <path d="M390 56 Q396 52 402 52 Q408 52 414 56"
-              stroke="white" strokeWidth="1.6" fill="none" strokeLinecap="round" opacity="0.2"/>
-
-        {/* Face */}
-        <circle cx="408" cy="98" r="29" fill="white" stroke="#1a1a1a" strokeWidth="2.8"/>
-
-        {/* Eyebrows — gentle arched */}
-        <path d="M394 86 Q402 81 410 86" stroke="#1a1a1a" strokeWidth="2.8" fill="none" strokeLinecap="round"/>
-        <path d="M406 86 Q414 81 422 86" stroke="#1a1a1a" strokeWidth="2.8" fill="none" strokeLinecap="round"/>
-
-        {/* Oval glasses (different shape from left's round ones) */}
-        <ellipse cx="399" cy="96" rx="12" ry="10" stroke="#1a1a1a" strokeWidth="2.6" fill="none"/>
-        <ellipse cx="417" cy="96" rx="12" ry="10" stroke="#1a1a1a" strokeWidth="2.6" fill="none"/>
-        <line x1="387" y1="96" x2="383" y2="94" stroke="#1a1a1a" strokeWidth="2.4" strokeLinecap="round"/>
-        <line x1="429" y1="96" x2="433" y2="94" stroke="#1a1a1a" strokeWidth="2.4" strokeLinecap="round"/>
-        <line x1="411" y1="96" x2="409" y2="96" stroke="#1a1a1a" strokeWidth="2.8" strokeLinecap="round"/>
-
-        {/* Eyes */}
-        <circle cx="399" cy="96" r="5.5" fill="#1a1a1a"/>
-        <circle cx="417" cy="96" r="5.5" fill="#1a1a1a"/>
-        <circle cx="400.8" cy="93.8" r="2"  fill="white"/>
-        <circle cx="418.8" cy="93.8" r="2"  fill="white"/>
-
-        {/* Nose */}
-        <circle cx="404" cy="107" r="2.2" fill="#1a1a1a" opacity="0.22"/>
-        <circle cx="412" cy="107" r="2.2" fill="#1a1a1a" opacity="0.22"/>
-
-        {/* Smile — soft */}
-        <path d="M396 114 Q408 124 420 114" stroke="#1a1a1a" strokeWidth="2.8" fill="none" strokeLinecap="round"/>
-
-        {/* Cheeks */}
-        <circle cx="389" cy="108" r="6.5" fill="#1a1a1a" opacity="0.09"/>
-        <circle cx="427" cy="108" r="6.5" fill="#1a1a1a" opacity="0.09"/>
-
-        {/* Neck */}
-        <rect x="403" y="125" width="10" height="30" fill="white"/>
-
-        {/* White shirt */}
-        <path d="M372 210 C372 163 386 150 408 148 C430 150 444 163 444 210Z"
-              fill="white" stroke="#1a1a1a" strokeWidth="2.8"/>
-        <path d="M400 148 L408 162 L416 148" stroke="#1a1a1a" strokeWidth="2.4" fill="none"/>
-
-        {/* Right arm — holds pen */}
-        <Arm d="M442 174 C450 186 456 197 459 207" w={14}/>
-
-        {/* Hand + pen */}
-        <ellipse cx="461" cy="209" rx="8" ry="6"   fill="white" stroke="#1a1a1a" strokeWidth="2.2"/>
-        <line x1="459" y1="205" x2="477" y2="189" stroke="#1a1a1a" strokeWidth="3.4" strokeLinecap="round"/>
-        <polygon points="477,186 482,178 487,184" fill="#1a1a1a"/>
-
-        {/* Left arm — resting on table */}
-        <Arm d="M374 174 C367 186 363 197 361 208" w={14}/>
-
-
-        {/* ── LAPTOP (center on table) ──────────────────────────── */}
-        <rect x="208" y="148" width="84" height="64" rx="4" fill="#1a1a1a"/>
-        <rect x="212" y="152" width="76" height="56" fill="#242424"/>
-        <rect x="217" y="158" width="50" height="3"   rx="1.5" fill="white" opacity="0.45"/>
-        <rect x="217" y="164" width="38" height="3"   rx="1.5" fill="white" opacity="0.32"/>
-        <rect x="217" y="170" width="46" height="3"   rx="1.5" fill="white" opacity="0.32"/>
-        <rect x="217" y="176" width="34" height="3"   rx="1.5" fill="white" opacity="0.28"/>
-        {/* Blinking cursor */}
-        <rect x="269" y="158" width="3" height="9" rx="1.5" fill="white"
-              style={{ animation: "czar-cursor 1.1s step-end infinite" }}/>
-        {/* Keyboard base */}
-        <rect x="190" y="210" width="120" height="9" rx="3" fill="#1a1a1a"/>
-        <rect x="202" y="212" width="96" height="2.5" rx="1.2" fill="white" opacity="0.1"/>
-
-        {/* ── PAPERS (right edge) ───────────────────────────────── */}
-        <rect x="460" y="174" width="34" height="24" rx="3" fill="white" stroke="#1a1a1a" strokeWidth="2"/>
-        <rect x="455" y="168" width="34" height="24" rx="3" fill="white" stroke="#1a1a1a" strokeWidth="2"/>
-        <line x1="459" y1="175" x2="483" y2="175" stroke="#1a1a1a" strokeWidth="1.2" opacity="0.38"/>
-        <line x1="459" y1="181" x2="481" y2="181" stroke="#1a1a1a" strokeWidth="1.2" opacity="0.38"/>
-
-        {/* ── FLOATING SPEECH BUBBLE ───────────────────────────── */}
-        <g style={{ animation: "czar-bubble 3.2s ease-in-out infinite" }}>
-          <rect x="130" y="34" width="92" height="40" rx="14" fill="#1a1a1a"/>
-          <path d="M150 74 L143 88 L167 74Z" fill="#1a1a1a"/>
-          <rect x="140" y="43" width="60" height="3.5" rx="1.8" fill="white" opacity="0.65"/>
-          <rect x="140" y="50" width="48" height="3.5" rx="1.8" fill="white" opacity="0.5"/>
-          <circle cx="149" cy="61" r="2.8" fill="white" opacity="0.5"/>
-          <circle cx="158" cy="61" r="2.8" fill="white" opacity="0.5"/>
-          <circle cx="167" cy="61" r="2.8" fill="white" opacity="0.5"/>
-        </g>
-
-        {/* ── SPARKLES ─────────────────────────────────────────── */}
-        <g style={{ animation: "czar-sparkle 4s linear infinite", transformOrigin: "136px 27px" }} opacity="0.74">
-          <path d="M136 27 L137.7 21 L139.4 27 L145 28.5 L139.4 30 L137.7 36 L136 30 L130 28.5 Z" fill="#1a1a1a"/>
-        </g>
-        <g style={{ animation: "czar-sparkle 5.5s linear infinite reverse", transformOrigin: "351px 17px" }} opacity="0.74">
-          <path d="M351 17 L352.8 11 L354.6 17 L361 18.5 L354.6 20 L352.8 26 L351 20 L344.5 18.5 Z" fill="#1a1a1a"/>
-        </g>
-        <circle cx="470" cy="130" r="4" fill="#1a1a1a" opacity="0.3"/>
-        <circle cx="477" cy="123" r="2.5" fill="#1a1a1a" opacity="0.2"/>
+        {/* Right arm — pen/writing */}
+        <path d="M428 138 L450 165" stroke="#1a1a1a" strokeWidth="3"/>
+        <circle cx="452" cy="167" r="5" fill="white" stroke="#1a1a1a" strokeWidth="2"/>
+        <line x1="448" y1="163" x2="465" y2="150" stroke="#1a1a1a" strokeWidth="3.5"/>
 
       </svg>
     </div>
   );
 }
 
-// ─── Greeting line ────────────────────────────────────────────────────────
+// ─── GreetingLine ─────────────────────────────────────────────────────────
 
 export function GreetingLine({ userName }: { userName?: string }) {
   const [show, setShow] = useState(false);
@@ -356,97 +242,87 @@ export function GreetingLine({ userName }: { userName?: string }) {
   );
 }
 
-// ─── Agent Activity Dock — fixed right edge during streaming ─────────────
+// ─── Mini faces for agent dock ────────────────────────────────────────────
 
-// Compact mini-face SVGs for the dock (same style: white fill + dark outline)
 function MiniWriter() {
   return (
-    <svg viewBox="0 0 80 82" fill="none" width="40" height="41" className="czar-svg">
-      <path d="M14 40 C12 20 17 5 40 5 C63 5 68 20 66 40 C70 56 68 78 62 82 L40 70 L18 82 C12 78 10 56 14 40Z" fill="#1a1a1a"/>
-      <circle cx="40" cy="44" r="22" fill="white" stroke="#1a1a1a" strokeWidth="2.2"/>
-      <circle cx="32" cy="41" r="4.5" fill="#1a1a1a"/>
-      <circle cx="48" cy="41" r="4.5" fill="#1a1a1a"/>
-      <circle cx="33.5" cy="39.2" r="1.6" fill="white"/>
-      <circle cx="49.5" cy="39.2" r="1.6" fill="white"/>
-      <path d="M32 52 Q40 59 48 52" stroke="#1a1a1a" strokeWidth="2.2" fill="none" strokeLinecap="round"/>
-      <circle cx="27" cy="48" r="4" fill="#1a1a1a" opacity="0.09"/>
-      <circle cx="53" cy="48" r="4" fill="#1a1a1a" opacity="0.09"/>
+    <svg viewBox="0 0 60 60" fill="none" width="40" height="40" className="czar-svg">
+      <circle cx="30" cy="18" r="13" fill="white" stroke="#1a1a1a" strokeWidth="1.5"/>
+      <path d="M18 10 Q18 5 30 4 Q42 5 42 10 L42 18 Q42 20 40 20 L20 20 Q18 20 18 18 Z" fill="#1a1a1a"/>
+      <circle cx="26" cy="17" r="2" fill="#1a1a1a"/>
+      <circle cx="34" cy="17" r="2" fill="#1a1a1a"/>
+      <path d="M22 25 Q30 30 38 25" fill="none" stroke="#1a1a1a" strokeWidth="1.5"/>
+      <rect x="24" y="28" width="12" height="18" fill="white" stroke="#1a1a1a" strokeWidth="1.5"/>
+      <path d="M24 32 L36 32" stroke="#1a1a1a" strokeWidth="1" opacity="0.4"/>
     </svg>
   );
 }
+
 function MiniResearcher() {
   return (
-    <svg viewBox="0 0 80 80" fill="none" width="40" height="40" className="czar-svg">
-      <circle cx="40" cy="28" r="12" fill="#1a1a1a"/>
-      <circle cx="25" cy="36" r="11" fill="#1a1a1a"/>
-      <circle cx="55" cy="36" r="11" fill="#1a1a1a"/>
-      <circle cx="18" cy="50" r="9"  fill="#1a1a1a"/>
-      <circle cx="62" cy="50" r="9"  fill="#1a1a1a"/>
-      <circle cx="40" cy="52" r="22" fill="white" stroke="#1a1a1a" strokeWidth="2.2"/>
-      <circle cx="31" cy="49" r="9" stroke="#1a1a1a" strokeWidth="2.2" fill="none"/>
-      <circle cx="49" cy="49" r="9" stroke="#1a1a1a" strokeWidth="2.2" fill="none"/>
-      <circle cx="31" cy="49" r="4" fill="#1a1a1a"/>
-      <circle cx="49" cy="49" r="4" fill="#1a1a1a"/>
-      <circle cx="32.5" cy="47.2" r="1.4" fill="white"/>
-      <circle cx="50.5" cy="47.2" r="1.4" fill="white"/>
-      <path d="M31 61 Q40 68 49 61" stroke="#1a1a1a" strokeWidth="2" fill="none" strokeLinecap="round"/>
+    <svg viewBox="0 0 60 60" fill="none" width="40" height="40" className="czar-svg">
+      <circle cx="30" cy="18" r="13" fill="white" stroke="#1a1a1a" strokeWidth="1.5"/>
+      <path d="M18 10 Q18 5 30 4 Q42 5 42 10 L42 18 Q42 20 40 20 L20 20 Q18 20 18 18 Z" fill="#1a1a1a"/>
+      <circle cx="25" cy="16" r="2.5" fill="#1a1a1a"/>
+      <circle cx="35" cy="16" r="2.5" fill="#1a1a1a"/>
+      <circle cx="25" cy="16" r="3" fill="none" stroke="#1a1a1a" strokeWidth="1.2"/>
+      <circle cx="35" cy="16" r="3" fill="none" stroke="#1a1a1a" strokeWidth="1.2"/>
+      <path d="M22 26 Q30 31 38 26" fill="none" stroke="#1a1a1a" strokeWidth="1.5"/>
+      <rect x="24" y="28" width="12" height="18" fill="white" stroke="#1a1a1a" strokeWidth="1.5"/>
     </svg>
   );
 }
+
 function MiniPlanner() {
   return (
-    <svg viewBox="0 0 80 80" fill="none" width="40" height="40" className="czar-svg">
-      <path d="M18 44 C16 22 20 6 40 6 C60 6 64 22 62 44 L60 55 C52 49 28 49 20 55Z" fill="#1a1a1a"/>
-      <circle cx="40" cy="50" r="22" fill="white" stroke="#1a1a1a" strokeWidth="2.2"/>
-      <circle cx="32" cy="47" r="4.5" fill="#1a1a1a"/>
-      <circle cx="48" cy="47" r="4.5" fill="#1a1a1a"/>
-      <circle cx="33.5" cy="45.2" r="1.6" fill="white"/>
-      <circle cx="49.5" cy="45.2" r="1.6" fill="white"/>
-      <path d="M31 59 Q40 67 49 59" stroke="#1a1a1a" strokeWidth="2.2" fill="none" strokeLinecap="round"/>
+    <svg viewBox="0 0 60 60" fill="none" width="40" height="40" className="czar-svg">
+      <circle cx="30" cy="18" r="13" fill="white" stroke="#1a1a1a" strokeWidth="1.5"/>
+      <path d="M18 10 Q18 5 30 4 Q42 5 42 10 L42 18 Q42 20 40 20 L20 20 Q18 20 18 18 Z" fill="#1a1a1a"/>
+      <circle cx="26" cy="17" r="2" fill="#1a1a1a"/>
+      <circle cx="34" cy="17" r="2" fill="#1a1a1a"/>
+      <path d="M22 26 Q30 31 38 26" fill="none" stroke="#1a1a1a" strokeWidth="1.5"/>
+      <rect x="22" y="28" width="16" height="16" fill="white" stroke="#1a1a1a" strokeWidth="1.5"/>
+      <line x1="26" y1="28" x2="26" y2="44" stroke="#1a1a1a" strokeWidth="0.8" opacity="0.5"/>
+      <line x1="30" y1="28" x2="30" y2="44" stroke="#1a1a1a" strokeWidth="0.8" opacity="0.5"/>
+      <line x1="34" y1="28" x2="34" y2="44" stroke="#1a1a1a" strokeWidth="0.8" opacity="0.5"/>
     </svg>
   );
 }
+
 function MiniEditor() {
   return (
-    <svg viewBox="0 0 80 80" fill="none" width="40" height="40" className="czar-svg">
-      <path d="M16 44 C14 20 18 4 40 4 C62 4 66 20 64 44 C66 58 64 76 58 80 L40 68 L22 80 C16 76 14 58 16 44Z" fill="#1a1a1a"/>
-      <circle cx="40" cy="46" r="22" fill="white" stroke="#1a1a1a" strokeWidth="2.2"/>
-      <ellipse cx="31" cy="43" rx="10" ry="9" stroke="#1a1a1a" strokeWidth="2" fill="none"/>
-      <ellipse cx="49" cy="43" rx="10" ry="9" stroke="#1a1a1a" strokeWidth="2" fill="none"/>
-      <circle cx="31" cy="43" r="4"   fill="#1a1a1a"/>
-      <circle cx="49" cy="43" r="4"   fill="#1a1a1a"/>
-      <circle cx="32.5" cy="41.2" r="1.4" fill="white"/>
-      <circle cx="50.5" cy="41.2" r="1.4" fill="white"/>
-      <path d="M31 55 Q40 62 49 55" stroke="#1a1a1a" strokeWidth="2" fill="none" strokeLinecap="round"/>
+    <svg viewBox="0 0 60 60" fill="none" width="40" height="40" className="czar-svg">
+      <circle cx="30" cy="18" r="13" fill="white" stroke="#1a1a1a" strokeWidth="1.5"/>
+      <path d="M16 12 Q16 4 30 3 Q44 4 44 12 L44 20 Q44 35 38 42 L22 42 Q16 35 16 20 Z" fill="#1a1a1a"/>
+      <circle cx="26" cy="16" r="2" fill="#1a1a1a"/>
+      <circle cx="34" cy="16" r="2" fill="#1a1a1a"/>
+      <path d="M22 26 Q30 31 38 26" fill="none" stroke="#1a1a1a" strokeWidth="1.5"/>
+      <rect x="24" y="28" width="12" height="18" fill="white" stroke="#1a1a1a" strokeWidth="1.5"/>
     </svg>
   );
 }
+
 function MiniCritic() {
   return (
-    <svg viewBox="0 0 80 80" fill="none" width="40" height="40" className="czar-svg">
-      <circle cx="40" cy="16" r="10" fill="#1a1a1a"/>
-      <circle cx="22" cy="24" r="9"  fill="#1a1a1a"/>
-      <circle cx="58" cy="24" r="9"  fill="#1a1a1a"/>
-      <circle cx="14" cy="38" r="8"  fill="#1a1a1a"/>
-      <circle cx="66" cy="38" r="8"  fill="#1a1a1a"/>
-      <circle cx="40" cy="52" r="22" fill="white" stroke="#1a1a1a" strokeWidth="2.2"/>
-      <circle cx="32" cy="49" r="4.5" fill="#1a1a1a"/>
-      <circle cx="48" cy="49" r="4.5" fill="#1a1a1a"/>
-      <circle cx="33.5" cy="47.2" r="1.6" fill="white"/>
-      <circle cx="49.5" cy="47.2" r="1.6" fill="white"/>
-      <path d="M32 61 Q40 68 48 61" stroke="#1a1a1a" strokeWidth="2.2" fill="none" strokeLinecap="round"/>
+    <svg viewBox="0 0 60 60" fill="none" width="40" height="40" className="czar-svg">
+      <circle cx="30" cy="18" r="13" fill="white" stroke="#1a1a1a" strokeWidth="1.5"/>
+      <path d="M18 10 Q18 5 30 4 Q42 5 42 10 L42 18 Q42 20 40 20 L20 20 Q18 20 18 18 Z" fill="#1a1a1a"/>
+      <circle cx="26" cy="17" r="2" fill="#1a1a1a"/>
+      <circle cx="34" cy="17" r="2" fill="#1a1a1a"/>
+      <path d="M22 25 Q30 30 38 25" fill="none" stroke="#1a1a1a" strokeWidth="1.5"/>
+      <rect x="24" y="28" width="12" height="18" fill="white" stroke="#1a1a1a" strokeWidth="1.5"/>
     </svg>
   );
 }
 
 const MINI_FACES: Record<string, React.FC> = {
-  writer:      MiniWriter,
-  editor:      MiniEditor,
-  researcher:  MiniResearcher,
-  planner:     MiniPlanner,
-  critic:      MiniCritic,
-  revision:    MiniEditor,
-  architect:   MiniPlanner,
+  writer: MiniWriter,
+  editor: MiniEditor,
+  researcher: MiniResearcher,
+  planner: MiniPlanner,
+  critic: MiniCritic,
+  revision: MiniEditor,
+  architect: MiniPlanner,
   illustrator: MiniWriter,
 };
 
@@ -471,8 +347,8 @@ export function AgentActivityDock({ agents, visible }: { agents: LiveAgent[]; vi
       {named.map(agent => {
         const Face = MINI_FACES[agent.id.toLowerCase()];
         const working = agent.status === "working";
-        const done    = agent.status === "done";
-        const error   = agent.status === "error";
+        const done = agent.status === "done";
+        const error = agent.status === "error";
         return (
           <div key={agent.id} className="flex items-center gap-2 justify-end">
             {working && agent.action && (
@@ -482,30 +358,14 @@ export function AgentActivityDock({ agents, visible }: { agents: LiveAgent[]; vi
             )}
             <div className="relative flex-shrink-0">
               {working && (
-                <span className="absolute inset-0 rounded-full border-2 border-primary animate-ping opacity-30"/>
+                <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-primary border-r-primary animate-spin" />
               )}
-              <div className={[
-                "w-10 h-10 rounded-full bg-white overflow-hidden border-2 shadow-md",
-                "flex items-center justify-center transition-all duration-300",
-                working ? "border-primary shadow-primary/20 scale-105"
-                : done   ? "border-emerald-500/60"
-                : error  ? "border-destructive/60"
-                : "border-border/50 opacity-60",
-              ].join(" ")}>
-                {Face && <Face/>}
-              </div>
-              {working && (
-                <span className="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full bg-primary border-2 border-background animate-pulse"/>
-              )}
+              {Face && <Face />}
               {done && (
-                <span className="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-500 border-2 border-background flex items-center justify-center">
-                  <svg width="6" height="6" viewBox="0 0 6 6" fill="none">
-                    <path d="M1 3L2.5 4.5L5 1.5" stroke="white" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
-                  </svg>
-                </span>
+                <span className="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-500 border-2 border-background" />
               )}
               {error && (
-                <span className="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full bg-destructive border-2 border-background"/>
+                <span className="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full bg-destructive border-2 border-background" />
               )}
             </div>
           </div>
@@ -515,98 +375,68 @@ export function AgentActivityDock({ agents, visible }: { agents: LiveAgent[]; vi
   );
 }
 
-// ─── Welcome aurora — always-on live background ───────────────────────────
-
-export function WelcomeAurora() {
-  return (
-    <div className="fixed inset-0 z-[-1] pointer-events-none" aria-hidden>
-      <style>{SCENE_CSS}</style>
-      {/* Terracotta warm blob — bottom left */}
-      <div style={{
-        position: "absolute", bottom: "-25%", left: "-15%",
-        width: "75vw", maxWidth: 560, height: "75vw", maxHeight: 560,
-        borderRadius: "50%",
-        background: "radial-gradient(circle, hsl(18 65% 58%) 0%, transparent 62%)",
-        animation: "czar-aurora-a 20s ease-in-out infinite",
-      }} />
-      {/* Sage/teal blob — top right */}
-      <div style={{
-        position: "absolute", top: "-20%", right: "-15%",
-        width: "60vw", maxWidth: 480, height: "60vw", maxHeight: 480,
-        borderRadius: "50%",
-        background: "radial-gradient(circle, hsl(153 28% 48%) 0%, transparent 62%)",
-        animation: "czar-aurora-b 26s ease-in-out infinite",
-      }} />
-      {/* Warm gold accent — upper center */}
-      <div style={{
-        position: "absolute", top: "-5%", left: "25%",
-        width: "50vw", maxWidth: 380, height: "50vw", maxHeight: 380,
-        borderRadius: "50%",
-        background: "radial-gradient(circle, hsl(37 56% 52%) 0%, transparent 62%)",
-        animation: "czar-aurora-c 30s ease-in-out 6s infinite",
-      }} />
-    </div>
-  );
-}
-
 // ─── Floating background elements ─────────────────────────────────────────
 
 function TextLines({ width }: { width: number }) {
   return (
     <svg width={width} height={14} viewBox={`0 0 ${width} 14`} fill="none">
-      <rect x="0" y="0" width={width}                   height="3" rx="1.5" fill="currentColor"/>
-      <rect x="0" y="7" width={Math.round(width * .72)} height="3" rx="1.5" fill="currentColor"/>
+      <rect x="0" y="0" width={width} height="3" rx="1.5" fill="currentColor" />
+      <rect x="0" y="7" width={Math.round(width * 0.72)} height="3" rx="1.5" fill="currentColor" />
     </svg>
   );
 }
+
 function SmallPen() {
   return (
     <svg width="22" height="30" viewBox="0 0 28 36" fill="none">
-      <path d="M14 0 L28 18 L20 18 L20 36 L8 36 L8 18 L0 18Z" fill="currentColor"/>
-      <path d="M11 18 L14 30 L17 18" fill="white" opacity="0.5"/>
+      <path d="M14 0 L28 18 L20 18 L20 36 L8 36 L8 18 L0 18Z" fill="currentColor" />
+      <path d="M11 18 L14 30 L17 18" fill="white" opacity="0.5" />
     </svg>
   );
 }
+
 function SmallBook() {
   return (
     <svg width="32" height="24" viewBox="0 0 40 30" fill="none">
       <path d="M20 7 C16 4 9 3 2 5 L2 27 C9 25 16 26 20 29 C24 26 31 25 38 27 L38 5 C31 3 24 4 20 7Z"
-            fill="currentColor"/>
-      <line x1="20" y1="7" x2="20" y2="29" stroke="white" strokeWidth="1.5" opacity="0.55"/>
+            fill="currentColor" />
+      <line x1="20" y1="7" x2="20" y2="29" stroke="white" strokeWidth="1.5" opacity="0.55" />
     </svg>
   );
 }
+
 function FloatSparkle({ size }: { size: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 20 20" fill="none">
-      <path d="M10 0 L11.8 8.2 L20 10 L11.8 11.8 L10 20 L8.2 11.8 L0 10 L8.2 8.2 Z" fill="currentColor"/>
+      <path d="M10 0 L11.8 8.2 L20 10 L11.8 11.8 L10 20 L8.2 11.8 L0 10 L8.2 8.2 Z" fill="currentColor" />
     </svg>
   );
 }
+
 function Dots() {
   return (
     <svg width="26" height="26" viewBox="0 0 26 26" fill="none">
       {[0, 10, 20].flatMap(x => [0, 10, 20].map(y => (
-        <circle key={`${x}-${y}`} cx={x + 3} cy={y + 3} r="2.5" fill="currentColor"/>
+        <circle key={`${x}-${y}`} cx={x + 3} cy={y + 3} r="2.5" fill="currentColor" />
       )))}
     </svg>
   );
 }
 
 const BG_ELEMENTS = [
-  { id:"l1",   x:"4%",  y:"10%", anim:"czar-float-a", dur:"8s",   delay:"0s",   op:"0.048", el:<TextLines width={68}/> },
-  { id:"l2",   x:"84%", y:"16%", anim:"czar-float-b", dur:"9.5s", delay:"1.4s", op:"0.044", el:<TextLines width={54}/> },
-  { id:"l3",   x:"5%",  y:"60%", anim:"czar-float-a", dur:"7s",   delay:"2.6s", op:"0.048", el:<TextLines width={60}/> },
-  { id:"l4",   x:"83%", y:"56%", anim:"czar-float-c", dur:"10s",  delay:"0.6s", op:"0.042", el:<TextLines width={56}/> },
-  { id:"l5",   x:"6%",  y:"80%", anim:"czar-float-b", dur:"8.5s", delay:"3.4s", op:"0.038", el:<TextLines width={48}/> },
-  { id:"l6",   x:"82%", y:"78%", anim:"czar-float-a", dur:"11s",  delay:"2s",   op:"0.038", el:<TextLines width={64}/> },
-  { id:"pen",  x:"87%", y:"38%", anim:"czar-float-b", dur:"12s",  delay:"0s",   op:"0.058", el:<SmallPen/> },
-  { id:"book", x:"3%",  y:"42%", anim:"czar-float-b", dur:"10s",  delay:"4s",   op:"0.052", el:<SmallBook/> },
-  { id:"s1",   x:"90%", y:"7%",  anim:"czar-float-a", dur:"6s",   delay:"0s",   op:"0.075", el:<FloatSparkle size={18}/> },
-  { id:"s2",   x:"2%",  y:"28%", anim:"czar-float-c", dur:"8s",   delay:"3s",   op:"0.065", el:<FloatSparkle size={14}/> },
-  { id:"s3",   x:"89%", y:"48%", anim:"czar-float-a", dur:"7s",   delay:"1.4s", op:"0.055", el:<FloatSparkle size={12}/> },
-  { id:"d1",   x:"85%", y:"70%", anim:"czar-float-a", dur:"9s",   delay:"1s",   op:"0.058", el:<Dots/> },
-  { id:"d2",   x:"3%",  y:"70%", anim:"czar-float-c", dur:"11s",  delay:"5s",   op:"0.048", el:<Dots/> },
+  { id: "l1", x: "4%", y: "10%", anim: "czar-float-a", dur: "8s", delay: "0s", op: "0.048", el: <TextLines width={68} /> },
+  { id: "l2", x: "84%", y: "16%", anim: "czar-float-b", dur: "9.5s", delay: "1.4s", op: "0.044", el: <TextLines width={54} /> },
+  { id: "l3", x: "5%", y: "60%", anim: "czar-float-a", dur: "7s", delay: "2.6s", op: "0.048", el: <TextLines width={60} /> },
+  { id: "l4", x: "83%", y: "56%", anim: "czar-float-c", dur: "10s", delay: "0.6s", op: "0.042", el: <TextLines width={56} /> },
+  { id: "l5", x: "6%", y: "80%", anim: "czar-float-b", dur: "8.5s", delay: "3.4s", op: "0.038", el: <TextLines width={48} /> },
+  { id: "l6", x: "82%", y: "78%", anim: "czar-float-a", dur: "11s", delay: "2s", op: "0.038", el: <TextLines width={64} /> },
+  { id: "pen", x: "87%", y: "38%", anim: "czar-float-b", dur: "12s", delay: "0s", op: "0.058", el: <SmallPen /> },
+  { id: "book", x: "3%", y: "42%", anim: "czar-float-b", dur: "10s", delay: "4s", op: "0.052", el: <SmallBook /> },
+  { id: "s1", x: "90%", y: "7%", anim: "czar-float-a", dur: "6s", delay: "0s", op: "0.075", el: <FloatSparkle size={18} /> },
+  { id: "s2", x: "2%", y: "28%", anim: "czar-float-c", dur: "8s", delay: "3s", op: "0.065", el: <FloatSparkle size={14} /> },
+  { id: "s3", x: "89%", y: "48%", anim: "czar-float-a", dur: "7s", delay: "1.4s", op: "0.055", el: <FloatSparkle size={12} /> },
+  { id: "d1", x: "85%", y: "70%", anim: "czar-float-a", dur: "9s", delay: "1s", op: "0.058", el: <Dots /> },
+  { id: "d2", x: "3%", y: "70%", anim: "czar-float-c", dur: "11s", delay: "5s", op: "0.048", el: <Dots /> },
 ];
 
 export function FloatingElements() {
@@ -618,7 +448,8 @@ export function FloatingElements() {
           key={item.id}
           className="absolute"
           style={{
-            left: item.x, top: item.y,
+            left: item.x,
+            top: item.y,
             opacity: item.op,
             animationName: item.anim,
             animationDuration: item.dur,
@@ -630,6 +461,52 @@ export function FloatingElements() {
           {item.el}
         </div>
       ))}
+    </div>
+  );
+}
+
+// ─── Welcome aurora — always-on live background ───────────────────────────
+
+export function WelcomeAurora() {
+  return (
+    <div className="fixed inset-0 z-[-1] pointer-events-none" aria-hidden>
+      <style>{SCENE_CSS}</style>
+      <div style={{
+        position: "absolute",
+        bottom: "-25%",
+        left: "-15%",
+        width: "75vw",
+        maxWidth: 560,
+        height: "75vw",
+        maxHeight: 560,
+        borderRadius: "50%",
+        background: "radial-gradient(circle, hsl(18 65% 58%) 0%, transparent 62%)",
+        animation: "czar-aurora-a 20s ease-in-out infinite",
+      }} />
+      <div style={{
+        position: "absolute",
+        top: "-20%",
+        right: "-15%",
+        width: "60vw",
+        maxWidth: 480,
+        height: "60vw",
+        maxHeight: 480,
+        borderRadius: "50%",
+        background: "radial-gradient(circle, hsl(153 28% 48%) 0%, transparent 62%)",
+        animation: "czar-aurora-b 26s ease-in-out infinite",
+      }} />
+      <div style={{
+        position: "absolute",
+        top: "-5%",
+        left: "25%",
+        width: "50vw",
+        maxWidth: 380,
+        height: "50vw",
+        maxHeight: 380,
+        borderRadius: "50%",
+        background: "radial-gradient(circle, hsl(37 56% 52%) 0%, transparent 62%)",
+        animation: "czar-aurora-c 30s ease-in-out 6s infinite",
+      }} />
     </div>
   );
 }
@@ -646,7 +523,8 @@ export function WritingGlow({ visible }: { visible: boolean }) {
       <div
         className="absolute w-[50vw] h-[50vw] rounded-full opacity-[0.032]"
         style={{
-          top: "5%", right: "-10%",
+          top: "5%",
+          right: "-10%",
           background: "radial-gradient(circle, hsl(18 50% 53%) 0%, transparent 70%)",
           animation: "czar-glow-drift 14s ease-in-out infinite",
         }}
@@ -654,7 +532,8 @@ export function WritingGlow({ visible }: { visible: boolean }) {
       <div
         className="absolute w-[40vw] h-[40vw] rounded-full opacity-[0.025]"
         style={{
-          bottom: "10%", left: "-8%",
+          bottom: "10%",
+          left: "-8%",
           background: "radial-gradient(circle, hsl(153 16% 42%) 0%, transparent 70%)",
           animation: "czar-glow-drift 18s ease-in-out 5s infinite",
         }}
