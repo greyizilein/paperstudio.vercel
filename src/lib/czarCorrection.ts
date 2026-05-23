@@ -44,13 +44,19 @@ export const CORRECTION_TYPE_META: Record<CorrectionType, {
   },
 };
 
+// Raw event from backend — no UI state
 export interface CorrectionChange {
   id: string;
   type: CorrectionType;
   original: string;
   corrected: string;
   explanation: string;
-  status: "pending" | "accepted" | "rejected";
+}
+
+// UI-layer change with selection + override instruction
+export interface CorrectionChangeUI extends CorrectionChange {
+  selected: boolean;
+  overrideInstruction: string;
 }
 
 export interface CorrectionSummary {
@@ -62,68 +68,16 @@ export interface CorrectionSummary {
   original_text: string;
 }
 
-export interface TextSegment { kind: "text"; text: string }
-export interface ChangeSegment { kind: "change"; change: CorrectionChange }
-export type Segment = TextSegment | ChangeSegment;
-
-export function buildSegments(originalText: string, changes: CorrectionChange[]): Segment[] {
-  const usedIntervals: [number, number][] = [];
-  const positioned: { change: CorrectionChange; index: number }[] = [];
-
-  for (const change of changes) {
-    if (!change.original) continue;
-    let searchFrom = 0;
-    let found = -1;
-
-    while (searchFrom <= originalText.length - change.original.length) {
-      const idx = originalText.indexOf(change.original, searchFrom);
-      if (idx === -1) break;
-      const end = idx + change.original.length;
-      const overlaps = usedIntervals.some(([s, e]) => idx < e && end > s);
-      if (!overlaps) {
-        found = idx;
-        usedIntervals.push([idx, end]);
-        break;
-      }
-      searchFrom = idx + 1;
-    }
-
-    if (found !== -1) {
-      positioned.push({ change, index: found });
-    }
-  }
-
-  positioned.sort((a, b) => a.index - b.index);
-
-  const segments: Segment[] = [];
-  let cursor = 0;
-
-  for (const { change, index } of positioned) {
-    if (index < cursor) continue;
-    if (index > cursor) {
-      segments.push({ kind: "text", text: originalText.slice(cursor, index) });
-    }
-    segments.push({ kind: "change", change });
-    cursor = index + change.original.length;
-  }
-
-  if (cursor < originalText.length) {
-    segments.push({ kind: "text", text: originalText.slice(cursor) });
-  }
-
-  return segments;
-}
-
-export function buildCleanText(originalText: string, changes: CorrectionChange[]): string {
+export function buildCleanText(originalText: string, changes: CorrectionChangeUI[]): string {
   const positioned = changes
+    .filter(c => c.selected)
     .map(c => ({ change: c, index: originalText.indexOf(c.original) }))
     .filter(p => p.index !== -1)
     .sort((a, b) => b.index - a.index);
 
   let result = originalText;
   for (const { change, index } of positioned) {
-    const replacement = change.status === "rejected" ? change.original : change.corrected;
-    result = result.slice(0, index) + replacement + result.slice(index + change.original.length);
+    result = result.slice(0, index) + change.corrected + result.slice(index + change.original.length);
   }
   return result;
 }

@@ -19,7 +19,7 @@ import {
   type CorrectionChangeEvent, type CorrectionSummaryEvent,
 } from "@/lib/czarStream";
 import { buildDocx, stripMarkdown, markdownComponents } from "@/lib/czarDocUtils.tsx";
-import { type CorrectionChange, type CorrectionSummary } from "@/lib/czarCorrection";
+import { type CorrectionChangeUI, type CorrectionSummary } from "@/lib/czarCorrection";
 import { ConvSidebar } from "@/components/czar/ConvSidebar";
 import { UpgradeModal } from "@/components/czar/UpgradeModal";
 import { DashboardSidebar } from "@/components/dashboard/DashboardSidebar";
@@ -47,8 +47,9 @@ interface UIMessage {
   streaming?: boolean;
   error?: boolean;
   agents?: LiveAgent[];
-  correctionChanges?: CorrectionChange[];
+  correctionChanges?: CorrectionChangeUI[];
   correctionSummary?: CorrectionSummary | null;
+  correctionApplied?: boolean;
 }
 
 // ── Constants ──────────────────────────────────────────────────────
@@ -245,10 +246,11 @@ export default function CzarPage() {
     const userMsgId = `u_${Date.now()}`;
     const assistantMsgId = `a_${Date.now()}`;
 
+    const isApplyStep = extraSettings.correction_apply === true;
     setMessages(prev => [
       ...prev,
-      { id: userMsgId, role: "user", content: text, mode },
-      { id: assistantMsgId, role: "assistant", content: "", mode, streaming: true },
+      { id: userMsgId, role: "user", content: text, mode, correctionApplied: isApplyStep },
+      { id: assistantMsgId, role: "assistant", content: "", mode, streaming: true, correctionApplied: isApplyStep },
     ]);
     setStreaming(true);
     setAgents([]);
@@ -317,7 +319,7 @@ export default function CzarPage() {
                   ...m,
                   correctionChanges: [
                     ...(m.correctionChanges ?? []),
-                    { ...e, status: "pending" as const },
+                    { ...e, selected: true, overrideInstruction: "" },
                   ],
                 }
               : m
@@ -377,51 +379,53 @@ export default function CzarPage() {
     setMessages(prev => prev.map(m => m.id === id ? { ...m, content } : m));
   }, []);
 
-  const handleCorrectionAccept = useCallback((msgId: string, changeId: string) => {
+  const handleCorrectionToggleSelect = useCallback((msgId: string, changeId: string) => {
     setMessages(prev => prev.map(m =>
       m.id === msgId
-        ? { ...m, correctionChanges: m.correctionChanges?.map(c => c.id === changeId ? { ...c, status: "accepted" as const } : c) }
+        ? { ...m, correctionChanges: m.correctionChanges?.map(c => c.id === changeId ? { ...c, selected: !c.selected } : c) }
         : m
     ));
   }, []);
 
-  const handleCorrectionReject = useCallback((msgId: string, changeId: string) => {
+  const handleCorrectionSelectAll = useCallback((msgId: string) => {
     setMessages(prev => prev.map(m =>
       m.id === msgId
-        ? { ...m, correctionChanges: m.correctionChanges?.map(c => c.id === changeId ? { ...c, status: "rejected" as const } : c) }
+        ? { ...m, correctionChanges: m.correctionChanges?.map(c => ({ ...c, selected: true })) }
         : m
     ));
   }, []);
 
-  const handleCorrectionAcceptAll = useCallback((msgId: string) => {
+  const handleCorrectionSelectNone = useCallback((msgId: string) => {
     setMessages(prev => prev.map(m =>
       m.id === msgId
-        ? { ...m, correctionChanges: m.correctionChanges?.map(c => ({ ...c, status: "accepted" as const })) }
+        ? { ...m, correctionChanges: m.correctionChanges?.map(c => ({ ...c, selected: false })) }
         : m
     ));
   }, []);
 
-  const handleCorrectionRejectAll = useCallback((msgId: string) => {
+  const handleCorrectionOverrideChange = useCallback((msgId: string, changeId: string, instruction: string) => {
     setMessages(prev => prev.map(m =>
       m.id === msgId
-        ? { ...m, correctionChanges: m.correctionChanges?.map(c => ({ ...c, status: "rejected" as const })) }
+        ? { ...m, correctionChanges: m.correctionChanges?.map(c => c.id === changeId ? { ...c, overrideInstruction: instruction } : c) }
         : m
     ));
   }, []);
 
-  const handleCorrectionDownload = useCallback(async (cleanText: string) => {
-    const doc = buildDocx(cleanText);
-    const blob = await Packer.toBlob(doc);
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url; a.download = "czar-corrected-clean.docx"; a.click();
-    URL.revokeObjectURL(url);
-  }, []);
+  const handleCorrectionApply = useCallback((selectedChanges: CorrectionChangeUI[], originalText: string) => {
+    const correctionsList = selectedChanges.map((c, i) =>
+      `${i + 1}. [${c.type}] Original: "${c.original}" → Replace with: "${c.corrected}" — ${c.explanation}${c.overrideInstruction ? `. Override: ${c.overrideInstruction}` : ""}`
+    ).join("\n");
 
-  const handleCorrectionFinalPass = useCallback((cleanText: string) => {
-    setCorrectionModalInitialText(cleanText);
-    setCorrectionModalOpen(true);
-  }, []);
+    sendMessage(
+      `Apply ${selectedChanges.length} correction${selectedChanges.length !== 1 ? "s" : ""} to document`,
+      [],
+      {
+        correction_apply: true,
+        correction_original_text: originalText,
+        correction_selected_changes: correctionsList,
+      },
+    );
+  }, [sendMessage]);
 
   const handleCorrectionModalSubmit = useCallback(({ text, notes, file }: { text?: string; notes: string; file?: File }) => {
     setCorrectionModalOpen(false);
@@ -575,12 +579,11 @@ export default function CzarPage() {
                 userInitials={userInitials}
                 onContentChange={handleMessageContentChange}
                 onSelectionAction={handleSelectionAction}
-                onCorrectionAccept={(changeId) => handleCorrectionAccept(msg.id, changeId)}
-                onCorrectionReject={(changeId) => handleCorrectionReject(msg.id, changeId)}
-                onCorrectionAcceptAll={() => handleCorrectionAcceptAll(msg.id)}
-                onCorrectionRejectAll={() => handleCorrectionRejectAll(msg.id)}
-                onCorrectionDownload={handleCorrectionDownload}
-                onCorrectionFinalPass={handleCorrectionFinalPass}
+                onCorrectionToggleSelect={(changeId) => handleCorrectionToggleSelect(msg.id, changeId)}
+                onCorrectionSelectAll={() => handleCorrectionSelectAll(msg.id)}
+                onCorrectionSelectNone={() => handleCorrectionSelectNone(msg.id)}
+                onCorrectionOverrideChange={(changeId, instr) => handleCorrectionOverrideChange(msg.id, changeId, instr)}
+                onCorrectionApply={handleCorrectionApply}
               />
             ))}
             <div ref={threadEndRef} />
@@ -866,24 +869,25 @@ function InlineDocMessage({ msg, onContentChange, onSelectionAction }: {
 function CzarMessage({
   msg, currentAgents, userInitials,
   onContentChange, onSelectionAction,
-  onCorrectionAccept, onCorrectionReject, onCorrectionAcceptAll, onCorrectionRejectAll,
-  onCorrectionDownload, onCorrectionFinalPass,
+  onCorrectionToggleSelect, onCorrectionSelectAll, onCorrectionSelectNone,
+  onCorrectionOverrideChange, onCorrectionApply,
 }: {
   msg: UIMessage;
   currentAgents: LiveAgent[];
   userInitials: string;
   onContentChange: (id: string, content: string) => void;
   onSelectionAction: (action: string, text: string) => void;
-  onCorrectionAccept: (changeId: string) => void;
-  onCorrectionReject: (changeId: string) => void;
-  onCorrectionAcceptAll: () => void;
-  onCorrectionRejectAll: () => void;
-  onCorrectionDownload: (cleanText: string) => void;
-  onCorrectionFinalPass: (cleanText: string) => void;
+  onCorrectionToggleSelect: (changeId: string) => void;
+  onCorrectionSelectAll: () => void;
+  onCorrectionSelectNone: () => void;
+  onCorrectionOverrideChange: (changeId: string, instruction: string) => void;
+  onCorrectionApply: (selectedChanges: CorrectionChangeUI[], originalText: string) => void;
 }) {
   const isDocMsg = DOC_MODES.includes(msg.mode ?? "");
 
   if (msg.role === "user") {
+    // Hide internal apply-trigger messages from the thread
+    if (msg.correctionApplied) return null;
     return (
       <div className="flex justify-end gap-2.5">
         <div className="max-w-[80%] px-4 py-2.5 rounded-2xl rounded-tr-sm bg-primary text-primary-foreground text-[13.5px] leading-relaxed whitespace-pre-wrap">
@@ -928,25 +932,33 @@ function CzarMessage({
           </div>
         )}
 
-        {/* Correction diff view */}
-        {!msg.error && msg.mode === "correct" && (msg.correctionSummary || msg.streaming) && (
+        {/* Correction review cards — analysis result */}
+        {!msg.error && msg.mode === "correct" && !msg.correctionApplied && (msg.correctionSummary || msg.streaming) && (
           <CorrectionDiffView
             summary={msg.correctionSummary ?? null}
             changes={msg.correctionChanges ?? []}
             isAnalyzing={!!msg.streaming}
-            onAccept={onCorrectionAccept}
-            onReject={onCorrectionReject}
-            onAcceptAll={onCorrectionAcceptAll}
-            onRejectAll={onCorrectionRejectAll}
-            onDownload={onCorrectionDownload}
-            onFinalPass={onCorrectionFinalPass}
+            onToggleSelect={onCorrectionToggleSelect}
+            onSelectAll={onCorrectionSelectAll}
+            onSelectNone={onCorrectionSelectNone}
+            onOverrideChange={onCorrectionOverrideChange}
+            onApply={onCorrectionApply}
           />
         )}
 
-        {/* Correction history placeholder (no live data available) */}
-        {!msg.error && msg.mode === "correct" && !msg.correctionSummary && !msg.streaming && msg.content && (
+        {/* Applied clean document — streamed result */}
+        {!msg.error && msg.mode === "correct" && msg.correctionApplied && (
+          <InlineDocMessage
+            msg={msg}
+            onContentChange={onContentChange}
+            onSelectionAction={onSelectionAction}
+          />
+        )}
+
+        {/* Correction history placeholder (loaded from DB, no live data) */}
+        {!msg.error && msg.mode === "correct" && !msg.correctionApplied && !msg.correctionSummary && !msg.streaming && msg.content && (
           <div className="text-sm text-muted-foreground px-4 py-3 rounded-xl border border-border bg-secondary/20">
-            Correction session complete. Reload a new document to see tracked changes.
+            Correction session complete. Upload a new document to start again.
           </div>
         )}
 

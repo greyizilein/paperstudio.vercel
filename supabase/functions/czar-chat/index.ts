@@ -1098,6 +1098,66 @@ async function runMain(
     // ── 11. Generate response (orchestrated or direct) ────────────────────
     let fullResponse = "";
 
+    // ── Special path: Apply selected corrections (surgical AI edit) ───────
+    if (mode === "correct" && req.settings?.correction_apply === true && !signal.aborted) {
+      const originalText = (req.settings.correction_original_text as string | undefined) || "";
+      const correctionsList = (req.settings.correction_selected_changes as string | undefined) || "";
+
+      if (!originalText.trim() || !correctionsList.trim()) {
+        write("error", { message: "Missing original text or corrections to apply.", recoverable: false });
+        return;
+      }
+
+      write("agent", { id: "editor", name: "CZAR Editor", status: "working", action: "Applying corrections…" });
+
+      const applySystem = `You are a precise document editor. Your sole job is to apply the listed corrections to the document.
+
+Rules:
+1. Apply ONLY the corrections listed — do not change anything else
+2. Apply each correction surgically: find the exact text and replace it
+3. If an override instruction is given for a correction, honour it as the primary guidance
+4. Preserve all paragraph breaks, spacing, headings, and formatting
+5. Output the COMPLETE corrected document text — nothing else, no preamble, no explanation`;
+
+      const userMsg = `Apply these corrections:\n\n${correctionsList}\n\n---\n\nORIGINAL DOCUMENT:\n\n${originalText}`;
+
+      try {
+        fullResponse = await streamAnthropic(
+          C_SONNET,
+          applySystem,
+          [{ role: "user", content: userMsg }],
+          false,
+          write,
+          signal,
+        );
+      } catch (err: any) {
+        if (err?.name !== "AbortError") {
+          write("error", { message: `Apply failed: ${err?.message ?? "unknown error"}`, recoverable: false });
+          return;
+        }
+      }
+
+      write("agent", { id: "editor", name: "CZAR Editor", status: "done", action: `${countWords(fullResponse)} words` });
+
+      // Persist
+      if (assistantId && fullResponse) {
+        await svc.from("czar_messages").update({
+          content: fullResponse,
+          metadata: { mode, complexity, word_count: countWords(fullResponse) },
+        }).eq("id", assistantId).catch(() => {});
+      }
+      await svc.from("czar_conversations").update({
+        mode, last_message: req.user_message.slice(0, 200), updated_at: new Date().toISOString(),
+      }).eq("id", conversationId).catch(() => {});
+
+      if (countWords(fullResponse) > 0 && email !== ADMIN_EMAIL) {
+        await svc.rpc("increment_czar_words_used", { _user_id: userId, _amount: countWords(fullResponse) }).catch(() => {});
+      }
+
+      write("done", { conversation_id: conversationId, assistant_id: assistantId ?? "", words: countWords(fullResponse) });
+      return;
+    }
+
     // ── Special path: Correction mode — structured JSON analysis ──────────
     if (mode === "correct" && !signal.aborted) {
       const docText: string = (req.settings?.correction_paste as string | undefined) || fileContext;
