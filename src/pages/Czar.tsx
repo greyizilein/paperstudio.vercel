@@ -479,32 +479,32 @@ export default function CzarPage() {
         </header>
 
         {/* Thread */}
-        <div className="flex-1 overflow-y-auto relative">
+        <div className={`flex-1 relative min-h-0 ${messages.length > 0 ? "overflow-y-auto" : "overflow-hidden"}`}>
           <WritingGlow visible={streaming || messages.length > 0} />
-          <div className="relative max-w-3xl mx-auto px-4 py-6 pb-10 space-y-8">
-            {messages.length === 0 && (
-              <WelcomeScreen
-                userName={userName}
-                userInitials={userInitials}
-                avatarUrl={avatarUrl}
-              />
-            )}
-
-            {messages.map(msg => (
-              <CzarMessage
-                key={msg.id}
-                msg={msg}
-                currentAgents={agents}
-                userInitials={userInitials}
-                onContentChange={handleMessageContentChange}
-                onSelectionAction={handleSelectionAction}
-                onDismissDiff={handleDismissDiff}
-                onClarificationAnswer={(answer) => sendMessage(answer, [])}
-                onDeleteMessage={handleDeleteMessage}
-              />
-            ))}
-            <div ref={threadEndRef} />
-          </div>
+          {messages.length === 0 ? (
+            <WelcomeScreen
+              userName={userName}
+              userInitials={userInitials}
+              avatarUrl={avatarUrl}
+            />
+          ) : (
+            <div className="relative max-w-3xl mx-auto px-4 py-6 pb-10 space-y-8">
+              {messages.map(msg => (
+                <CzarMessage
+                  key={msg.id}
+                  msg={msg}
+                  currentAgents={agents}
+                  userInitials={userInitials}
+                  onContentChange={handleMessageContentChange}
+                  onSelectionAction={handleSelectionAction}
+                  onDismissDiff={handleDismissDiff}
+                  onClarificationAnswer={(answer) => sendMessage(answer, [])}
+                  onDeleteMessage={handleDeleteMessage}
+                />
+              ))}
+              <div ref={threadEndRef} />
+            </div>
+          )}
         </div>
 
         {/* Input */}
@@ -1095,12 +1095,12 @@ function WelcomeScreen({ userName, userInitials, avatarUrl }: {
   });
 
   return (
-    <div className="flex flex-col md:flex-row items-center justify-center gap-10 md:gap-16 min-h-[72vh] px-6 py-8">
+    <div className="absolute inset-0 flex flex-col md:flex-row items-start px-6 py-7 gap-5 md:gap-12 md:px-14 md:items-center">
 
-      {/* ── Left: Greeting ── */}
-      <div className="flex-1 flex flex-col items-center md:items-start text-center md:text-left max-w-xs">
+      {/* ── Left: Greeting (always left-aligned) ── */}
+      <div className="flex flex-col items-start text-left md:flex-1 md:max-w-sm">
         {/* Avatar + Hi name */}
-        <div className="flex items-center gap-2.5 mb-6" style={fadeIn(0)}>
+        <div className="flex items-center gap-2.5 mb-5" style={fadeIn(0)}>
           {avatarUrl ? (
             <img src={avatarUrl} alt="" className="w-9 h-9 rounded-full object-cover ring-2 ring-border" />
           ) : (
@@ -1114,15 +1114,18 @@ function WelcomeScreen({ userName, userInitials, avatarUrl }: {
         </div>
         {/* Large greeting */}
         <h1
-          className="text-4xl sm:text-5xl font-bold font-heading text-foreground leading-tight"
+          className="text-3xl sm:text-4xl md:text-5xl font-bold font-heading text-foreground leading-tight"
           style={fadeIn(120)}
         >
           {greeting}
         </h1>
       </div>
 
-      {/* ── Right: SVG Scene ── */}
-      <div className="flex-1 flex items-center justify-center" style={fadeIn(260)}>
+      {/* ── SVG Scene — compact on mobile, full on desktop ── */}
+      <div
+        className="w-full max-w-[310px] mx-auto md:mx-0 md:max-w-none md:flex-1 flex items-center justify-center"
+        style={fadeIn(260)}
+      >
         <CzarObjectScene />
       </div>
 
