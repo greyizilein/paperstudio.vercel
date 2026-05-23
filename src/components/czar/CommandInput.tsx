@@ -7,7 +7,7 @@ import {
   type DragEvent,
   type KeyboardEvent,
 } from "react";
-import { ArrowUp, Square, Paperclip, X } from "lucide-react";
+import { ArrowUp, Square, Plus, FileSearch, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { VoiceInput } from "./VoiceInput";
 
@@ -16,7 +16,8 @@ interface CommandInputProps {
   onStop: () => void;
   streaming: boolean;
   disabled?: boolean;
-  placeholder?: string;
+  tier?: string;
+  onCorrect?: () => void;
 }
 
 function formatFileSize(bytes: number): string {
@@ -36,12 +37,20 @@ function truncateFilename(name: string, max = 20): string {
   return `${name.slice(0, max - 1)}…`;
 }
 
+function tierLabel(tier: string): string {
+  if (tier === "pro") return "Unlimited";
+  if (tier === "university") return "University";
+  if (tier === "free") return "Free";
+  return tier.charAt(0).toUpperCase() + tier.slice(1);
+}
+
 export function CommandInput({
   onSend,
   onStop,
   streaming,
   disabled = false,
-  placeholder,
+  tier,
+  onCorrect,
 }: CommandInputProps) {
   const [text, setText] = useState("");
   const [files, setFiles] = useState<File[]>([]);
@@ -57,7 +66,7 @@ export function CommandInput({
     if (!el) return;
     el.style.height = "auto";
     const lineHeight = parseInt(getComputedStyle(el).lineHeight || "24", 10);
-    const maxHeight = lineHeight * 6 + 16; // 6 lines + padding
+    const maxHeight = lineHeight * 6 + 16;
     el.style.height = `${Math.min(el.scrollHeight, maxHeight)}px`;
   }, []);
 
@@ -80,7 +89,6 @@ export function CommandInput({
     setText("");
     setFiles([]);
     setInterimVoice("");
-    // Reset textarea height
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
     }
@@ -96,7 +104,6 @@ export function CommandInput({
     [handleSend]
   );
 
-  // Voice callbacks
   const handleVoiceTranscript = useCallback((transcript: string) => {
     setInterimVoice("");
     setText((prev) => {
@@ -110,7 +117,6 @@ export function CommandInput({
     setInterimVoice(interim);
   }, []);
 
-  // File handling
   const addFiles = useCallback((newFiles: FileList | File[]) => {
     const arr = Array.from(newFiles);
     setFiles((prev) => {
@@ -138,7 +144,6 @@ export function CommandInput({
     fileInputRef.current?.click();
   }, []);
 
-  // Drag-and-drop handlers (on the whole component)
   const handleDragEnter = useCallback((e: DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     dragCounterRef.current += 1;
@@ -171,16 +176,13 @@ export function CommandInput({
   );
 
   const canSend = (text.trim().length > 0 || files.length > 0) && !streaming;
-  const isDisabled = disabled || (streaming && false); // allow stop even when streaming
-
-  const defaultPlaceholder =
-    "Ask CZAR anything, describe what to write, or upload files to correct…";
+  const isDisabled = disabled;
 
   return (
     <div
       className={cn(
-        "relative flex flex-col gap-0 rounded-xl bg-background shadow-sm transition-shadow",
-        isDraggingOver && "ring-2 ring-primary/40 shadow-md",
+        "relative flex flex-col rounded-2xl bg-background shadow-md transition-shadow",
+        isDraggingOver && "ring-2 ring-primary/40 shadow-lg",
         isDisabled && "opacity-60"
       )}
       onDragEnter={handleDragEnter}
@@ -190,14 +192,23 @@ export function CommandInput({
     >
       {/* Drag overlay */}
       {isDraggingOver && (
-        <div className="absolute inset-0 z-20 flex items-center justify-center rounded-xl bg-primary/5 border-2 border-dashed border-primary/40 pointer-events-none">
+        <div className="absolute inset-0 z-20 flex items-center justify-center rounded-2xl bg-primary/5 border-2 border-dashed border-primary/40 pointer-events-none">
           <p className="text-sm font-medium text-primary">Drop files here</p>
         </div>
       )}
 
-      {/* File chips area */}
+      {/* Tier badge */}
+      {tier && (
+        <div className="flex justify-end px-4 pt-2.5">
+          <span className="text-[10.5px] font-semibold text-muted-foreground/50 uppercase tracking-widest">
+            {tierLabel(tier)}
+          </span>
+        </div>
+      )}
+
+      {/* File chips */}
       {files.length > 0 && (
-        <div className="flex flex-wrap gap-1.5 px-3 pt-3 pb-1">
+        <div className="flex flex-wrap gap-1.5 px-3 pt-2 pb-0">
           {files.map((file, i) => (
             <div
               key={`${file.name}-${i}`}
@@ -220,116 +231,101 @@ export function CommandInput({
               </button>
             </div>
           ))}
-          <span className="self-center text-xs text-muted-foreground/60 ml-1">
-            {files.length} file{files.length !== 1 ? "s" : ""} attached
-          </span>
         </div>
       )}
 
-      {/* Drop target hint when no files and not dragging */}
-      {files.length === 0 && (
+      {/* Textarea */}
+      <div className="relative px-4 pt-3 pb-1">
+        <textarea
+          ref={textareaRef}
+          value={text}
+          onChange={handleTextChange}
+          onKeyDown={handleKeyDown}
+          disabled={isDisabled}
+          rows={1}
+          placeholder={interimVoice ? "" : "Ask CZAR anything, describe what to write, or upload files to correct…"}
+          aria-label="Message input"
+          className={cn(
+            "w-full resize-none bg-transparent text-sm text-foreground placeholder:text-muted-foreground/45",
+            "focus:outline-none leading-6",
+            "min-h-[40px] overflow-y-auto",
+            "scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent",
+            isDisabled && "cursor-not-allowed"
+          )}
+          style={{ maxHeight: "144px" }}
+        />
+        {interimVoice && (
+          <span
+            className="absolute top-3 left-4 text-sm text-muted-foreground/40 pointer-events-none select-none leading-6 whitespace-pre-wrap break-words"
+            style={{ maxWidth: "calc(100% - 32px)" }}
+          >
+            {text}{text ? " " : ""}{interimVoice}
+          </span>
+        )}
+      </div>
+
+      {/* Bottom action row */}
+      <div className="flex items-center gap-1.5 px-3 pb-3 pt-1">
+        {/* Attach files */}
         <button
           type="button"
           onClick={openFilePicker}
-          className={cn(
-            "flex items-center justify-center gap-2 py-1.5 text-xs text-muted-foreground/50 hover:text-muted-foreground transition-colors mx-3 mt-2",
-            ""
-          )}
+          disabled={isDisabled}
+          className="flex items-center justify-center w-8 h-8 rounded-full text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
           aria-label="Attach files"
         >
-          <Paperclip className="w-3 h-3" />
-          <span>Drag & drop files, or click to attach</span>
+          <Plus className="w-4 h-4" />
         </button>
-      )}
 
-      {/* Input row */}
-      <div className="flex items-end gap-1 px-2 py-2">
-        {/* Paperclip button (only visible when files already attached) */}
-        {files.length > 0 && (
+        {/* Correct doc */}
+        {!streaming && onCorrect && (
           <button
             type="button"
-            onClick={openFilePicker}
+            onClick={onCorrect}
             disabled={isDisabled}
-            className="flex-shrink-0 flex items-center justify-center w-9 h-9 rounded-full text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors mb-0.5"
-            aria-label="Attach more files"
+            className="flex items-center gap-1.5 px-2.5 h-8 rounded-full text-[11.5px] font-medium text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+            aria-label="Correct a document"
           >
-            <Paperclip className="w-4 h-4" />
+            <FileSearch className="w-3.5 h-3.5" />
+            <span>Correct</span>
           </button>
         )}
 
-        {/* Textarea */}
-        <div className="relative flex-1 min-w-0">
-          <textarea
-            ref={textareaRef}
-            value={text}
-            onChange={handleTextChange}
-            onKeyDown={handleKeyDown}
-            disabled={isDisabled}
-            rows={1}
-            placeholder={
-              interimVoice ? "" : placeholder ?? defaultPlaceholder
-            }
-            aria-label="Message input"
+        <div className="flex-1" />
+
+        {/* Voice */}
+        <VoiceInput
+          onTranscript={handleVoiceTranscript}
+          onInterim={handleVoiceInterim}
+          disabled={isDisabled}
+        />
+
+        {/* Send / Stop */}
+        {streaming ? (
+          <button
+            type="button"
+            onClick={onStop}
+            className="flex items-center justify-center w-9 h-9 rounded-full bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-colors"
+            aria-label="Stop generation"
+          >
+            <Square className="w-3.5 h-3.5 fill-current" />
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={handleSend}
+            disabled={!canSend || isDisabled}
             className={cn(
-              "w-full resize-none rounded-lg bg-transparent px-1 py-2 text-sm text-foreground placeholder:text-muted-foreground/50",
-              "focus:outline-none leading-6",
-              "min-h-[40px] overflow-y-auto",
-              "scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent",
-              isDisabled && "cursor-not-allowed"
+              "flex items-center justify-center w-9 h-9 rounded-full transition-colors",
+              canSend && !isDisabled
+                ? "bg-primary text-primary-foreground hover:bg-primary/90"
+                : "bg-secondary text-muted-foreground/40 cursor-not-allowed"
             )}
-            style={{ maxHeight: "144px" }} // 6 rows × 24px
-          />
-
-          {/* Interim voice overlay */}
-          {interimVoice && (
-            <span
-              className="absolute top-2 left-1 text-sm text-muted-foreground/40 pointer-events-none select-none leading-6 whitespace-pre-wrap break-words"
-              style={{ maxWidth: "calc(100% - 4px)" }}
-            >
-              {text}
-              {text ? " " : ""}
-              {interimVoice}
-            </span>
-          )}
-        </div>
-
-        {/* Voice input button */}
-        <div className="flex-shrink-0 mb-0.5">
-          <VoiceInput
-            onTranscript={handleVoiceTranscript}
-            onInterim={handleVoiceInterim}
-            disabled={isDisabled}
-          />
-        </div>
-
-        {/* Send / Stop button */}
-        <div className="flex-shrink-0 mb-0.5">
-          {streaming ? (
-            <button
-              type="button"
-              onClick={onStop}
-              className="flex items-center justify-center w-9 h-9 rounded-full bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-colors"
-              aria-label="Stop generation"
-            >
-              <Square className="w-3.5 h-3.5 fill-current" />
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={handleSend}
-              disabled={!canSend || isDisabled}
-              className={cn(
-                "flex items-center justify-center w-9 h-9 rounded-full transition-colors",
-                canSend && !isDisabled
-                  ? "bg-primary text-primary-foreground hover:bg-primary/90"
-                  : "bg-secondary text-muted-foreground/40 cursor-not-allowed"
-              )}
-              aria-label="Send message"
-            >
-              <ArrowUp className="w-4 h-4" />
-            </button>
-          )}
-        </div>
+            aria-label="Send message"
+          >
+            <ArrowUp className="w-4 h-4" />
+          </button>
+        )}
       </div>
 
       {/* Hidden file input */}

@@ -430,6 +430,7 @@ export default function CzarPage() {
 
       {/* Main */}
       <div className="flex-1 flex flex-col min-w-0 min-h-0">
+        {messages.length === 0 && <WelcomeAurora />}
 
         {/* Top bar */}
         <header className="flex items-center gap-2 px-3 h-11 border-b border-border flex-shrink-0 bg-background/95 backdrop-blur-sm">
@@ -492,15 +493,20 @@ export default function CzarPage() {
         </div>
 
         {/* Input */}
-        <div className="flex-shrink-0 bg-background/95 backdrop-blur-sm">
+        <div className="flex-shrink-0">
           <div className="max-w-3xl mx-auto px-4 py-3">
             <Suspense fallback={<InputFallback />}>
               <CommandInput
                 onSend={sendMessage}
                 onStop={stopStream}
                 streaming={streaming}
+                tier={userTier}
+                onCorrect={() => setCorrectionModalOpen(true)}
               />
             </Suspense>
+            <p className="text-center text-[10px] text-muted-foreground/40 mt-1.5 px-2">
+              CZAR can make mistakes — verify important information.
+            </p>
           </div>
         </div>
       </div>
@@ -1042,8 +1048,7 @@ function CzarMessage({
 
 function WelcomeScreen({ userName }: { userName?: string }) {
   return (
-    <div className="relative flex flex-col items-center justify-center min-h-[70vh] text-center px-4 py-12 overflow-hidden">
-      <WelcomeAurora />
+    <div className="relative flex flex-col items-center justify-center min-h-[70vh] text-center px-4 py-12">
       <FloatingElements />
       <div className="relative z-10 flex flex-col items-center w-full">
         <TeamScene />
