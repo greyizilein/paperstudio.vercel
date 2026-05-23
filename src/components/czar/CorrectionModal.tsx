@@ -249,7 +249,19 @@ export function CorrectionModal({ open, onClose, onApplied }: CorrectionModalPro
       setApplyProgress(100);
       setApplyStatus("Done!");
 
-      const cleaned = acc.replace(/<!--\s*CORRECTIONS_LOG[\s\S]*?-->/g, "").trim();
+      // Strip the corrections log
+      let cleaned = acc.replace(/<!--\s*CORRECTIONS_LOG[\s\S]*?-->/g, "").trim();
+
+      // Restore the original references section verbatim (AI is told not to output one)
+      const refPattern = /^(#{0,4}\s*(?:References|Bibliography|Works Cited|Reference List)\b[\s\S]*)/im;
+      const originalRefMatch = originalText.match(refPattern);
+      if (originalRefMatch) {
+        // Remove any reference section the AI may have accidentally produced
+        cleaned = cleaned.replace(refPattern, "").trimEnd();
+        // Append original references verbatim
+        cleaned = cleaned + "\n\n" + originalRefMatch[0].trimStart();
+      }
+
       const logMatch = acc.match(/Applied:\s*([^\n]*)/);
       const appliedIds = logMatch ? logMatch[1].split(",").map(s => s.trim()).filter(Boolean) : [];
       const count = appliedIds.length || selected.length;
