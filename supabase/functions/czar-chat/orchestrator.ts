@@ -40,6 +40,14 @@ type StreamGoogleFn = (
   signal: AbortSignal,
 ) => Promise<string>;
 
+type StreamQwenFn = (
+  model: string,
+  system: string,
+  messages: { role: string; content: string }[],
+  write: WriteFunction,
+  signal: AbortSignal,
+) => Promise<string>;
+
 // ---------------------------------------------------------------------------
 // Planner agent — produces a structured execution plan via Gemini Flash
 // ---------------------------------------------------------------------------
@@ -58,10 +66,27 @@ interface PlannerOutput {
   }>;
 }
 
+// ── Model constants ──────────────────────────────────────────────────────────
+// Architect / main orchestration planner — best agentic fast reasoning
+const MODEL_PLANNER = "gemini-3.5-flash";
+// Simple classification / tagging (memory, figure spotting, cheap JSON)
+const MODEL_CLASSIFIER = "gemini-3.1-flash-lite";
+// Image generation
+const MODEL_IMAGE = "gemini-3.1-flash-image-preview";
+// Critic reasoning — Qwen QwQ is a dedicated reasoning model
+const MODEL_CRITIC_QWEN = "qwq-32b";
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+function stripThinkTags(text: string): string {
+  return text.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+}
+
 async function callGeminiSync(
   prompt: string,
   userMessage: string,
   signal: AbortSignal,
+  model = MODEL_PLANNER,
 ): Promise<string> {
   const apiKey = Deno.env.get("GOOGLE_AI_API_KEY");
   if (!apiKey) throw new Error("GOOGLE_AI_API_KEY not configured");
@@ -72,7 +97,7 @@ async function callGeminiSync(
     generationConfig: { maxOutputTokens: 4096, temperature: 0.2 },
   };
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
   const resp = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -87,6 +112,42 @@ async function callGeminiSync(
 
   const data = await resp.json();
   return data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+}
+
+async function callQwenSync(
+  system: string,
+  userMessage: string,
+  signal: AbortSignal,
+  model = MODEL_CRITIC_QWEN,
+): Promise<string> {
+  const apiKey = Deno.env.get("QWEN_API_KEY");
+  if (!apiKey) return "";
+
+  try {
+    const resp = await fetch("https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: "system", content: system },
+          { role: "user", content: userMessage },
+        ],
+        stream: false,
+        max_tokens: 2048,
+      }),
+      signal,
+    });
+    if (!resp.ok) return "";
+    const data = await resp.json();
+    const raw = data?.choices?.[0]?.message?.content ?? "";
+    return stripThinkTags(raw);
+  } catch {
+    return "";
+  }
 }
 
 const PLANNER_SYSTEM = `You are CZAR Architect. Analyse the writing brief and produce a precise JSON execution plan.
@@ -134,7 +195,7 @@ async function runPlannerAgent(
     (fileContext ? `\n\nUploaded content (first 3000 chars):\n${fileContext.slice(0, 3000)}` : "");
 
   try {
-    const raw = await callGeminiSync(PLANNER_SYSTEM, brief, signal);
+    const raw = await callGeminiSync(PLANNER_SYSTEM, brief, signal, MODEL_PLANNER);
 
     // Extract JSON — model may wrap in markdown despite instructions
     const jsonMatch = raw.match(/\{[\s\S]*\}/);
@@ -383,7 +444,12 @@ Maximum 4 issues. If argument is solid, return { "quality": "high", "issues": []
   const userMsg = `Brief: ${userMessage.slice(0, 250)}\n\nDraft (first 3500 chars):\n${draft.slice(0, 3500)}`;
 
   try {
-    const raw = await callGeminiSync(system, userMsg, signal);
+    // Prefer Qwen QwQ (dedicated reasoning model) — falls back to Gemini Flash-Lite
+    const hasQwen = !!Deno.env.get("QWEN_API_KEY");
+    const raw = hasQwen
+      ? await callQwenSync(system, userMsg, signal)
+      : await callGeminiSync(system, userMsg, signal, MODEL_CLASSIFIER);
+
     const match = raw.match(/\{[\s\S]*\}/);
     if (!match) {
       write("agent", { id: "critic", name: "Critic", status: "done", action: "Review complete" });
@@ -411,32 +477,38 @@ Maximum 4 issues. If argument is solid, return { "quality": "high", "issues": []
 // Illustrator agent — image generation via Google Imagen 3
 // ---------------------------------------------------------------------------
 
-async function generateImageImagen(
+async function generateImageGemini(
   prompt: string,
   apiKey: string,
   signal: AbortSignal,
-): Promise<string | null> {
+): Promise<{ b64: string; mime: string } | null> {
   try {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-001:predict?key=${apiKey}`;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_IMAGE}:generateContent?key=${apiKey}`;
     const resp = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        instances: [{
-          prompt: `Professional academic diagram: ${prompt}. Clean white background. Scientific illustration style. No decorative elements. High contrast.`,
+        contents: [{
+          role: "user",
+          parts: [{
+            text: `Generate a professional academic diagram: ${prompt}. Clean white background. Scientific illustration style. No decorative elements. High contrast. Suitable for an academic paper.`,
+          }],
         }],
-        parameters: {
-          sampleCount: 1,
-          aspectRatio: "4:3",
-          safetyFilterLevel: "block_few",
-          personGeneration: "dont_allow",
+        generationConfig: {
+          responseModalities: ["IMAGE", "TEXT"],
         },
       }),
       signal,
     });
     if (!resp.ok) return null;
     const data = await resp.json();
-    return data?.predictions?.[0]?.bytesBase64Encoded ?? null;
+    const parts = data?.candidates?.[0]?.content?.parts ?? [];
+    for (const part of parts) {
+      if (part.inlineData?.mimeType?.startsWith("image/")) {
+        return { b64: part.inlineData.data, mime: part.inlineData.mimeType };
+      }
+    }
+    return null;
   } catch {
     return null;
   }
@@ -455,7 +527,8 @@ Only suggest: conceptual frameworks, process flows, hierarchical models, compara
 Do NOT suggest bar charts, pie charts, or data visualisations.`;
 
   try {
-    const raw = await callGeminiSync(system, `Discipline: ${discipline}\n\n${draft.slice(0, 3000)}`, signal);
+    // Use Flash-Lite for this simple classification task — fast and cheap
+    const raw = await callGeminiSync(system, `Discipline: ${discipline}\n\n${draft.slice(0, 3000)}`, signal, MODEL_CLASSIFIER);
     const match = raw.match(/\[[\s\S]*?\]/);
     if (!match) return [];
     const parsed = JSON.parse(match[0]);
@@ -502,15 +575,17 @@ async function runIllustratorAgent(
   for (const description of opportunities) {
     if (signal.aborted) break;
 
-    const b64 = await generateImageImagen(description, googleKey, signal);
-    if (!b64) { figNum++; continue; }
+    const result = await generateImageGemini(description, googleKey, signal);
+    if (!result) { figNum++; continue; }
 
     try {
+      const { b64, mime } = result;
       const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
-      const path = `figures/${userId}/${Date.now()}_fig${figNum}.png`;
+      const ext = mime === "image/jpeg" ? "jpg" : "png";
+      const path = `figures/${userId}/${Date.now()}_fig${figNum}.${ext}`;
       const { data: uploadData, error } = await svc.storage
         .from("czar-uploads")
-        .upload(path, bytes.buffer as ArrayBuffer, { contentType: "image/png", upsert: false });
+        .upload(path, bytes.buffer as ArrayBuffer, { contentType: mime, upsert: false });
 
       if (!error && uploadData) {
         const { data: urlData } = svc.storage.from("czar-uploads").getPublicUrl(path);
@@ -556,6 +631,7 @@ export interface OrchestratorOptions {
   signal: AbortSignal;
   streamAnthropicFn: StreamAnthropicFn;
   streamGoogleFn: StreamGoogleFn;
+  streamQwenFn: StreamQwenFn;
   svc: SupabaseClient;
   userId: string;
 }
@@ -572,6 +648,7 @@ export async function runOrchestrator(opts: OrchestratorOptions): Promise<string
     signal,
     streamAnthropicFn,
     streamGoogleFn,
+    streamQwenFn,
     svc,
     userId,
   } = opts;
@@ -628,6 +705,14 @@ export async function runOrchestrator(opts: OrchestratorOptions): Promise<string
         systemPrompt,
         messages,
         modelChoice.thinking,
+        write,
+        signal,
+      );
+    } else if (modelChoice.provider === "qwen") {
+      fullResponse = await streamQwenFn(
+        modelChoice.model,
+        systemPrompt,
+        messages,
         write,
         signal,
       );

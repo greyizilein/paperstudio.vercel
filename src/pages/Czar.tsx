@@ -435,22 +435,6 @@ export default function CzarPage() {
                       {mode === m && <span className="ml-auto mt-1 w-1.5 h-1.5 rounded-full bg-primary flex-shrink-0" />}
                     </button>
                   ))}
-                  <div className="px-3 py-1.5 border-t border-border mt-0.5">
-                    <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/40">Specialist</span>
-                  </div>
-                  {(["literature_review", "screenplay", "legal"] as CzarMode[]).map(m => (
-                    <button key={m}
-                      onClick={() => { setMode(m); setShowModeMenu(false); }}
-                      className={`w-full flex items-start gap-3 px-3 py-2.5 text-left hover:bg-secondary transition-colors ${mode === m ? "bg-secondary/60" : ""}`}
-                    >
-                      <span className={`mt-0.5 ${mode === m ? "text-foreground" : "text-muted-foreground"}`}>{modeIcon(m)}</span>
-                      <div className="min-w-0">
-                        <div className={`text-[12px] font-semibold ${mode === m ? "text-foreground" : "text-muted-foreground"}`}>{modeLabel(m)}</div>
-                        <div className="text-[10.5px] text-muted-foreground/60 leading-snug">{MODE_DESCRIPTIONS[m]}</div>
-                      </div>
-                      {mode === m && <span className="ml-auto mt-1 w-1.5 h-1.5 rounded-full bg-primary flex-shrink-0" />}
-                    </button>
-                  ))}
                 </div>
               </>
             )}
@@ -838,29 +822,17 @@ function WelcomeScreen({ mode, onExample }: { mode: CzarMode; onExample: (text: 
       { label: "Brainstorm", text: "What are some angles I could take for an essay on climate change policy?" },
     ],
     write: [
-      { label: "Essay", text: "Write a 2,000-word Level 7 essay on transformational leadership in NHS trusts, Harvard references." },
-      { label: "Case study", text: "Write a 1,500-word case study on Apple's product strategy using Porter's Five Forces." },
-      { label: "Report", text: "Write a business report on the impact of AI on supply chain management, 2,500 words." },
+      { label: "Academic essay", text: "Write a 2,000-word Level 7 essay on transformational leadership in NHS trusts, Harvard references." },
+      { label: "Literature review", text: "Write a systematic literature review on the effectiveness of mindfulness-based stress reduction in the workplace." },
+      { label: "Legal memo", text: "Write a legal memo applying IRAC to whether an employer can monitor employee emails under UK law." },
     ],
     research: [
-      { label: "Literature synthesis", text: "Research and synthesise current academic literature on mindfulness-based stress reduction in the workplace." },
+      { label: "Synthesis", text: "Research and synthesise current academic literature on AI bias in hiring algorithms." },
       { label: "Topic overview", text: "Find and summarise key academic sources on the digital divide in higher education." },
     ],
     correct: [
       { label: "Improve draft", text: "Here's my draft introduction — improve the academic tone and citation integration:" },
       { label: "Fix structure", text: "Review this paragraph for argument coherence and suggest improvements:" },
-    ],
-    literature_review: [
-      { label: "Systematic review", text: "Conduct a systematic literature review on the effectiveness of cognitive behavioural therapy for anxiety disorders." },
-      { label: "Scoping review", text: "Scoping review of digital health interventions for type 2 diabetes management, 2015–2024." },
-    ],
-    screenplay: [
-      { label: "Feature script", text: "Write the opening 10 pages of a thriller set in a London financial firm where an analyst discovers fraud." },
-      { label: "Short film", text: "Write a 5-minute short film script about a nurse's final shift before retirement." },
-    ],
-    legal: [
-      { label: "Legal memo", text: "Write a legal memo applying IRAC to whether an employer can monitor employee emails under UK law." },
-      { label: "Case analysis", text: "Analyse the legal implications of promissory estoppel using IRAC with relevant case law." },
     ],
   };
 
