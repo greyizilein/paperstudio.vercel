@@ -1,4 +1,6 @@
+import { useState } from "react";
 import { Document, Paragraph, TextRun, HeadingLevel, AlignmentType } from "docx";
+import { Copy, Check, X, Download, Code2, ExternalLink } from "lucide-react";
 
 export function stripMarkdown(text: string): string {
   return text
@@ -79,6 +81,191 @@ export function buildDocx(markdown: string): Document {
   });
 }
 
+// ── Code block with copy button ───────────────────────────────────────────────
+
+function CodeBlock({ language, content }: { language?: string; content: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(content).catch(() => {});
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
+
+  const handleDownload = () => {
+    const ext: Record<string, string> = {
+      python: "py", javascript: "js", typescript: "ts", jsx: "jsx", tsx: "tsx",
+      css: "css", html: "html", json: "json", yaml: "yaml", yml: "yml",
+      bash: "sh", shell: "sh", sql: "sql", markdown: "md", md: "md",
+    };
+    const filename = `code.${ext[language || ""] || language || "txt"}`;
+    const blob = new Blob([content], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = filename; a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  return (
+    <div className="mb-4 rounded-xl overflow-hidden border border-border">
+      <div className="flex items-center justify-between px-3.5 py-2 bg-secondary/80 border-b border-border">
+        <span className="text-[10px] font-mono font-semibold text-muted-foreground uppercase tracking-wide">
+          {language || "code"}
+        </span>
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={handleDownload}
+            className="text-[10px] text-muted-foreground hover:text-foreground flex items-center gap-1 px-2 py-0.5 rounded hover:bg-secondary transition-colors"
+            title="Download"
+          >
+            <Download size={10} />
+          </button>
+          <button
+            onClick={handleCopy}
+            className="text-[10px] text-muted-foreground hover:text-foreground flex items-center gap-1 px-2 py-0.5 rounded hover:bg-secondary transition-colors"
+          >
+            {copied ? <Check size={10} className="text-emerald-500" /> : <Copy size={10} />}
+            <span>{copied ? "Copied!" : "Copy"}</span>
+          </button>
+        </div>
+      </div>
+      <pre className="bg-[#1e1e2e] text-[#cdd6f4] p-4 overflow-x-auto text-xs font-mono leading-relaxed m-0 whitespace-pre">
+        <code>{content}</code>
+      </pre>
+    </div>
+  );
+}
+
+// ── Artifact card + modal ─────────────────────────────────────────────────────
+
+const ARTIFACT_META: Record<string, { label: string; color: string }> = {
+  html:     { label: "HTML",     color: "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300" },
+  svg:      { label: "SVG",      color: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300" },
+  mermaid:  { label: "Diagram",  color: "bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300" },
+  jsx:      { label: "React",    color: "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/40 dark:text-cyan-300" },
+  tsx:      { label: "React TS", color: "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/40 dark:text-cyan-300" },
+};
+
+function ArtifactModal({ language, content, title, onClose }: {
+  language: string;
+  content: string;
+  title?: string;
+  onClose: () => void;
+}) {
+  const [copied, setCopied] = useState(false);
+  const meta = ARTIFACT_META[language] || { label: language.toUpperCase(), color: "bg-secondary text-muted-foreground" };
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(content).catch(() => {});
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
+
+  const handleDownload = () => {
+    const ext: Record<string, string> = { html: "html", svg: "svg", mermaid: "md", jsx: "jsx", tsx: "tsx" };
+    const blob = new Blob([content], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `artifact.${ext[language] || "txt"}`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  // Build srcdoc for HTML artifacts
+  const htmlSrc = language === "html" ? content
+    : language === "svg" ? `<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{margin:0;display:flex;align-items:center;justify-content:center;min-height:100vh;background:#fff}</style></head><body>${content}</body></html>`
+    : language === "mermaid" ? `<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{margin:20px;font-family:sans-serif}</style><script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script></head><body><div class="mermaid">${content}</div><script>mermaid.initialize({startOnLoad:true,theme:'default'})</script></body></html>`
+    : null;
+
+  return (
+    <div className="fixed inset-0 z-[600] flex items-center justify-center p-4 bg-foreground/50 backdrop-blur-sm">
+      <div className="bg-background border border-border rounded-2xl w-full max-w-4xl max-h-[90dvh] flex flex-col shadow-2xl">
+        {/* Header */}
+        <div className="flex items-center gap-3 px-4 py-3 border-b border-border flex-shrink-0">
+          <Code2 size={16} className="text-muted-foreground" />
+          <span className="text-[13px] font-semibold text-foreground flex-1 truncate">
+            {title || "Artifact"}
+          </span>
+          <span className={`text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded ${meta.color}`}>
+            {meta.label}
+          </span>
+          <button onClick={handleCopy} className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] text-muted-foreground hover:text-foreground hover:bg-secondary rounded-lg transition-colors">
+            {copied ? <Check size={11} className="text-emerald-500" /> : <Copy size={11} />}
+            {copied ? "Copied" : "Copy"}
+          </button>
+          <button onClick={handleDownload} className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] text-muted-foreground hover:text-foreground hover:bg-secondary rounded-lg transition-colors">
+            <Download size={11} />
+            Download
+          </button>
+          <button onClick={onClose} className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-secondary rounded-lg transition-colors">
+            <X size={14} />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="flex-1 min-h-0 overflow-hidden rounded-b-2xl">
+          {htmlSrc ? (
+            <iframe
+              srcDoc={htmlSrc}
+              sandbox="allow-scripts"
+              className="w-full h-full border-0"
+              style={{ minHeight: "60vh" }}
+              title="Artifact preview"
+            />
+          ) : (
+            <pre className="p-4 text-xs font-mono text-foreground bg-background overflow-auto h-full whitespace-pre">
+              {content}
+            </pre>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ArtifactCard({ language, content }: { language: string; content: string }) {
+  const [open, setOpen] = useState(false);
+  const meta = ARTIFACT_META[language] || { label: language.toUpperCase(), color: "bg-secondary text-muted-foreground" };
+
+  const previewLines = content.split("\n").slice(0, 3).join("\n");
+
+  return (
+    <>
+      <div
+        className="mb-4 border border-border rounded-xl overflow-hidden cursor-pointer group hover:border-primary/50 transition-colors"
+        onClick={() => setOpen(true)}
+      >
+        {/* Mini preview */}
+        <div className="px-3 py-2 bg-[#1e1e2e] text-[#cdd6f4]/60 font-mono text-[10px] leading-relaxed whitespace-pre overflow-hidden max-h-14 select-none">
+          {previewLines}
+          {content.split("\n").length > 3 && "\n…"}
+        </div>
+        {/* Footer */}
+        <div className="flex items-center gap-2 px-3 py-2 bg-secondary/40 border-t border-border">
+          <span className={`text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded flex-shrink-0 ${meta.color}`}>
+            {meta.label}
+          </span>
+          <span className="text-[11px] text-muted-foreground flex-1 truncate">
+            Click to preview &amp; download
+          </span>
+          <ExternalLink size={11} className="text-muted-foreground group-hover:text-foreground transition-colors flex-shrink-0" />
+        </div>
+      </div>
+
+      {open && (
+        <ArtifactModal
+          language={language}
+          content={content}
+          onClose={() => setOpen(false)}
+        />
+      )}
+    </>
+  );
+}
+
+// ── Document markdown components (for InlineDocMessage — no artifacts) ────────
+
 export const markdownComponents = {
   h1: ({ children, ...props }: React.HTMLAttributes<HTMLHeadingElement>) => (
     <h1 {...props} className="text-2xl font-bold font-sans mt-8 mb-3 text-foreground leading-tight">{children}</h1>
@@ -139,4 +326,33 @@ export const markdownComponents = {
   em: ({ children, ...props }: React.HTMLAttributes<HTMLElement>) => (
     <em {...props} className="italic">{children}</em>
   ),
+};
+
+// ── Chat markdown components (for chat bubbles — with artifacts + code copy) ──
+
+const ARTIFACT_LANGUAGES = new Set(["html", "svg", "mermaid", "jsx", "tsx"]);
+
+export const chatMarkdownComponents = {
+  ...markdownComponents,
+
+  pre: ({ children }: React.HTMLAttributes<HTMLPreElement>) => {
+    const child = (Array.isArray(children) ? children[0] : children) as React.ReactElement<any>;
+    const className = child?.props?.className || "";
+    const match = className.match(/language-(\w+)/);
+    const language = (match?.[1] || "").toLowerCase();
+    const content = String(child?.props?.children || "").replace(/\n$/, "");
+
+    if (ARTIFACT_LANGUAGES.has(language)) {
+      return <ArtifactCard language={language} content={content} />;
+    }
+    return <CodeBlock language={language} content={content} />;
+  },
+
+  code: ({ inline, children, ...props }: React.HTMLAttributes<HTMLElement> & { inline?: boolean }) =>
+    inline ? (
+      <code {...props} className="font-mono text-xs bg-secondary text-foreground px-1.5 py-0.5 rounded">{children}</code>
+    ) : (
+      // Block code without language falls through to pre handler
+      <code {...props}>{children}</code>
+    ),
 };

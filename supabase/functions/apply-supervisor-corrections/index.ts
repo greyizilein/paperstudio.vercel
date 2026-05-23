@@ -80,12 +80,13 @@ When an instruction is genuinely ambiguous and you must make a judgment call:
 
 ## CRITICAL RULES
 - Preserve ALL citations exactly as written in untouched sections
-- Preserve the References section verbatim unless a feedback item explicitly targets it
+- **REFERENCES SECTION — ABSOLUTE VERBATIM COPY**: The References or Bibliography section MUST be reproduced CHARACTER-FOR-CHARACTER exactly as it appears in the original. NEVER reconstruct, interpret, abbreviate, paraphrase, or substitute any reference entry. Do NOT add placeholder text such as "[Reference reconstructed]" or "full bibliographic details to be confirmed." Every author name, year, title, journal, publisher, volume, pages, DOI, and URL must be byte-for-byte identical to the original. If you cannot locate a reference, leave it EXACTLY as it was — do not alter it in any way.
+- **HEADINGS — NO DUPLICATION**: Do NOT repeat the chapter title or any heading that already appears as the first line(s) of the chapter content you received. The content begins with the existing title — do not output it again before or after your edits. If the first line of the chapter content is "CHAPTER ONE — INTRODUCTION", your output must also begin with exactly that line — not with a second copy of it.
 - Maintain Markdown formatting (headings, bold, tables) in all untouched sections
 - Never reduce total word count by more than 20% unless a compression instruction explicitly requires it
 - Never add summary or meta-commentary ("I have applied the following corrections…")
-- Begin your output with the first character of the chapter — no preamble
-- End with the References section if one was present, then optionally append the corrections log
+- Begin your output with the first character of the chapter content exactly as received — no preamble, no repeated title
+- End with the References section copied verbatim, then optionally append the corrections log
 
 ## CORRECTIONS LOG (append after the chapter)
 After the full revised chapter, append exactly:

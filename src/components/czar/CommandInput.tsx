@@ -204,6 +204,7 @@ export function CommandInput({
               className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-secondary border border-border text-xs text-foreground max-w-[200px]"
             >
               <span className="truncate" title={file.name}>
+                {file.type.startsWith("image/") && <span className="text-[10px] mr-0.5">🖼</span>}
                 {truncateFilename(file.name)}
               </span>
               <span className="text-muted-foreground flex-shrink-0">
@@ -336,7 +337,7 @@ export function CommandInput({
         ref={fileInputRef}
         type="file"
         multiple
-        accept="*/*"
+        accept=".docx,.pdf,.txt,.md,.csv,.xlsx,.xls,image/png,image/jpeg,image/gif,image/webp"
         className="hidden"
         onChange={handleFileInputChange}
         aria-hidden="true"

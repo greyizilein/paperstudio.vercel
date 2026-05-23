@@ -17,7 +17,7 @@ import {
   type CzarRequest, type CzarMode, type CzarHandlers,
   type CzarMetaEvent, type CzarAgentEvent, type CzarToolEvent,
 } from "@/lib/czarStream";
-import { buildDocx, stripMarkdown, markdownComponents } from "@/lib/czarDocUtils.tsx";
+import { buildDocx, stripMarkdown, markdownComponents, chatMarkdownComponents } from "@/lib/czarDocUtils.tsx";
 import { ConvSidebar } from "@/components/czar/ConvSidebar";
 import { UpgradeModal } from "@/components/czar/UpgradeModal";
 import { DashboardSidebar } from "@/components/dashboard/DashboardSidebar";
@@ -880,7 +880,10 @@ function CzarMessage({
 
         {!msg.error && !isDocMsg && (
           <div className="prose prose-sm dark:prose-invert max-w-none prose-p:my-1.5 prose-headings:my-2 prose-ul:my-1 prose-ol:my-1 prose-pre:bg-secondary prose-pre:border prose-pre:border-border prose-code:text-primary prose-code:bg-primary/10 prose-code:px-1 prose-code:rounded text-[13.5px] leading-relaxed text-foreground">
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              components={chatMarkdownComponents as React.ComponentProps<typeof ReactMarkdown>["components"]}
+            >
               {msg.content || (msg.streaming ? "​" : "—")}
             </ReactMarkdown>
             {msg.streaming && (
