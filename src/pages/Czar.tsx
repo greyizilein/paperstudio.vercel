@@ -886,8 +886,8 @@ function CzarMessage({
   const isDocMsg = DOC_MODES.includes(msg.mode ?? "");
 
   if (msg.role === "user") {
-    // Hide internal apply-trigger messages from the thread
-    if (msg.correctionApplied) return null;
+    // Correction mode is a document flow — hide all user trigger messages from the thread
+    if (msg.mode === "correct") return null;
     return (
       <div className="flex justify-end gap-2.5">
         <div className="max-w-[80%] px-4 py-2.5 rounded-2xl rounded-tr-sm bg-primary text-primary-foreground text-[13.5px] leading-relaxed whitespace-pre-wrap">

@@ -1141,17 +1141,17 @@ Rules:
 
       // Persist
       if (assistantId && fullResponse) {
-        await svc.from("czar_messages").update({
+        try { await svc.from("czar_messages").update({
           content: fullResponse,
           metadata: { mode, complexity, word_count: countWords(fullResponse) },
-        }).eq("id", assistantId).catch(() => {});
+        }).eq("id", assistantId); } catch {}
       }
-      await svc.from("czar_conversations").update({
+      try { await svc.from("czar_conversations").update({
         mode, last_message: req.user_message.slice(0, 200), updated_at: new Date().toISOString(),
-      }).eq("id", conversationId).catch(() => {});
+      }).eq("id", conversationId); } catch {}
 
       if (countWords(fullResponse) > 0 && email !== ADMIN_EMAIL) {
-        await svc.rpc("increment_czar_words_used", { _user_id: userId, _amount: countWords(fullResponse) }).catch(() => {});
+        try { await svc.rpc("increment_czar_words_used", { _user_id: userId, _amount: countWords(fullResponse) }); } catch {}
       }
 
       write("done", { conversation_id: conversationId, assistant_id: assistantId ?? "", words: countWords(fullResponse) });
@@ -1269,15 +1269,15 @@ Rules:
       // Persist
       const correctionMeta = `[Correction analysis: ${changes.length} changes]`;
       if (assistantId) {
-        await svc.from("czar_messages").update({
+        try { await svc.from("czar_messages").update({
           content: correctionMeta,
           metadata: { mode, complexity, correction_count: changes.length },
-        }).eq("id", assistantId).catch(() => {});
+        }).eq("id", assistantId); } catch {}
       }
 
-      await svc.from("czar_conversations").update({
+      try { await svc.from("czar_conversations").update({
         mode, last_message: req.user_message.slice(0, 200), updated_at: new Date().toISOString(),
-      }).eq("id", conversationId).catch(() => {});
+      }).eq("id", conversationId); } catch {}
 
       write("done", { conversation_id: conversationId, assistant_id: assistantId ?? "", words: changes.length });
       return;
