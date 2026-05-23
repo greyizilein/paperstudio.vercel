@@ -29,7 +29,9 @@ export type CzarEventType =
   | "error"
   | "billing"
   | "done"
-  | "ping";
+  | "ping"
+  | "correction_summary"
+  | "correction_change";
 
 export interface CzarMetaEvent {
   conversation_id: string;
@@ -79,6 +81,25 @@ export interface CzarDoneEvent {
   words?: number;
 }
 
+export type CorrectionType = "grammar" | "style" | "structure" | "argument" | "register";
+
+export interface CorrectionChangeEvent {
+  id: string;
+  type: CorrectionType;
+  original: string;
+  corrected: string;
+  explanation: string;
+}
+
+export interface CorrectionSummaryEvent {
+  total: number;
+  by_type: Partial<Record<CorrectionType, number>>;
+  word_count_before: number;
+  word_count_after: number;
+  register_notes: string[];
+  original_text: string;
+}
+
 // ---------------------------------------------------------------------------
 // Handlers
 // ---------------------------------------------------------------------------
@@ -93,6 +114,8 @@ export interface CzarHandlers {
   onError?: (message: string, recoverable?: boolean) => void;
   onBilling?: (reason: string) => void;
   onDone?: (e: CzarDoneEvent) => void;
+  onCorrectionSummary?: (e: CorrectionSummaryEvent) => void;
+  onCorrectionChange?: (e: CorrectionChangeEvent) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -145,6 +168,12 @@ function dispatch(eventType: string, payload: any, handlers: CzarHandlers): void
       handlers.onDone?.(payload as CzarDoneEvent);
       break;
     case "ping":
+      break;
+    case "correction_summary":
+      handlers.onCorrectionSummary?.(payload as CorrectionSummaryEvent);
+      break;
+    case "correction_change":
+      handlers.onCorrectionChange?.(payload as CorrectionChangeEvent);
       break;
   }
 }

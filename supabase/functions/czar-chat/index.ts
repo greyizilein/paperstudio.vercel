@@ -440,6 +440,44 @@ async function ingestFiles(
 }
 
 // ---------------------------------------------------------------------------
+// Anthropic non-streaming (for structured JSON extraction)
+// ---------------------------------------------------------------------------
+
+async function callAnthropicSync(
+  model: string,
+  system: string,
+  userMessage: string,
+  signal: AbortSignal,
+): Promise<string> {
+  const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
+  if (!apiKey) throw new Error("ANTHROPIC_API_KEY not configured");
+
+  const resp = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model,
+      max_tokens: 8192,
+      system,
+      messages: [{ role: "user", content: userMessage }],
+    }),
+    signal,
+  });
+
+  if (!resp.ok) {
+    const txt = await resp.text().catch(() => "");
+    throw new Error(`Anthropic ${resp.status}: ${txt.slice(0, 400)}`);
+  }
+
+  const data = await resp.json();
+  return data?.content?.[0]?.text ?? "";
+}
+
+// ---------------------------------------------------------------------------
 // Anthropic streaming
 // ---------------------------------------------------------------------------
 
@@ -1059,6 +1097,131 @@ async function runMain(
 
     // ── 11. Generate response (orchestrated or direct) ────────────────────
     let fullResponse = "";
+
+    // ── Special path: Correction mode — structured JSON analysis ──────────
+    if (mode === "correct" && !signal.aborted) {
+      const docText: string = (req.settings?.correction_paste as string | undefined) || fileContext;
+      const correctionNotes: string = (req.settings?.correction_notes as string | undefined) || "";
+
+      if (!docText.trim()) {
+        write("error", {
+          message: "No document text found. Please upload a file or paste your text in the correction modal.",
+          recoverable: false,
+        });
+        return;
+      }
+
+      write("agent", { id: "corrector", name: "CZAR Corrector", status: "working", action: "Analyzing document…" });
+
+      const correctionSystem = `You are a professional editor. Analyze the provided document and identify ALL corrections needed.
+
+Return ONLY valid JSON (no markdown code fence, no explanation outside the JSON) in this exact format:
+{
+  "summary": {
+    "word_count_before": <number>,
+    "word_count_after": <number>,
+    "register_notes": ["<note about tone or register inconsistency if any>"]
+  },
+  "changes": [
+    {
+      "id": "ch_001",
+      "type": "<grammar|style|structure|argument|register>",
+      "original": "<EXACT verbatim text from document — must match character-for-character>",
+      "corrected": "<the improved replacement text>",
+      "explanation": "<brief, specific explanation of why this change is needed>"
+    }
+  ]
+}
+
+Types:
+- grammar: spelling, punctuation, subject-verb agreement, tense consistency, capitalisation
+- style: word choice, clarity, passive voice, sentence variety, concision, filler words
+- structure: paragraph organisation, transitions, topic sentences, logical flow
+- argument: logical gaps, unsupported claims, weak evidence, missing citations
+- register: tone inconsistency, formal/informal mixing, inappropriate register for context
+
+Rules:
+1. The "original" field MUST be verbatim text from the document (used for exact string matching — do NOT paraphrase)
+2. Include ALL corrections, including minor ones; err on the side of more changes
+3. Order changes by their position in the document (start → end)
+4. Do not repeat the same original text in two changes
+5. Keep changes granular — one specific issue per change entry
+6. For structural issues, use the problematic sentence or paragraph opener as "original"${correctionNotes ? `\n\nAdditional editor instructions from user: ${correctionNotes}` : ""}`;
+
+      let rawJson = "";
+      try {
+        rawJson = await callAnthropicSync(C_SONNET, correctionSystem, `Document to analyze:\n\n${docText}`, signal);
+      } catch (err: any) {
+        if (err?.name === "AbortError") return;
+        write("error", { message: `Correction analysis failed: ${err?.message ?? "unknown error"}`, recoverable: false });
+        return;
+      }
+
+      write("agent", { id: "corrector", name: "CZAR Corrector", status: "done", action: "Analysis complete" });
+
+      // Parse JSON — extract the JSON object even if the model added surrounding text
+      let parsed: { summary?: Record<string, any>; changes?: any[] } = {};
+      try {
+        const match = rawJson.match(/\{[\s\S]*\}/);
+        if (!match) throw new Error("No JSON object found in response");
+        parsed = JSON.parse(match[0]);
+      } catch (err: any) {
+        write("error", { message: `Could not parse correction results: ${err?.message}`, recoverable: false });
+        return;
+      }
+
+      const changes: any[] = Array.isArray(parsed.changes) ? parsed.changes : [];
+      const summary = parsed.summary ?? {};
+
+      // Count by type
+      const byType: Record<string, number> = {};
+      for (const c of changes) {
+        if (c.type) byType[c.type] = (byType[c.type] ?? 0) + 1;
+      }
+
+      const wordsBefore = typeof summary.word_count_before === "number"
+        ? summary.word_count_before
+        : docText.trim().split(/\s+/).filter(Boolean).length;
+
+      // Emit summary first
+      write("correction_summary", {
+        total: changes.length,
+        by_type: byType,
+        word_count_before: wordsBefore,
+        word_count_after: typeof summary.word_count_after === "number" ? summary.word_count_after : wordsBefore,
+        register_notes: Array.isArray(summary.register_notes) ? summary.register_notes : [],
+        original_text: docText,
+      });
+
+      // Emit each change
+      for (let i = 0; i < changes.length; i++) {
+        const c = changes[i];
+        if (!c.original || !c.corrected) continue;
+        write("correction_change", {
+          id: c.id ?? `ch_${String(i + 1).padStart(3, "0")}`,
+          type: c.type ?? "grammar",
+          original: c.original,
+          corrected: c.corrected,
+          explanation: c.explanation ?? "",
+        });
+      }
+
+      // Persist
+      const correctionMeta = `[Correction analysis: ${changes.length} changes]`;
+      if (assistantId) {
+        await svc.from("czar_messages").update({
+          content: correctionMeta,
+          metadata: { mode, complexity, correction_count: changes.length },
+        }).eq("id", assistantId).catch(() => {});
+      }
+
+      await svc.from("czar_conversations").update({
+        mode, last_message: req.user_message.slice(0, 200), updated_at: new Date().toISOString(),
+      }).eq("id", conversationId).catch(() => {});
+
+      write("done", { conversation_id: conversationId, assistant_id: assistantId ?? "", words: changes.length });
+      return;
+    }
 
     const isOrchestratedMode = mode === "write" || mode === "research" || mode === "literature_review" || mode === "legal";
 
