@@ -596,6 +596,33 @@ const SCENE2_CSS = `
     48%, 88%     { stroke-dashoffset: 0;   opacity: 0.5; }
     96%, 100%    { stroke-dashoffset: 220; opacity: 0; }
   }
+  @keyframes czar-tour-p1 {
+    0%, 3%    { opacity: 0.12; }
+    9%, 30%   { opacity: 1; }
+    37%, 100% { opacity: 0.12; }
+  }
+  @keyframes czar-tour-p2 {
+    0%, 34%   { opacity: 0.12; }
+    41%, 62%  { opacity: 1; }
+    69%, 100% { opacity: 0.12; }
+  }
+  @keyframes czar-tour-p3 {
+    0%, 66%   { opacity: 0.12; }
+    73%, 93%  { opacity: 1; }
+    100%      { opacity: 0.12; }
+  }
+  @keyframes czar-tour-ring {
+    from { transform: rotate(0deg); }
+    to   { transform: rotate(360deg); }
+  }
+  @keyframes czar-tour-bar {
+    from { stroke-dashoffset: 372; }
+    to   { stroke-dashoffset: 20; }
+  }
+  @keyframes czar-tour-check {
+    0%, 60%  { opacity: 0; transform: scale(0.3); }
+    80%, 100% { opacity: 1; transform: scale(1); }
+  }
 `;
 
 export function CzarTypingScene() {
@@ -846,109 +873,180 @@ export function CzarReviewScene() {
   );
 }
 
-// ─── CzarObjectScene — objects only, live laptop interface ────────────────
+// ─── CzarObjectScene — 3-phase animated tour (how to use CZAR) ───────────
 
 export function CzarObjectScene() {
+  const CR = "#C4384A"; // crimson — type
+  const GO = "#B8903A"; // gold — process
+  const SA = "#4A7A5A"; // sage — output
+
   return (
-    <div className="w-full max-w-[540px] mx-auto select-none" aria-hidden>
+    <div className="w-full select-none" aria-hidden>
       <style>{SCENE2_CSS}</style>
-      <svg viewBox="0 0 540 290" fill="none" xmlns="http://www.w3.org/2000/svg"
-        className="czar2-svg w-full h-auto" strokeLinejoin="round" strokeLinecap="round">
+      <svg viewBox="0 0 420 446" fill="none" xmlns="http://www.w3.org/2000/svg"
+        className="w-full h-auto" strokeLinecap="round" strokeLinejoin="round">
 
-        {/* ── DESK ── */}
-        <rect x="10" y="259" width="520" height="4" rx="2" fill="#1a1a1a"/>
-        <rect x="28"  y="263" width="8" height="28" rx="4" fill="#1a1a1a" opacity="0.5"/>
-        <rect x="504" y="263" width="8" height="28" rx="4" fill="#1a1a1a" opacity="0.5"/>
+        {/* ═══════════════════════════════════════════════════════
+            CARD 1 — Type Your Request   (y 8–132)   CRIMSON
+        ═══════════════════════════════════════════════════════ */}
+        <g style={{ animation: "czar-tour-p1 15s ease-in-out infinite" }}>
+          {/* Card shell */}
+          <rect x="10" y="8" width="400" height="124" rx="14"
+            fill={CR} fillOpacity="0.05" stroke={CR} strokeWidth="1.5"/>
 
-        {/* ── COFFEE CUP ── */}
-        <rect x="28" y="218" width="46" height="41" rx="9" fill="white" stroke="#1a1a1a" strokeWidth="2.2"/>
-        <ellipse cx="51" cy="259" rx="28" ry="6" fill="white" stroke="#1a1a1a" strokeWidth="2"/>
-        <path d="M 74 224 Q 86 228 86 236 Q 86 244 74 247" stroke="#1a1a1a" strokeWidth="2.2" fill="none"/>
-        <path d="M 38 215 Q 44 204 38 193" stroke="#1a1a1a" strokeWidth="1.8" fill="none"
-          style={{ animation: "czar2-steam 2.4s ease-in-out infinite", transformOrigin: "38px 215px" }}/>
-        <path d="M 54 215 Q 60 202 54 191" stroke="#1a1a1a" strokeWidth="1.8" fill="none"
-          style={{ animation: "czar2-steam 2.4s 0.72s ease-in-out infinite", transformOrigin: "54px 215px" }}/>
+          {/* Step tag */}
+          <rect x="22" y="20" width="96" height="14" rx="5" fill={CR} fillOpacity="0.12"/>
+          <rect x="26" y="24" width="20" height="5" rx="2.5" fill={CR} fillOpacity="0.7"/>
+          <rect x="50" y="24" width="62" height="5" rx="2.5" fill={CR} fillOpacity="0.5"/>
 
-        {/* ── LAPTOP SCREEN BEZEL ── */}
-        <rect x="146" y="56" width="248" height="205" rx="12" fill="white" stroke="#1a1a1a" strokeWidth="2.5"/>
-        {/* Screen glass */}
-        <rect x="156" y="66" width="228" height="185" rx="6" fill="#f7f8fa" stroke="#1a1a1a" strokeWidth="1.5"/>
-        {/* Toolbar strip */}
-        <rect x="156" y="66" width="228" height="24" rx="6" fill="#ebebeb" stroke="none"/>
-        <line x1="156" y1="90" x2="384" y2="90" stroke="#1a1a1a" strokeWidth="0.8" opacity="0.25"/>
-        <circle cx="168" cy="78" r="4" fill="#1a1a1a" opacity="0.18"/>
-        <circle cx="182" cy="78" r="4" fill="#1a1a1a" opacity="0.18"/>
-        <circle cx="196" cy="78" r="4" fill="#1a1a1a" opacity="0.18"/>
-        <rect x="212" y="71" width="118" height="14" rx="5" fill="white" opacity="0.7"/>
+          {/* Mode pills */}
+          <rect x="22" y="40" width="36" height="13" rx="6" fill={CR} fillOpacity="0.18" stroke={CR} strokeWidth="1"/>
+          <rect x="62" y="40" width="36" height="13" rx="6" fill={CR} fillOpacity="0.04"/>
+          <rect x="102" y="40" width="48" height="13" rx="6" fill={CR} fillOpacity="0.04"/>
+          <rect x="154" y="40" width="42" height="13" rx="6" fill={CR} fillOpacity="0.04"/>
+          <rect x="200" y="40" width="32" height="13" rx="6" fill={CR} fillOpacity="0.04"/>
 
-        {/* Document content on screen */}
-        {/* Title line */}
-        <line x1="166" y1="108" x2="294" y2="108" stroke="#1a1a1a" strokeWidth="3.2" strokeLinecap="round" opacity="0.8"/>
-        {/* Subhead */}
-        <line x1="166" y1="121" x2="254" y2="121" stroke="#1a1a1a" strokeWidth="1.8" strokeLinecap="round" opacity="0.45"/>
-        {/* Body lines — static */}
-        <line x1="166" y1="136" x2="374" y2="136" stroke="#1a1a1a" strokeWidth="1.6" strokeLinecap="round" opacity="0.4"/>
-        <line x1="166" y1="148" x2="368" y2="148" stroke="#1a1a1a" strokeWidth="1.6" strokeLinecap="round" opacity="0.4"/>
-        <line x1="166" y1="160" x2="376" y2="160" stroke="#1a1a1a" strokeWidth="1.6" strokeLinecap="round" opacity="0.4"/>
-        <line x1="166" y1="172" x2="362" y2="172" stroke="#1a1a1a" strokeWidth="1.6" strokeLinecap="round" opacity="0.4"/>
-        <line x1="166" y1="184" x2="370" y2="184" stroke="#1a1a1a" strokeWidth="1.6" strokeLinecap="round" opacity="0.4"/>
-        <line x1="166" y1="196" x2="355" y2="196" stroke="#1a1a1a" strokeWidth="1.6" strokeLinecap="round" opacity="0.4"/>
-        {/* Active line being written */}
-        <line x1="166" y1="208" x2="324" y2="208" stroke="#1a1a1a" strokeWidth="1.6" strokeLinecap="round"
-          strokeDasharray="220" style={{ animation: "czar-obj-write 7s ease-in-out 0.4s infinite" }}/>
-        {/* Second active line */}
-        <line x1="166" y1="220" x2="282" y2="220" stroke="#1a1a1a" strokeWidth="1.6" strokeLinecap="round"
-          strokeDasharray="220" style={{ animation: "czar-obj-write 7s ease-in-out 3.6s infinite" }}/>
-        {/* Blinking cursor */}
-        <line x1="284" y1="213" x2="284" y2="227"
-          stroke="#1a1a1a" strokeWidth="2.2" strokeLinecap="round"
-          style={{ animation: "czar2-blink 1s step-end infinite" }}/>
+          {/* Input field */}
+          <rect x="22" y="60" width="332" height="52" rx="10"
+            fill="white" fillOpacity="0.7" stroke={CR} strokeWidth="1.4"/>
 
-        {/* Keyboard hinge + base */}
-        <rect x="146" y="259" width="248" height="5" rx="2.5" fill="#1a1a1a" opacity="0.16"/>
-        <rect x="138" y="262" width="264" height="18" rx="9" fill="white" stroke="#1a1a1a" strokeWidth="2.2"/>
-        <line x1="156" y1="268" x2="384" y2="268" stroke="#1a1a1a" strokeWidth="0.8" opacity="0.2"/>
-        <line x1="156" y1="273" x2="384" y2="273" stroke="#1a1a1a" strokeWidth="0.8" opacity="0.2"/>
-        <rect x="228" y="265" width="84" height="12" rx="4" stroke="#1a1a1a" strokeWidth="0.8" opacity="0.25"/>
+          {/* Simulated typed text — two lines */}
+          <rect x="34" y="75" width="196" height="4" rx="2" fill={CR} fillOpacity="0.4"/>
+          <rect x="34" y="86" width="148" height="3.5" rx="1.75" fill={CR} fillOpacity="0.25"/>
 
-        {/* ── BOOKS ── */}
-        <rect x="434" y="216" width="66" height="43" rx="3" fill="white" stroke="#1a1a1a" strokeWidth="2.2"/>
-        <line x1="444" y1="216" x2="444" y2="259" stroke="#1a1a1a" strokeWidth="2.2"/>
-        <rect x="438" y="188" width="58" height="30" rx="3" fill="white" stroke="#1a1a1a" strokeWidth="2.2"/>
-        <line x1="448" y1="188" x2="448" y2="218" stroke="#1a1a1a" strokeWidth="2.2"/>
-        <rect x="441" y="165" width="52" height="25" rx="3" fill="white" stroke="#1a1a1a" strokeWidth="2.2"/>
-        <line x1="451" y1="165" x2="451" y2="190" stroke="#1a1a1a" strokeWidth="2.2"/>
+          {/* Blinking cursor */}
+          <rect x="186" y="72" width="1.8" height="20" rx="0.9" fill={CR}
+            style={{ animation: "czar2-blink 1s step-end infinite" }}/>
 
-        {/* ── FLOATING PAPER 1 (upper left) ── */}
-        <g style={{ animation: "czar2-float-a 4.8s ease-in-out infinite", transformOrigin: "96px 90px" }}>
-          <rect x="68" y="60" width="54" height="66" rx="4" fill="white" stroke="#1a1a1a" strokeWidth="1.8"/>
-          <line x1="78" y1="76" x2="114" y2="76"  stroke="#1a1a1a" strokeWidth="1.4" strokeLinecap="round"/>
-          <line x1="78" y1="87" x2="114" y2="87"  stroke="#1a1a1a" strokeWidth="1.4" strokeLinecap="round"/>
-          <line x1="78" y1="98" x2="110" y2="98"  stroke="#1a1a1a" strokeWidth="1.4" strokeLinecap="round"/>
-          <line x1="78" y1="109" x2="114" y2="109" stroke="#1a1a1a" strokeWidth="1.4" strokeLinecap="round"/>
-          <line x1="78" y1="120" x2="108" y2="120" stroke="#1a1a1a" strokeWidth="1.4" strokeLinecap="round"/>
+          {/* Send button */}
+          <circle cx="342" cy="86" r="16" fill={CR}/>
+          <path d="M 336 86 L 342 80 L 348 86 M 342 80 L 342 93"
+            stroke="white" strokeWidth="2" fill="none"/>
+
+          {/* Attach + voice hints */}
+          <rect x="26" y="119" width="18" height="13" rx="4" fill={CR} fillOpacity="0.14"/>
+          <rect x="49" y="119" width="54" height="13" rx="6" fill={CR} fillOpacity="0.07"/>
+          <rect x="108" y="119" width="36" height="13" rx="6" fill={CR} fillOpacity="0.07"/>
         </g>
 
-        {/* ── FLOATING PAPER 2 (upper right) ── */}
-        <g style={{ animation: "czar2-float-b 5.6s 1.3s ease-in-out infinite", transformOrigin: "462px 76px" }}>
-          <g transform="rotate(-14,462,76)">
-            <rect x="440" y="50" width="44" height="54" rx="3" fill="white" stroke="#1a1a1a" strokeWidth="1.6"/>
-            <line x1="448" y1="64" x2="476" y2="64"  stroke="#1a1a1a" strokeWidth="1.3" strokeLinecap="round"/>
-            <line x1="448" y1="74" x2="476" y2="74"  stroke="#1a1a1a" strokeWidth="1.3" strokeLinecap="round"/>
-            <line x1="448" y1="84" x2="473" y2="84"  stroke="#1a1a1a" strokeWidth="1.3" strokeLinecap="round"/>
-            <line x1="448" y1="94" x2="476" y2="94"  stroke="#1a1a1a" strokeWidth="1.3" strokeLinecap="round"/>
+        {/* Connector dots 1→2 */}
+        <g opacity="0.22">
+          <circle cx="202" cy="142" r="2.8" fill="#1a1a1a"/>
+          <circle cx="212" cy="142" r="2.8" fill="#1a1a1a"/>
+          <circle cx="222" cy="142" r="2.8" fill="#1a1a1a"/>
+        </g>
+
+        {/* ═══════════════════════════════════════════════════════
+            CARD 2 — CZAR Works          (y 152–294)   GOLD
+        ═══════════════════════════════════════════════════════ */}
+        <g style={{ animation: "czar-tour-p2 15s ease-in-out infinite" }}>
+          <rect x="10" y="152" width="400" height="142" rx="14"
+            fill={GO} fillOpacity="0.05" stroke={GO} strokeWidth="1.5"/>
+
+          {/* Step tag */}
+          <rect x="22" y="164" width="96" height="14" rx="5" fill={GO} fillOpacity="0.14"/>
+          <rect x="26" y="168" width="20" height="5" rx="2.5" fill={GO} fillOpacity="0.7"/>
+          <rect x="50" y="168" width="55" height="5" rx="2.5" fill={GO} fillOpacity="0.5"/>
+
+          {/* Agent row 1 — Researcher */}
+          <rect x="22" y="184" width="376" height="26" rx="7" fill={GO} fillOpacity="0.07"/>
+          <circle cx="37" cy="197" r="7" fill={GO} fillOpacity="0.25"/>
+          <rect x="50" y="193" width="56" height="4" rx="2" fill={GO} fillOpacity="0.6"/>
+          <rect x="50" y="201" width="100" height="3" rx="1.5" fill={GO} fillOpacity="0.3"/>
+          <g style={{ animation: "czar-tour-ring 1.5s linear infinite", transformOrigin: "383px 197px" }}>
+            <circle cx="383" cy="197" r="8" fill="none" stroke={GO} strokeWidth="1.8" strokeDasharray="16 8"/>
           </g>
+
+          {/* Agent row 2 — Writer */}
+          <rect x="22" y="214" width="376" height="26" rx="7" fill={GO} fillOpacity="0.05"/>
+          <circle cx="37" cy="227" r="7" fill={GO} fillOpacity="0.25"/>
+          <rect x="50" y="223" width="40" height="4" rx="2" fill={GO} fillOpacity="0.6"/>
+          <rect x="50" y="231" width="118" height="3" rx="1.5" fill={GO} fillOpacity="0.3"/>
+          <g style={{ animation: "czar-tour-ring 1.9s linear infinite 0.4s", transformOrigin: "383px 227px" }}>
+            <circle cx="383" cy="227" r="8" fill="none" stroke={GO} strokeWidth="1.8" strokeDasharray="16 8"/>
+          </g>
+
+          {/* Agent row 3 — Editor */}
+          <rect x="22" y="244" width="376" height="26" rx="7" fill={GO} fillOpacity="0.07"/>
+          <circle cx="37" cy="257" r="7" fill={GO} fillOpacity="0.25"/>
+          <rect x="50" y="253" width="36" height="4" rx="2" fill={GO} fillOpacity="0.6"/>
+          <rect x="50" y="261" width="88" height="3" rx="1.5" fill={GO} fillOpacity="0.3"/>
+          <g style={{ animation: "czar-tour-ring 2.3s linear infinite 0.8s", transformOrigin: "383px 257px" }}>
+            <circle cx="383" cy="257" r="8" fill="none" stroke={GO} strokeWidth="1.8" strokeDasharray="8 16"/>
+          </g>
+
+          {/* Progress bar */}
+          <rect x="22" y="278" width="376" height="7" rx="3.5" fill={GO} fillOpacity="0.1"/>
+          <line x1="22" y1="281.5" x2="398" y2="281.5"
+            stroke={GO} strokeWidth="7" strokeLinecap="round"
+            strokeDasharray="376"
+            style={{ animation: "czar-tour-bar 5s ease-in-out infinite alternate" }}/>
         </g>
 
-        {/* ── SPARKLE 1 ── */}
-        <g style={{ animation: "czar2-spin 3.2s ease-in-out infinite", transformOrigin: "122px 36px" }}>
-          <path d="M 122 26 L 122 46 M 112 36 L 132 36 M 114 28 L 130 44 M 130 28 L 114 44"
-            stroke="#1a1a1a" strokeWidth="1.5" strokeLinecap="round"/>
+        {/* Connector dots 2→3 */}
+        <g opacity="0.22">
+          <circle cx="202" cy="304" r="2.8" fill="#1a1a1a"/>
+          <circle cx="212" cy="304" r="2.8" fill="#1a1a1a"/>
+          <circle cx="222" cy="304" r="2.8" fill="#1a1a1a"/>
         </g>
-        {/* ── SPARKLE 2 ── */}
-        <g style={{ animation: "czar2-spin 2.4s 1.2s ease-in-out infinite", transformOrigin: "416px 30px" }}>
-          <path d="M 416 23 L 416 37 M 409 30 L 423 30"
-            stroke="#1a1a1a" strokeWidth="2.2" strokeLinecap="round"/>
+
+        {/* ═══════════════════════════════════════════════════════
+            CARD 3 — Download            (y 314–436)   SAGE
+        ═══════════════════════════════════════════════════════ */}
+        <g style={{ animation: "czar-tour-p3 15s ease-in-out infinite" }}>
+          <rect x="10" y="314" width="400" height="124" rx="14"
+            fill={SA} fillOpacity="0.05" stroke={SA} strokeWidth="1.5"/>
+
+          {/* Step tag */}
+          <rect x="22" y="326" width="96" height="14" rx="5" fill={SA} fillOpacity="0.14"/>
+          <rect x="26" y="330" width="20" height="5" rx="2.5" fill={SA} fillOpacity="0.7"/>
+          <rect x="50" y="330" width="62" height="5" rx="2.5" fill={SA} fillOpacity="0.5"/>
+
+          {/* Document panel — left */}
+          <rect x="22" y="346" width="180" height="82" rx="7"
+            fill={SA} fillOpacity="0.06" stroke={SA} strokeWidth="1.2"/>
+          <rect x="32" y="358" width="68" height="5" rx="2.5" fill={SA} fillOpacity="0.5"/>
+          <rect x="32" y="370" width="158" height="3" rx="1.5" fill={SA} fillOpacity="0.28"/>
+          <rect x="32" y="379" width="148" height="3" rx="1.5" fill={SA} fillOpacity="0.22"/>
+          <rect x="32" y="388" width="154" height="3" rx="1.5" fill={SA} fillOpacity="0.28"/>
+          <rect x="32" y="397" width="140" height="3" rx="1.5" fill={SA} fillOpacity="0.2"/>
+          <rect x="32" y="406" width="128" height="3" rx="1.5" fill={SA} fillOpacity="0.16"/>
+          <rect x="32" y="415" width="112" height="3" rx="1.5" fill={SA} fillOpacity="0.12"/>
+
+          {/* Stats + download panel — right */}
+          <rect x="214" y="346" width="196" height="82" rx="7"
+            fill={SA} fillOpacity="0.08" stroke={SA} strokeWidth="1.2"/>
+
+          {/* Word count row */}
+          <rect x="224" y="358" width="76" height="5" rx="2.5" fill={SA} fillOpacity="0.5"/>
+          <rect x="304" y="359" width="46" height="4" rx="2" fill={SA} fillOpacity="0.25"/>
+
+          {/* Citations row */}
+          <rect x="224" y="371" width="60" height="4" rx="2" fill={SA} fillOpacity="0.4"/>
+          <rect x="288" y="372" width="52" height="3" rx="1.5" fill={SA} fillOpacity="0.2"/>
+
+          {/* Harvard refs row */}
+          <rect x="224" y="383" width="72" height="4" rx="2" fill={SA} fillOpacity="0.35"/>
+          <rect x="300" y="384" width="40" height="3" rx="1.5" fill={SA} fillOpacity="0.18"/>
+
+          {/* Download .docx button */}
+          <rect x="224" y="396" width="176" height="30" rx="8" fill={SA} fillOpacity="0.85"/>
+          <rect x="234" y="404" width="80" height="4" rx="2" fill="white" fillOpacity="0.9"/>
+          <rect x="234" y="412" width="56" height="3" rx="1.5" fill="white" fillOpacity="0.55"/>
+          {/* Download arrow */}
+          <path d="M 381 405 L 381 420 M 376 415 L 381 420 L 386 415"
+            stroke="white" strokeWidth="1.8" fill="none"/>
+
+          {/* Checkmark badge */}
+          <g style={{
+            animation: "czar-tour-check 15s ease-in-out infinite",
+            transformOrigin: "202px 346px",
+            transformBox: "fill-box" as React.CSSProperties["transformBox"],
+          }}>
+            <circle cx="202" cy="346" r="20" fill={SA}/>
+            <path d="M 192 346 L 199 353 L 213 338"
+              stroke="white" strokeWidth="2.8" fill="none" strokeLinecap="round"/>
+          </g>
         </g>
 
       </svg>
