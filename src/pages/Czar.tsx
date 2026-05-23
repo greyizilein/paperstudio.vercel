@@ -470,7 +470,7 @@ export default function CzarPage() {
         {/* Thread */}
         <div className="flex-1 overflow-y-auto relative">
           <WritingGlow visible={streaming || messages.length > 0} />
-          <div className="relative max-w-3xl mx-auto px-4 py-6 space-y-8">
+          <div className="relative max-w-3xl mx-auto px-4 py-6 pb-10 space-y-8">
             {messages.length === 0 && (
               <WelcomeScreen userName={userName} />
             )}
@@ -493,7 +493,7 @@ export default function CzarPage() {
         </div>
 
         {/* Input */}
-        <div className="flex-shrink-0">
+        <div className="flex-shrink-0 bg-background">
           <div className="max-w-3xl mx-auto px-4 py-3">
             <Suspense fallback={<InputFallback />}>
               <CommandInput
