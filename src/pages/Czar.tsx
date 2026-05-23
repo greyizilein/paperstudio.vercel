@@ -6,6 +6,7 @@ import {
   ChevronDown, ChevronRight, LayoutPanelLeft, FileSearch, Clock, X,
   BookOpen, Film, Scale, Download, Volume2, VolumeX, Edit3, Eye, FileText, Sparkles,
   Compass, FlaskConical, Pen, Library, Gavel, RefreshCw, ImageIcon,
+  Copy, Trash2, MoreHorizontal,
 } from "lucide-react";
 import { PsThemeToggle } from "@/components/ps/PsThemeToggle";
 import ReactMarkdown from "react-markdown";
@@ -18,6 +19,7 @@ import {
   type CzarRequest, type CzarMode, type CzarHandlers,
   type CzarMetaEvent, type CzarAgentEvent, type CzarToolEvent,
   type CzarClarificationEvent,
+  type CorrectionSummaryEvent, type CorrectionChangeEvent,
 } from "@/lib/czarStream";
 import { buildDocx, stripMarkdown, markdownComponents, chatMarkdownComponents } from "@/lib/czarDocUtils.tsx";
 import { computeParaDiff, type DiffParagraph } from "@/lib/diffUtils";
@@ -422,6 +424,10 @@ export default function CzarPage() {
     setMessages(prev => prev.map(m => m.id === id ? { ...m, correctionDiff: undefined } : m));
   }, []);
 
+  const handleDeleteMessage = useCallback((id: string) => {
+    setMessages(prev => prev.filter(m => m.id !== id));
+  }, []);
+
   if (!user) return null;
 
   return (
@@ -577,6 +583,7 @@ export default function CzarPage() {
                 onSelectionAction={handleSelectionAction}
                 onDismissDiff={handleDismissDiff}
                 onClarificationAnswer={(answer) => sendMessage(answer, [])}
+                onDeleteMessage={handleDeleteMessage}
               />
             ))}
             <div ref={threadEndRef} />
@@ -584,7 +591,7 @@ export default function CzarPage() {
         </div>
 
         {/* Input */}
-        <div className="flex-shrink-0 border-t border-border bg-background/95 backdrop-blur-sm">
+        <div className="flex-shrink-0 bg-background/95 backdrop-blur-sm">
           <div className="max-w-3xl mx-auto px-4 py-3">
             {mode === "correct" && !streaming && (
               <div className="mb-2">
@@ -973,9 +980,73 @@ function InlineDocMessage({ msg, onContentChange, onSelectionAction, onDismissDi
   );
 }
 
+function UserMessage({ msg, userInitials, onDelete }: {
+  msg: UIMessage;
+  userInitials: string;
+  onDelete?: (id: string) => void;
+}) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [menuOpen]);
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(msg.content).catch(() => {});
+    setMenuOpen(false);
+  };
+
+  return (
+    <div className="flex justify-end gap-2 group">
+      {/* Options button — shown on hover */}
+      <div className="relative flex items-start mt-1 opacity-0 group-hover:opacity-100 transition-opacity" ref={menuRef}>
+        <button
+          onClick={() => setMenuOpen(o => !o)}
+          className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+          title="Message options"
+        >
+          <MoreHorizontal size={13} />
+        </button>
+        {menuOpen && (
+          <div className="absolute right-0 top-6 z-50 bg-background border border-border rounded-xl shadow-lg overflow-hidden min-w-[120px] animate-in fade-in duration-100">
+            <button
+              onClick={handleCopy}
+              className="w-full flex items-center gap-2 px-3 py-2 text-[12px] text-foreground hover:bg-secondary transition-colors"
+            >
+              <Copy size={12} className="text-muted-foreground" />
+              Copy
+            </button>
+            {onDelete && (
+              <button
+                onClick={() => { onDelete(msg.id); setMenuOpen(false); }}
+                className="w-full flex items-center gap-2 px-3 py-2 text-[12px] text-destructive hover:bg-destructive/10 transition-colors"
+              >
+                <Trash2 size={12} />
+                Delete
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+      <div className="max-w-[80%] px-4 py-2.5 rounded-2xl rounded-tr-sm bg-primary text-primary-foreground text-[13.5px] leading-relaxed whitespace-pre-wrap">
+        {msg.content}
+      </div>
+      <div className="w-7 h-7 rounded-full bg-secondary border border-border flex items-center justify-center flex-shrink-0 mt-0.5 text-xs font-semibold text-muted-foreground">
+        {userInitials}
+      </div>
+    </div>
+  );
+}
+
 function CzarMessage({
   msg, currentAgents, userInitials,
-  onContentChange, onSelectionAction, onDismissDiff, onClarificationAnswer,
+  onContentChange, onSelectionAction, onDismissDiff, onClarificationAnswer, onDeleteMessage,
 }: {
   msg: UIMessage;
   currentAgents: LiveAgent[];
@@ -984,6 +1055,7 @@ function CzarMessage({
   onSelectionAction: (action: string, text: string) => void;
   onDismissDiff: (id: string) => void;
   onClarificationAnswer: (answer: string) => void;
+  onDeleteMessage?: (id: string) => void;
 }) {
   const isDocMsg = DOC_MODES.includes(msg.mode ?? "");
 
@@ -991,14 +1063,11 @@ function CzarMessage({
     // Correction mode is a document flow — hide all user trigger messages from the thread
     if (msg.mode === "correct") return null;
     return (
-      <div className="flex justify-end gap-2.5">
-        <div className="max-w-[80%] px-4 py-2.5 rounded-2xl rounded-tr-sm bg-primary text-primary-foreground text-[13.5px] leading-relaxed whitespace-pre-wrap">
-          {msg.content}
-        </div>
-        <div className="w-7 h-7 rounded-full bg-secondary border border-border flex items-center justify-center flex-shrink-0 mt-0.5 text-xs font-semibold text-muted-foreground">
-          {userInitials}
-        </div>
-      </div>
+      <UserMessage
+        msg={msg}
+        userInitials={userInitials}
+        onDelete={onDeleteMessage}
+      />
     );
   }
 

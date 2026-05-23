@@ -323,7 +323,16 @@ export function SupervisorFeedbackModal({ open, onClose, chapter, project, docum
       setApplyStatus("Done!");
 
       // Strip the corrections log comment from the content
-      const cleaned = acc.replace(/<!--\s*CORRECTIONS_LOG[\s\S]*?-->/g, "").trim();
+      let cleaned = acc.replace(/<!--\s*CORRECTIONS_LOG[\s\S]*?-->/g, "").trim();
+
+      // Restore original references section verbatim
+      const originalContent = documentText ?? localCleanText ?? chapter?.content ?? "";
+      const refPattern = /^(#{0,4}\s*(?:References|Bibliography|Works Cited|Reference List)\b[\s\S]*)/im;
+      const originalRefMatch = originalContent.match(refPattern);
+      if (originalRefMatch) {
+        cleaned = cleaned.replace(refPattern, "").trimEnd();
+        cleaned = cleaned + "\n\n" + originalRefMatch[0].trimStart();
+      }
 
       // Count applied items from the log
       const logMatch = acc.match(/Applied:\s*([^\n]*)/);

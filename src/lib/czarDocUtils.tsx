@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Document, Paragraph, TextRun, HeadingLevel, AlignmentType } from "docx";
-import { Copy, Check, X, Download, Code2, ExternalLink } from "lucide-react";
+import { Copy, Check, X, Download, Code2, ExternalLink, ZoomIn } from "lucide-react";
 
 export function stripMarkdown(text: string): string {
   return text
@@ -326,7 +326,70 @@ export const markdownComponents = {
   em: ({ children, ...props }: React.HTMLAttributes<HTMLElement>) => (
     <em {...props} className="italic">{children}</em>
   ),
+  img: ({ src, alt, ...props }: React.ImgHTMLAttributes<HTMLImageElement>) =>
+    src ? <ImageViewer src={src} alt={alt} /> : null,
 };
+
+// ── Interactive image component ───────────────────────────────────────────────
+
+function ImageViewer({ src, alt }: { src: string; alt?: string }) {
+  const [lightbox, setLightbox] = useState(false);
+
+  const handleDownload = () => {
+    const a = document.createElement("a");
+    a.href = src;
+    a.download = alt || "image";
+    a.target = "_blank";
+    a.click();
+  };
+
+  return (
+    <>
+      <span className="inline-block mb-4 relative group cursor-zoom-in" onClick={() => setLightbox(true)}>
+        <img
+          src={src}
+          alt={alt || ""}
+          className="max-w-full rounded-xl border border-border shadow-sm"
+          style={{ maxHeight: "400px", objectFit: "contain" }}
+        />
+        <span className="absolute inset-0 flex items-center justify-center bg-foreground/0 group-hover:bg-foreground/10 rounded-xl transition-colors">
+          <ZoomIn size={20} className="text-white opacity-0 group-hover:opacity-100 drop-shadow transition-opacity" />
+        </span>
+      </span>
+
+      {lightbox && (
+        <div
+          className="fixed inset-0 z-[700] flex flex-col items-center justify-center bg-foreground/80 backdrop-blur-sm p-4"
+          onClick={() => setLightbox(false)}
+        >
+          <div className="relative max-w-5xl w-full flex flex-col items-center gap-3" onClick={e => e.stopPropagation()}>
+            <img
+              src={src}
+              alt={alt || ""}
+              className="max-w-full max-h-[80vh] rounded-2xl shadow-2xl object-contain"
+            />
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleDownload}
+                className="flex items-center gap-1.5 px-4 py-2 bg-background text-foreground text-[12px] font-medium rounded-xl border border-border hover:bg-secondary transition-colors shadow"
+              >
+                <Download size={13} />
+                Download
+              </button>
+              <button
+                onClick={() => setLightbox(false)}
+                className="flex items-center gap-1.5 px-4 py-2 bg-background text-muted-foreground text-[12px] rounded-xl border border-border hover:text-foreground hover:bg-secondary transition-colors shadow"
+              >
+                <X size={13} />
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
 
 // ── Chat markdown components (for chat bubbles — with artifacts + code copy) ──
 
@@ -334,6 +397,9 @@ const ARTIFACT_LANGUAGES = new Set(["html", "svg", "mermaid", "jsx", "tsx"]);
 
 export const chatMarkdownComponents = {
   ...markdownComponents,
+
+  img: ({ src, alt }: React.ImgHTMLAttributes<HTMLImageElement>) =>
+    src ? <ImageViewer src={src} alt={alt} /> : null,
 
   pre: ({ children }: React.HTMLAttributes<HTMLPreElement>) => {
     const child = (Array.isArray(children) ? children[0] : children) as React.ReactElement<any>;

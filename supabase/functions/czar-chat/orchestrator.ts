@@ -372,21 +372,15 @@ async function runResearcherAgent(
   const tavilyKey = Deno.env.get("TAVILY_API_KEY") ?? null;
   const serperKey = Deno.env.get("SERPER_API_KEY") ?? null;
 
-  if (!tavilyKey && !serperKey) {
-    write("agent", {
-      id: "researcher",
-      name: "Researcher",
-      status: "error",
-      action: "No search API keys — add TAVILY_API_KEY or SERPER_API_KEY",
-    });
-    return [];
-  }
+  // Always proceed — Semantic Scholar (no key) + CrossRef (no key) are always available.
+  // Tavily/Serper add richer web coverage when configured.
+  const hasKeyedSearch = tavilyKey || serperKey;
 
   write("agent", {
     id: "researcher",
     name: "Researcher",
     status: "starting",
-    action: "Searching academic databases",
+    action: hasKeyedSearch ? "Searching academic databases" : "Searching via Semantic Scholar & CrossRef",
   });
 
   // Collect all search queries: topic + section-level queries
