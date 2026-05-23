@@ -129,6 +129,8 @@ RULES:
 - "original" must be a verbatim substring of the document (max ~120 chars)
 - "corrected" must be a drop-in replacement for "original"
 - Aim for 5–20 high-value corrections
+- Do NOT flag anything in the References or Bibliography section — leave references completely untouched
+- Do NOT flag chapter headings or section titles as corrections unless they contain a genuine grammar/spelling error
 - Return a JSON array (no wrapper object)${notesLine}
 
 DOCUMENT:
