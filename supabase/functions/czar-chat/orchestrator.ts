@@ -1,5 +1,5 @@
 // orchestrator.ts — Multi-agent pipeline for CZAR write and research modes
-// Planner → Researcher → Writer, with verified citations and live-linked references.
+// Planner → Researcher → Writer → Critic → Illustrator, with verified citations.
 
 import {
   discoverSources,
@@ -7,12 +7,13 @@ import {
   formatSourceForWriter,
   VerifiedSource,
 } from "./researcher.ts";
+import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
 // ---------------------------------------------------------------------------
 // Types (mirrored from index.ts — no circular imports)
 // ---------------------------------------------------------------------------
 
-type CzarMode = "chat" | "write" | "correct" | "research" | "plan";
+type CzarMode = "chat" | "write" | "correct" | "research" | "plan" | "literature_review" | "screenplay" | "legal";
 type WriteFunction = (event: string, data: Record<string, unknown>) => void;
 
 interface ModelChoice {
@@ -314,6 +315,233 @@ function buildReferencesSection(
 }
 
 // ---------------------------------------------------------------------------
+// Banned-phrase stripping (deterministic, no API call needed)
+// ---------------------------------------------------------------------------
+
+const BANNED_REPLACEMENTS: Array<[RegExp, string]> = [
+  [/\bdelve(?:s|d|ing)?\b/gi, "examine"],
+  [/\btapestry\b/gi, "range"],
+  [/\bseamlessly\b/gi, "effectively"],
+  [/\bgroundbreaking\b/gi, "significant"],
+  [/\bcutting-edge\b/gi, "advanced"],
+  [/\bleverag(?:e|es|ed|ing)\b/gi, "use"],
+  [/\bspearhead(?:s|ed|ing)?\b/gi, "lead"],
+  [/\bit is (?:important|worth noting|crucial) to note that\s*/gi, ""],
+  [/\bfurthermore,\s+/gi, ""],
+  [/\bmoreover,\s+/gi, ""],
+  [/\bin today'?s fast-paced world,?\s*/gi, ""],
+  [/\bin conclusion(?:,?\s*it can be said that)?\s*/gi, "To conclude, "],
+  [/\blet us (?:explore|delve into|examine)\b/gi, "examining"],
+  [/\bdive into\b/gi, "examine"],
+  [/\bin the realm of\b/gi, "in"],
+  [/\bunderscores?\b/gi, "emphasise"],
+  [/\bshowcas(?:e|es|ed|ing)\b/gi, "demonstrat"],
+  [/\bempow(?:er|ers|ered|ering|erment)\b/gi, "enable"],
+  [/\bvibrant\b/gi, "active"],
+  [/\bparadigm shift\b/gi, "fundamental change"],
+  [/\bsynergi(?:es|stic|se|zing)\b/gi, "collaboration"],
+  [/\bholistic(?:ally)?\b/gi, "comprehensive"],
+  [/\bit goes without saying\b/gi, ""],
+  [/\bat the end of the day\b/gi, "ultimately"],
+  [/\bmoving forward\b/gi, "going forward"],
+  [/\bgame-chang(?:er|ing)\b/gi, "transformative"],
+  [/\bworth noting that\s*/gi, ""],
+  [/\bit is worth noting\s*/gi, ""],
+];
+
+function stripBannedPhrases(text: string): string {
+  let result = text;
+  for (const [pattern, replacement] of BANNED_REPLACEMENTS) {
+    result = result.replace(pattern, replacement);
+  }
+  // Clean up double spaces or empty lines created by deletions
+  return result.replace(/  +/g, " ").replace(/\n{3,}/g, "\n\n");
+}
+
+// ---------------------------------------------------------------------------
+// Critic agent — quality review
+// ---------------------------------------------------------------------------
+
+async function runCriticAgent(
+  draft: string,
+  userMessage: string,
+  write: WriteFunction,
+  signal: AbortSignal,
+): Promise<{ quality: string; issueCount: number }> {
+  write("agent", {
+    id: "critic",
+    name: "Critic",
+    status: "starting",
+    action: "Reviewing argument quality",
+  });
+
+  const system = `You are CZAR Critic. Assess argument quality only — banned phrase stripping is handled separately.
+Review for: (1) evidence-based claims without citations, (2) logical gaps or circular reasoning, (3) structural problems, (4) register inconsistency.
+Return ONLY valid JSON: { "quality": "high|medium|low", "issues": [{ "issue": "concise description", "severity": "low|high" }] }
+Maximum 4 issues. If argument is solid, return { "quality": "high", "issues": [] }.`;
+
+  const userMsg = `Brief: ${userMessage.slice(0, 250)}\n\nDraft (first 3500 chars):\n${draft.slice(0, 3500)}`;
+
+  try {
+    const raw = await callGeminiSync(system, userMsg, signal);
+    const match = raw.match(/\{[\s\S]*\}/);
+    if (!match) {
+      write("agent", { id: "critic", name: "Critic", status: "done", action: "Review complete" });
+      return { quality: "medium", issueCount: 0 };
+    }
+
+    const result = JSON.parse(match[0]);
+    const highCount = (result.issues ?? []).filter((i: any) => i.severity === "high").length;
+    const action =
+      result.quality === "high"
+        ? "Argument quality: strong"
+        : highCount > 0
+        ? `${highCount} quality issue${highCount > 1 ? "s" : ""} flagged`
+        : "Minor issues only";
+
+    write("agent", { id: "critic", name: "Critic", status: "done", action });
+    return { quality: result.quality ?? "medium", issueCount: highCount };
+  } catch {
+    write("agent", { id: "critic", name: "Critic", status: "done", action: "Review skipped" });
+    return { quality: "medium", issueCount: 0 };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Illustrator agent — image generation via Google Imagen 3
+// ---------------------------------------------------------------------------
+
+async function generateImageImagen(
+  prompt: string,
+  apiKey: string,
+  signal: AbortSignal,
+): Promise<string | null> {
+  try {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-001:predict?key=${apiKey}`;
+    const resp = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        instances: [{
+          prompt: `Professional academic diagram: ${prompt}. Clean white background. Scientific illustration style. No decorative elements. High contrast.`,
+        }],
+        parameters: {
+          sampleCount: 1,
+          aspectRatio: "4:3",
+          safetyFilterLevel: "block_few",
+          personGeneration: "dont_allow",
+        },
+      }),
+      signal,
+    });
+    if (!resp.ok) return null;
+    const data = await resp.json();
+    return data?.predictions?.[0]?.bytesBase64Encoded ?? null;
+  } catch {
+    return null;
+  }
+}
+
+async function identifyFigureOpportunities(
+  draft: string,
+  discipline: string,
+  signal: AbortSignal,
+): Promise<string[]> {
+  const system = `Identify up to 2 places in this academic document where a diagram or structural figure would materially strengthen understanding.
+For each, write ONE concise sentence describing exactly what the diagram should show.
+Return ONLY a JSON array of strings: ["description 1", "description 2"]
+If no figure would add value, return [].
+Only suggest: conceptual frameworks, process flows, hierarchical models, comparative structures.
+Do NOT suggest bar charts, pie charts, or data visualisations.`;
+
+  try {
+    const raw = await callGeminiSync(system, `Discipline: ${discipline}\n\n${draft.slice(0, 3000)}`, signal);
+    const match = raw.match(/\[[\s\S]*?\]/);
+    if (!match) return [];
+    const parsed = JSON.parse(match[0]);
+    return Array.isArray(parsed) ? parsed.slice(0, 2).filter((s: any) => typeof s === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+async function runIllustratorAgent(
+  draft: string,
+  discipline: string,
+  write: WriteFunction,
+  svc: SupabaseClient,
+  userId: string,
+  signal: AbortSignal,
+): Promise<string> {
+  const googleKey = Deno.env.get("GOOGLE_AI_API_KEY");
+  if (!googleKey || signal.aborted) return draft;
+
+  write("agent", {
+    id: "illustrator",
+    name: "Illustrator",
+    status: "starting",
+    action: "Identifying figure opportunities",
+  });
+
+  const opportunities = await identifyFigureOpportunities(draft, discipline, signal);
+  if (opportunities.length === 0 || signal.aborted) {
+    write("agent", { id: "illustrator", name: "Illustrator", status: "done", action: "No figures needed" });
+    return draft;
+  }
+
+  write("agent", {
+    id: "illustrator",
+    name: "Illustrator",
+    status: "working",
+    action: `Generating ${opportunities.length} figure${opportunities.length > 1 ? "s" : ""}`,
+  });
+
+  const figureMarkdown: string[] = [];
+  let figNum = 1;
+
+  for (const description of opportunities) {
+    if (signal.aborted) break;
+
+    const b64 = await generateImageImagen(description, googleKey, signal);
+    if (!b64) { figNum++; continue; }
+
+    try {
+      const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+      const path = `figures/${userId}/${Date.now()}_fig${figNum}.png`;
+      const { data: uploadData, error } = await svc.storage
+        .from("czar-uploads")
+        .upload(path, bytes.buffer as ArrayBuffer, { contentType: "image/png", upsert: false });
+
+      if (!error && uploadData) {
+        const { data: urlData } = svc.storage.from("czar-uploads").getPublicUrl(path);
+        figureMarkdown.push(
+          `\n![Figure ${figNum}: ${description}](${urlData.publicUrl})\n\n*Figure ${figNum}: ${description}. Author's own figure.*`,
+        );
+      }
+    } catch {
+      // storage upload failed — skip this figure
+    }
+    figNum++;
+  }
+
+  if (figureMarkdown.length > 0) {
+    const figuresSection = `\n\n---\n\n## Figures\n\n${figureMarkdown.join("\n\n")}`;
+    write("delta", { text: figuresSection });
+    draft += figuresSection;
+    write("agent", {
+      id: "illustrator",
+      name: "Illustrator",
+      status: "done",
+      action: `${figureMarkdown.length} figure${figureMarkdown.length > 1 ? "s" : ""} generated`,
+    });
+  } else {
+    write("agent", { id: "illustrator", name: "Illustrator", status: "done", action: "Image generation unavailable" });
+  }
+
+  return draft;
+}
+
+// ---------------------------------------------------------------------------
 // Main orchestrator entry point
 // ---------------------------------------------------------------------------
 
@@ -328,6 +556,8 @@ export interface OrchestratorOptions {
   signal: AbortSignal;
   streamAnthropicFn: StreamAnthropicFn;
   streamGoogleFn: StreamGoogleFn;
+  svc: SupabaseClient;
+  userId: string;
 }
 
 export async function runOrchestrator(opts: OrchestratorOptions): Promise<string> {
@@ -342,6 +572,8 @@ export async function runOrchestrator(opts: OrchestratorOptions): Promise<string
     signal,
     streamAnthropicFn,
     streamGoogleFn,
+    svc,
+    userId,
   } = opts;
 
   // ── Phase 1: Planner ─────────────────────────────────────────────────────
@@ -424,14 +656,8 @@ export async function runOrchestrator(opts: OrchestratorOptions): Promise<string
   });
 
   // ── Phase 4: References ──────────────────────────────────────────────────
-  // Append verified references with live DOI links if the writer didn't already include them
   if (sources.length > 0 && !fullResponse.includes("## References") && !signal.aborted) {
-    write("agent", {
-      id: "editor",
-      name: "Editor",
-      status: "starting",
-      action: "Compiling references",
-    });
+    write("agent", { id: "editor", name: "Editor", status: "starting", action: "Compiling references" });
 
     const refsSection = buildReferencesSection(sources, fullResponse);
     if (refsSection) {
@@ -439,13 +665,23 @@ export async function runOrchestrator(opts: OrchestratorOptions): Promise<string
       fullResponse += refsSection;
     }
 
-    write("agent", {
-      id: "editor",
-      name: "Editor",
-      status: "done",
-      action: "References compiled with live links",
-    });
+    write("agent", { id: "editor", name: "Editor", status: "done", action: "References compiled with live links" });
   }
 
-  return fullResponse;
+  // ── Phase 5: Critic — quality review ────────────────────────────────────
+  if (!signal.aborted && fullResponse.length > 200) {
+    await runCriticAgent(fullResponse, userMessage, write, signal);
+  }
+
+  // ── Phase 6: Illustrator — figure generation ─────────────────────────────
+  if (!signal.aborted && (mode === "write" || mode === "literature_review") && fullResponse.length > 500) {
+    const discipline = plan?.discipline ?? "general";
+    fullResponse = await runIllustratorAgent(fullResponse, discipline, write, svc, userId, signal);
+  }
+
+  // ── Phase 7: Banned-phrase strip — silent post-processing ───────────────
+  // Cleans the saved version even if the streamed version had phrases.
+  const cleanedResponse = stripBannedPhrases(fullResponse);
+
+  return cleanedResponse;
 }

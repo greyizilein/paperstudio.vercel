@@ -27,7 +27,7 @@ interface Attachment {
   mime: string;
 }
 
-type CzarMode = "chat" | "write" | "correct" | "research" | "plan";
+type CzarMode = "chat" | "write" | "correct" | "research" | "plan" | "literature_review" | "screenplay" | "legal";
 
 interface CzarRequest {
   conversation_id: string | null;
@@ -170,10 +170,12 @@ function detectMode(message: string, hasFiles: boolean, requestedMode?: CzarMode
   const lower = message.toLowerCase();
 
   if (/\b(correct|fix|improve|proofread|edit)\b/.test(lower) && hasFiles) return "correct";
+  if (/\b(literature review|systematic review|scoping review|prisma)\b/.test(lower)) return "literature_review";
+  if (/\b(screenplay|script|scene|dialogue|fade in|ext\.|int\.)\b/.test(lower)) return "screenplay";
+  if (/\b(legal brief|irac|case law|statute|tort|contract law|legal memo)\b/.test(lower)) return "legal";
   if (/\b(research|find sources|literature|bibliography)\b/.test(lower)) return "research";
   if (/\b(plan|outline|structure)\b/.test(lower)) return "plan";
 
-  // Heuristic: long message with no files that looks like a writing brief
   if (!hasFiles && message.length > 300 && /\b(write|draft|essay|report|paper)\b/.test(lower)) {
     return "write";
   }
@@ -226,19 +228,19 @@ function pickModel(
     return { provider: "google", model: "gemini-2.5-flash", thinking: false, label: "standard" };
   }
 
-  // Hardest case only: PhD/enterprise/admin, high complexity, write or research
-  // This is where Anthropic's reasoning depth actually matters
-  const isPremiumTier = effectiveTier === "phd" || effectiveTier === "enterprise" || effectiveTier === "custom" || isAdmin;
-  if (isPremiumTier && complexity === "high" && (mode === "write" || mode === "research")) {
-    return {
-      provider: "anthropic",
-      model: "claude-opus-4-7",
-      thinking: true,
-      label: "deep reasoning",
-    };
+  // Screenplay is creative — Gemini Flash is good enough and fast
+  if (mode === "screenplay") {
+    return { provider: "google", model: "gemini-2.5-flash", thinking: false, label: "standard" };
   }
 
-  // Everything else: Gemini 2.5 Pro for quality write/correct/research
+  // Hardest case only: PhD/enterprise/admin, high complexity, write/research/legal/lit-review
+  const isPremiumTier = effectiveTier === "phd" || effectiveTier === "enterprise" || effectiveTier === "custom" || isAdmin;
+  const isDeepMode = mode === "write" || mode === "research" || mode === "literature_review" || mode === "legal";
+  if (isPremiumTier && complexity === "high" && isDeepMode) {
+    return { provider: "anthropic", model: "claude-opus-4-7", thinking: true, label: "deep reasoning" };
+  }
+
+  // Everything else: Gemini 2.5 Pro
   return { provider: "google", model: "gemini-2.5-pro", thinking: false, label: "enhanced" };
 }
 
@@ -256,9 +258,52 @@ function modeDirective(mode: CzarMode, hasFiles: boolean): string {
       return `Produce a structured document plan only. No prose. Format as: ## Overview, ## Sections (numbered with description and target word count), ## Sources (to research), ## Key Arguments. Be specific and actionable.`;
     case "write":
       return `You are writing a full document. Write completely. Do not stop mid-section. Do not ask permission to continue. Write all sections fully.`;
+    case "literature_review":
+      return `You are conducting a systematic literature review. Structure: Introduction (scope, search strategy, inclusion/exclusion criteria) → Thematic Sections (organised by theme not chronology) → Synthesis and Gaps → Conclusion. Follow PRISMA principles where appropriate. All claims must be cited. Identify research gaps explicitly. End with a full ## References section.`;
+    case "screenplay":
+      return `You are writing in Fountain screenplay format. Use proper scene headings (INT./EXT. LOCATION — DAY/NIGHT), action lines (present tense, active voice), character names (centred, all caps), and dialogue. Each scene must advance character or plot. Subtext over exposition. No camera directions unless essential. Dialogue must do at least two things simultaneously.`;
+    case "legal":
+      return `You are writing a legal document. Apply IRAC structure (Issue, Rule, Application, Conclusion) for each legal question. Distinguish clearly between statute (legislation as written), case law (judicial interpretation), and academic commentary. Cite cases in italics, statutes in plain text. Use OSCOLA citation style unless otherwise specified. Argument must be formally valid — state premises explicitly.`;
     case "chat":
     default:
       return "";
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Gemini multimodal extraction (PDF, audio)
+// ---------------------------------------------------------------------------
+
+async function extractWithGemini(
+  b64: string,
+  mimeType: string,
+  instruction: string,
+  signal: AbortSignal,
+): Promise<string> {
+  const apiKey = Deno.env.get("GOOGLE_AI_API_KEY");
+  if (!apiKey) return "";
+
+  const body = {
+    contents: [{
+      role: "user",
+      parts: [
+        { text: instruction },
+        { inlineData: { mimeType, data: b64 } },
+      ],
+    }],
+    generationConfig: { maxOutputTokens: 16384, temperature: 0 },
+  };
+
+  try {
+    const resp = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal },
+    );
+    if (!resp.ok) return "";
+    const data = await resp.json();
+    return data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+  } catch {
+    return "";
   }
 }
 
@@ -302,26 +347,32 @@ async function ingestFiles(
 
       let text = "";
 
-      if (att.mime === "text/plain" || att.mime === "text/markdown" || att.filename.endsWith(".md") || att.filename.endsWith(".txt")) {
+      const isText = att.mime === "text/plain" || att.mime === "text/markdown" ||
+        att.filename.endsWith(".md") || att.filename.endsWith(".txt") ||
+        att.mime.startsWith("text/") || att.mime === "application/json";
+
+      const isPdf = att.mime === "application/pdf" || att.filename.endsWith(".pdf");
+
+      const isAudio = att.mime.startsWith("audio/") ||
+        /\.(mp3|wav|m4a|ogg|webm|flac|aac)$/i.test(att.filename);
+
+      if (isText) {
         text = await data.text();
-      } else if (att.mime === "application/pdf" || att.filename.endsWith(".pdf")) {
-        // Extract printable ASCII from the PDF buffer — best-effort
+      } else if (isPdf || isAudio) {
+        // Use Gemini multimodal for PDFs and audio
         const buf = await data.arrayBuffer();
-        const bytes = new Uint8Array(buf);
-        const raw = new TextDecoder("latin1").decode(bytes);
-        // Pull out text between BT/ET markers and plain readable runs
-        const matches = raw.match(/\(([^\)]{1,400})\)/g) ?? [];
-        const decoded = matches
-          .map((m) => m.slice(1, -1).replace(/\\[nrt\\()]/g, " ").trim())
-          .filter((s) => s.length > 2 && /[a-zA-Z]{2,}/.test(s));
-        text = decoded.join(" ");
-        if (text.length < 50) {
-          text = `[PDF: ${att.filename} — text extraction yielded limited content. Please paste the key sections directly.]`;
+        const b64 = btoa(String.fromCharCode(...new Uint8Array(buf)));
+        const instruction = isPdf
+          ? "Extract all text from this PDF document. Preserve headings, paragraph structure, and any tables or lists. Return only the extracted text."
+          : "Transcribe this audio file accurately and completely. Return only the transcription, with speaker labels if multiple speakers are apparent.";
+        text = await extractWithGemini(b64, att.mime, instruction, signal);
+        if (!text || text.length < 20) {
+          text = isPdf
+            ? `[PDF: ${att.filename} — extraction returned limited content. Please paste key sections directly.]`
+            : `[Audio: ${att.filename} — transcription failed or returned empty.]`;
         }
-      } else if (att.mime.startsWith("text/") || att.mime === "application/json") {
-        text = await data.text();
       } else {
-        text = `[File: ${att.filename} (${att.mime}) — binary format, content not extractable as text.]`;
+        text = `[File: ${att.filename} (${att.mime}) — binary format, not extractable as text.]`;
       }
 
       parts.push(`\n\n--- FILE: ${att.filename} ---\n${text}\n--- END FILE ---`);
@@ -612,6 +663,94 @@ async function loadConversationHistory(
 }
 
 // ---------------------------------------------------------------------------
+// Long-term memory
+// ---------------------------------------------------------------------------
+
+async function loadUserMemory(userId: string, svc: SupabaseClient): Promise<string> {
+  try {
+    const { data } = await svc
+      .from("czar_user_memory")
+      .select("facts")
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    if (!data?.facts) return "";
+
+    const facts = data.facts as Record<string, string>;
+    const lines = Object.entries(facts)
+      .filter(([, v]) => v?.trim())
+      .map(([k, v]) => `• ${k}: ${v}`);
+
+    if (lines.length === 0) return "";
+
+    return [
+      "",
+      "===== USER MEMORY (persistent context — highest priority) =====",
+      ...lines,
+      "===== END USER MEMORY =====",
+      "",
+    ].join("\n");
+  } catch {
+    return "";
+  }
+}
+
+async function extractAndSaveMemory(
+  userId: string,
+  userMessage: string,
+  svc: SupabaseClient,
+): Promise<void> {
+  const lower = userMessage.toLowerCase();
+  if (!lower.includes("remember") && !lower.includes("my name is") &&
+      !lower.includes("i am a") && !lower.includes("i'm a") &&
+      !lower.includes("i study") && !lower.includes("my supervisor")) {
+    return;
+  }
+
+  const apiKey = Deno.env.get("GOOGLE_AI_API_KEY");
+  if (!apiKey) return;
+
+  const system = `Extract factual memory items from this message. The user is telling CZAR something to remember.
+Return ONLY valid JSON: { "key": "value", ... } where key is a short label and value is the fact.
+Examples: { "academic_level": "PhD student", "institution": "UCL", "citation_style": "Harvard", "supervisor": "Dr Smith" }
+Return {} if nothing memorable. Max 5 keys.`;
+
+  try {
+    const body = {
+      system_instruction: { parts: [{ text: system }] },
+      contents: [{ role: "user", parts: [{ text: userMessage }] }],
+      generationConfig: { maxOutputTokens: 512, temperature: 0 },
+    };
+    const resp = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) },
+    );
+    if (!resp.ok) return;
+    const data = await resp.json();
+    const raw = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+    const match = raw.match(/\{[\s\S]*\}/);
+    if (!match) return;
+    const newFacts = JSON.parse(match[0]);
+    if (Object.keys(newFacts).length === 0) return;
+
+    // Merge with existing facts
+    const { data: existing } = await svc
+      .from("czar_user_memory")
+      .select("facts")
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    const merged = { ...(existing?.facts ?? {}), ...newFacts };
+
+    await svc
+      .from("czar_user_memory")
+      .upsert({ user_id: userId, facts: merged, updated_at: new Date().toISOString() });
+  } catch {
+    // non-fatal
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Main logic
 // ---------------------------------------------------------------------------
 
@@ -771,11 +910,17 @@ async function runMain(
     const playbook = pickPlaybook(routerSignals);
     const playbookContent = playbookText(playbook);
 
+    const memoryBlock = await loadUserMemory(userId, svc);
+
     const systemParts = [CZAR_BRAIN_SYSTEM_PROMPT];
+    if (memoryBlock) systemParts.push(memoryBlock);
     if (settingsBlock) systemParts.push(settingsBlock);
     if (directive) systemParts.push("\n\n" + directive);
     if (playbookContent) systemParts.push("\n\n" + playbookContent);
     const system = systemParts.join("\n");
+
+    // Extract memory facts async — non-blocking, runs after main logic starts
+    extractAndSaveMemory(userId, req.user_message, svc).catch(() => {});
 
     // ── 10. Load conversation history ─────────────────────────────────────
     let history: { role: string; content: string }[] = [];
@@ -800,8 +945,10 @@ async function runMain(
     // ── 11. Generate response (orchestrated or direct) ────────────────────
     let fullResponse = "";
 
-    if ((mode === "write" || mode === "research") && !signal.aborted) {
-      // Multi-agent pipeline: Planner → Researcher → Writer → References
+    const isOrchestratedMode = mode === "write" || mode === "research" || mode === "literature_review" || mode === "legal";
+
+    if (isOrchestratedMode && !signal.aborted) {
+      // Multi-agent pipeline: Planner → Researcher → Writer → Critic → Illustrator
       try {
         fullResponse = await runOrchestrator({
           userMessage: req.user_message,
@@ -814,6 +961,8 @@ async function runMain(
           signal,
           streamAnthropicFn: streamAnthropic,
           streamGoogleFn: streamGoogle,
+          svc,
+          userId,
         });
       } catch (err: any) {
         if (err?.name !== "AbortError") {
