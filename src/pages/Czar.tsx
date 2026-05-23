@@ -29,7 +29,7 @@ import { DashboardSidebar } from "@/components/dashboard/DashboardSidebar";
 import { CorrectionModal } from "@/components/czar/CorrectionModal";
 
 import { lazy, Suspense } from "react";
-import { AgentActivityDock, WritingGlow, CzarTypingScene, CzarReviewScene } from "@/components/czar/CzarVisuals";
+import { AgentActivityDock, WritingGlow, WelcomeAurora, CzarTypingScene, CzarReviewScene } from "@/components/czar/CzarVisuals";
 const CommandInput = lazy(() => import("@/components/czar/CommandInput").then(m => ({ default: m.CommandInput })));
 
 // ── Types ──────────────────────────────────────────────────────────
