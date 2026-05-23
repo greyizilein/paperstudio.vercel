@@ -219,27 +219,25 @@ function pickModel(
   const isAdmin = !!email && email.toLowerCase() === ADMIN_EMAIL;
   const effectiveTier = isAdmin ? "phd" : tier.toLowerCase();
 
-  // Admin and PhD always get best model
-  if (isAdmin || effectiveTier === "phd" || effectiveTier === "custom") {
-    const thinking = complexity === "high" || mode === "research" || mode === "write";
+  // Chat and Plan are always lightweight — Gemini Flash
+  if (mode === "chat" || mode === "plan") {
+    return { provider: "google", model: "gemini-2.5-flash", thinking: false, label: "standard" };
+  }
+
+  // Hardest case only: PhD/enterprise/admin, high complexity, write or research
+  // This is where Anthropic's reasoning depth actually matters
+  const isPremiumTier = effectiveTier === "phd" || effectiveTier === "enterprise" || effectiveTier === "custom" || isAdmin;
+  if (isPremiumTier && complexity === "high" && (mode === "write" || mode === "research")) {
     return {
       provider: "anthropic",
       model: "claude-opus-4-7",
-      thinking,
-      label: thinking ? "deep reasoning" : "extended thinking",
+      thinking: true,
+      label: "deep reasoning",
     };
   }
 
-  // Masters tier: Sonnet for medium+, Flash for low chat
-  if (effectiveTier === "masters") {
-    if (complexity === "low" && mode === "chat") {
-      return { provider: "google", model: "gemini-2.5-flash", thinking: false, label: "standard" };
-    }
-    return { provider: "anthropic", model: "claude-sonnet-4-6", thinking: false, label: "enhanced" };
-  }
-
-  // Free / undergraduate / none: always Gemini Flash
-  return { provider: "google", model: "gemini-2.5-flash", thinking: false, label: "standard" };
+  // Everything else: Gemini 2.5 Pro for quality write/correct/research
+  return { provider: "google", model: "gemini-2.5-pro", thinking: false, label: "enhanced" };
 }
 
 // ---------------------------------------------------------------------------
