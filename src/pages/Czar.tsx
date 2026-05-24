@@ -123,6 +123,19 @@ const MODE_COLOURS: Record<CzarMode, string> = {
 };
 
 
+function modePlaceholder(mode: CzarMode): string {
+  return ({
+    chat: "Ask CZAR anything… or type / for commands",
+    write: "Describe what to write — topic, length, style, audience…",
+    correct: "Attach your document and describe what to improve…",
+    research: "What topic should I research?",
+    plan: "Describe the document you want to plan…",
+    literature_review: "Describe the research question or topic for your review…",
+    screenplay: "Describe the scene, characters, or story…",
+    legal: "Describe the legal issue, case, or document…",
+  } as Record<CzarMode, string>)[mode] ?? "Ask CZAR…";
+}
+
 // ── Main component ─────────────────────────────────────────────────
 
 export default function CzarPage() {
@@ -459,7 +472,12 @@ export default function CzarPage() {
             <Clock size={16} />
           </button>
 
-          {/* Right: stop + status + theme */}
+          {/* Mode badge — read-only; mode switching is in the input area */}
+          <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[12px] font-semibold select-none ${MODE_COLOURS[mode]}`}>
+            {modeIcon(mode)}
+            <span>{modeLabel(mode)}</span>
+          </div>
+
           <div className="ml-auto flex items-center gap-1">
             {streaming && (
               <button onClick={stopStream}
@@ -515,8 +533,10 @@ export default function CzarPage() {
                 onSend={sendMessage}
                 onStop={stopStream}
                 streaming={streaming}
-                tier={userTier}
-                onCorrect={() => setCorrectionModalOpen(true)}
+                placeholder={modePlaceholder(mode)}
+                mode={mode}
+                onModeChange={setMode}
+                onNewConversation={newConv}
               />
             </Suspense>
             <p className="text-center text-[10px] text-muted-foreground/40 mt-1.5 px-2">
