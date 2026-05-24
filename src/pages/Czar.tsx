@@ -21,7 +21,7 @@ import {
   type CzarClarificationEvent,
   type CorrectionSummaryEvent, type CorrectionChangeEvent,
 } from "@/lib/czarStream";
-import { buildDocx, stripMarkdown, markdownComponents, chatMarkdownComponents } from "@/lib/czarDocUtils.tsx";
+import { buildDocx, docxFilename, stripMarkdown, markdownComponents, chatMarkdownComponents } from "@/lib/czarDocUtils.tsx";
 import { computeParaDiff, type DiffParagraph } from "@/lib/diffUtils";
 import { ConvSidebar } from "@/components/czar/ConvSidebar";
 import { UpgradeModal } from "@/components/czar/UpgradeModal";
@@ -61,15 +61,6 @@ interface UIMessage {
 
 const DOC_MODES = ["write", "correct", "research", "literature_review", "legal", "screenplay"];
 
-const DOC_FILENAMES: Partial<Record<CzarMode, string>> = {
-  write: "czar-essay.docx",
-  research: "czar-research.docx",
-  correct: "czar-corrected.docx",
-  literature_review: "czar-lit-review.docx",
-  legal: "czar-legal.docx",
-  screenplay: "czar-screenplay.docx",
-  plan: "czar-plan.docx",
-};
 
 // ── Helpers ────────────────────────────────────────────────────────
 
@@ -336,7 +327,7 @@ export default function CzarPage() {
             setConvId(e.conversation_id);
           }
           if (extraSettings.autoDownload && accText.trim()) {
-            downloadContent(accText, finalMode);
+            downloadContent(accText);
           }
         },
       };
@@ -367,10 +358,10 @@ export default function CzarPage() {
   }, []);
 
   // Trigger a DOCX download from any markdown string
-  const downloadContent = useCallback(async (content: string, msgMode?: string) => {
+  const downloadContent = useCallback(async (content: string) => {
     if (!content.trim()) return;
     try {
-      const [{ buildDocx }, { Packer }] = await Promise.all([
+      const [{ buildDocx, docxFilename }, { Packer }] = await Promise.all([
         import("@/lib/czarDocUtils.tsx"),
         import("docx"),
       ]);
@@ -378,7 +369,7 @@ export default function CzarPage() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = DOC_FILENAMES[msgMode as CzarMode] ?? "czar-document.docx";
+      a.download = docxFilename(content);
       a.click();
       URL.revokeObjectURL(url);
     } catch { /* silent */ }
@@ -389,7 +380,7 @@ export default function CzarPage() {
     const last = [...messages].reverse().find(
       m => m.role === "assistant" && !m.streaming && m.content.trim().length > 0
     );
-    if (last) downloadContent(last.content, last.mode);
+    if (last) downloadContent(last.content);
   }, [messages, downloadContent]);
 
   // Detect messages whose sole intent is to download (not write + download)
@@ -605,7 +596,7 @@ function AssistantActions({ content }: { content: string }) {
 
   const handleSaveDocx = useCallback(async () => {
     try {
-      const [{ buildDocx }, { Packer }] = await Promise.all([
+      const [{ buildDocx, docxFilename }, { Packer }] = await Promise.all([
         import("@/lib/czarDocUtils.tsx"),
         import("docx"),
       ]);
@@ -613,7 +604,7 @@ function AssistantActions({ content }: { content: string }) {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = "czar-response.docx";
+      a.download = docxFilename(content);
       a.click();
       URL.revokeObjectURL(url);
     } catch { /* silently ignore download errors */ }
@@ -812,10 +803,9 @@ function InlineDocMessage({ msg, onContentChange, onSelectionAction, onDismissDi
     const blob = await Packer.toBlob(doc);
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
-    const filename = DOC_FILENAMES[msg.mode as CzarMode] ?? "czar-document.docx";
-    a.href = url; a.download = filename; a.click();
+    a.href = url; a.download = docxFilename(msg.content); a.click();
     URL.revokeObjectURL(url);
-  }, [msg.content, msg.mode]);
+  }, [msg.content]);
 
   const handleDocCopy = useCallback(() => {
     navigator.clipboard.writeText(msg.content).catch(() => {});
@@ -853,7 +843,7 @@ function InlineDocMessage({ msg, onContentChange, onSelectionAction, onDismissDi
     return () => document.removeEventListener("selectionchange", handler);
   }, []);
 
-  const filename = DOC_FILENAMES[msg.mode as CzarMode] ?? "czar-document.docx";
+  const filename = docxFilename(msg.content);
 
   return (
     <div ref={containerRef} className="relative" onMouseUp={handleMouseUp}>

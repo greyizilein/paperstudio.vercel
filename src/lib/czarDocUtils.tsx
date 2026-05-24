@@ -117,6 +117,44 @@ function buildMarkdownTable(rows: string[]): Table {
   });
 }
 
+// ── Filename derivation ────────────────────────────────────────────────────────
+// Derives a human-readable .docx filename from the document content.
+// Priority: first H1 → first H2 → first non-empty sentence (≤8 words).
+
+export function docxFilename(markdown: string): string {
+  const lines = markdown.split("\n");
+
+  // Try H1 then H2
+  for (const prefix of ["# ", "## "]) {
+    const line = lines.find(l => l.trimStart().startsWith(prefix));
+    if (line) {
+      const title = line.replace(/^#{1,2}\s+/, "").trim();
+      if (title.length > 2) return sanitiseFilename(title);
+    }
+  }
+
+  // Fall back to first substantive line (first 8 words)
+  for (const line of lines) {
+    const t = line.replace(/^#{1,6}\s+/, "").replace(/[*_`[\]()>]/g, "").trim();
+    if (t.length < 4) continue;
+    const words = t.split(/\s+/).slice(0, 8).join(" ");
+    return sanitiseFilename(words);
+  }
+
+  return "czar-document.docx";
+}
+
+function sanitiseFilename(title: string): string {
+  return (
+    title
+      .replace(/[<>:"/\\|?*\x00-\x1f]/g, "")   // strip illegal chars
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 80)
+      .replace(/[. ]+$/, "") + ".docx"           // no trailing dots/spaces
+  );
+}
+
 // ── Professional document builder ─────────────────────────────────────────────
 // Produces Calibri 11pt body · 1-inch margins · styled headings · page footer.
 // Base64 images are stripped and replaced with a figure placeholder.
