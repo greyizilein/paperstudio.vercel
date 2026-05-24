@@ -9,21 +9,87 @@ import {
 import { cn } from "@/lib/utils";
 import { VoiceInput } from "./VoiceInput";
 
-// ─── Command catalogue ─────────────────────────────────────────────────────
+// ─── Output modifier catalogue ────────────────────────────────────────────────
+// Each modifier stacks as a pill and appends an instruction token to the payload.
+
+interface Modifier {
+  label: string;
+  colour: string;
+  instruction: string;
+}
+
+const SLASH_MODIFIERS: Record<string, Modifier> = {
+  humanise: {
+    label: "Humanise",
+    colour: "bg-violet-500/15 text-violet-600 dark:text-violet-400",
+    instruction:
+      "[OUTPUT MODIFIER — Humanise: vary sentence openings and lengths aggressively; favour concrete nouns over abstractions; introduce occasional field-appropriate idiom; disrupt uniform AI cadence throughout. Preserve every citation, statistic, and claim exactly as sourced. Do not add information.]",
+  },
+  expand: {
+    label: "Expand",
+    colour: "bg-blue-500/15 text-blue-600 dark:text-blue-400",
+    instruction:
+      "[OUTPUT MODIFIER — Expand: develop with greater depth, additional evidence, nuanced sub-argument, and concrete examples. Every added sentence must earn its place — no filler or repetition.]",
+  },
+  shorten: {
+    label: "Shorten",
+    colour: "bg-orange-500/15 text-orange-600 dark:text-orange-400",
+    instruction:
+      "[OUTPUT MODIFIER — Shorten: reduce to the essential points only. Cut repetition, hedging, throat-clearing, and padding. Each surviving sentence must carry distinct informational weight.]",
+  },
+  formal: {
+    label: "Formal",
+    colour: "bg-slate-500/15 text-slate-600 dark:text-slate-400",
+    instruction:
+      "[OUTPUT MODIFIER — Register: strictly formal academic throughout. Third person. No contractions. No rhetorical questions in expository passages. Measured, analytical tone.]",
+  },
+  plain: {
+    label: "Plain",
+    colour: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
+    instruction:
+      "[OUTPUT MODIFIER — Register: plain English. No unnecessary jargon. Short, declarative sentences preferred. Accessible to a general reader without sacrificing accuracy or substance.]",
+  },
+  structure: {
+    label: "Structure",
+    colour: "bg-indigo-500/15 text-indigo-600 dark:text-indigo-400",
+    instruction:
+      "[OUTPUT MODIFIER — Format: organise with clearly numbered sections and descriptive subheadings. Each section should open with its controlling claim or thesis sentence.]",
+  },
+  table: {
+    label: "Table",
+    colour: "bg-teal-500/15 text-teal-600 dark:text-teal-400",
+    instruction:
+      "[OUTPUT MODIFIER — Format: present core comparative or structured information as a properly labelled markdown table in addition to or instead of prose where it aids clarity.]",
+  },
+};
+
+// Regex to detect and strip inline slash modifier tokens
+const SLASH_MOD_REGEX = /\/(humanise|humanize|expand|shorten|formal|plain|structure|table)\b/gi;
+
+// ─── Command catalogue ────────────────────────────────────────────────────────
 
 interface Cmd { cmd: string; aliases: string[]; label: string; desc: string; group: string; action: string }
 
 const COMMANDS: Cmd[] = [
-  { cmd: "/correct",  aliases: ["/fix", "/edit"],                                                                     label: "Correct",          desc: "Fix and improve a draft",               group: "Other",   action: "correct" },
-  { cmd: "/image",    aliases: ["/draw", "/drawing", "/figure", "/diagram", "/chart", "/illustration", "/visual"],    label: "Image / Diagram",  desc: "Generate a visual, chart, or diagram",  group: "Visuals", action: "image"   },
-  { cmd: "/new",      aliases: ["/clear", "/reset", "/start"],                                                        label: "New conversation", desc: "Start fresh",                           group: "Other",   action: "new"     },
+  // ── Output modifiers — stack as pills, append instruction tokens ──────────
+  { cmd: "/humanise",  aliases: ["/humanize", "/h"],       label: "Humanise",   desc: "Make output sound more naturally human",         group: "Modifiers", action: "mod:humanise" },
+  { cmd: "/expand",    aliases: ["/detail", "/more"],      label: "Expand",     desc: "Add depth, evidence, and nuanced analysis",      group: "Modifiers", action: "mod:expand" },
+  { cmd: "/shorten",   aliases: ["/brief", "/condense"],   label: "Shorten",    desc: "Cut to the essential points only",               group: "Modifiers", action: "mod:shorten" },
+  { cmd: "/formal",    aliases: ["/academic", "/prof"],    label: "Formal",     desc: "Strict academic register — third person",        group: "Modifiers", action: "mod:formal" },
+  { cmd: "/plain",     aliases: ["/simple", "/clear"],     label: "Plain",      desc: "Plain English — no jargon, short sentences",     group: "Modifiers", action: "mod:plain" },
+  { cmd: "/structure", aliases: ["/outline", "/sections"], label: "Structure",  desc: "Numbered sections with descriptive subheadings", group: "Modifiers", action: "mod:structure" },
+  { cmd: "/table",     aliases: ["/grid", "/compare"],     label: "Table",      desc: "Format key data as a structured table",          group: "Modifiers", action: "mod:table" },
+  // ── Standalone actions ─────────────────────────────────────────────────────
+  { cmd: "/image",   aliases: ["/draw", "/diagram", "/figure", "/visual"], label: "Image / Diagram", desc: "Generate an image, diagram, or visual", group: "Visuals", action: "image"   },
+  { cmd: "/correct", aliases: ["/fix", "/edit", "/improve"],                label: "Correct",         desc: "Fix and improve a document or draft",   group: "Other",   action: "correct" },
+  { cmd: "/new",     aliases: ["/clear", "/reset", "/fresh"],               label: "New chat",         desc: "Start a fresh conversation",            group: "Other",   action: "new"     },
 ];
 
-const CMD_GROUPS = ["Visuals", "Other"];
+const CMD_GROUPS = ["Modifiers", "Visuals", "Other"];
 
 const AT_ITEMS = [
-  { token: "@file", label: "Attach file",  desc: "Open the file picker", action: "file" },
-  { token: "@cite", label: "Citation",     desc: "Insert a citation placeholder", action: "cite" },
+  { token: "@file", label: "Attach file", desc: "Open the file picker",          action: "file" },
+  { token: "@cite", label: "Citation",    desc: "Insert a citation placeholder", action: "cite" },
 ];
 
 const HASH_ITEMS = [
@@ -35,26 +101,45 @@ const HASH_ITEMS = [
   { token: "#mla",       label: "MLA",       desc: "Use MLA referencing" },
 ];
 
-// Strip @/# tokens and build context note to append to payload
+// ─── Token processor ──────────────────────────────────────────────────────────
+// Strips #/@ tokens and inline /modifier tokens, appending contextual instructions.
+
 function processTokens(text: string): string {
-  const hashMatches = [...text.matchAll(/#(harvard|apa|chicago|vancouver|ieee|mla)\b/gi)];
+  const hashMatches  = [...text.matchAll(/#(harvard|apa|chicago|vancouver|ieee|mla)\b/gi)];
   const atCiteMatches = [...text.matchAll(/@cite\b/gi)];
+  const slashMods    = [...text.matchAll(SLASH_MOD_REGEX)];
 
   let context = "";
+
   if (hashMatches.length > 0) {
-    const styleMap: Record<string, string> = { harvard: "Harvard", apa: "APA 7th", chicago: "Chicago", vancouver: "Vancouver", ieee: "IEEE", mla: "MLA" };
+    const styleMap: Record<string, string> = {
+      harvard: "Harvard", apa: "APA 7th", chicago: "Chicago",
+      vancouver: "Vancouver", ieee: "IEEE", mla: "MLA",
+    };
     context += ` [Use ${styleMap[hashMatches[0][1].toLowerCase()] ?? hashMatches[0][1]} referencing style.]`;
   }
   if (atCiteMatches.length > 0) context += " [User has requested citations here.]";
 
+  if (slashMods.length > 0) {
+    const seen = new Set<string>();
+    for (const m of slashMods) {
+      const key = m[1].toLowerCase().replace("humanize", "humanise");
+      if (!seen.has(key)) {
+        const mod = SLASH_MODIFIERS[key];
+        if (mod) { context += " " + mod.instruction; seen.add(key); }
+      }
+    }
+  }
+
   return text
     .replace(/#(harvard|apa|chicago|vancouver|ieee|mla)\b/gi, "")
     .replace(/@cite\b/gi, "[CITE]")
+    .replace(SLASH_MOD_REGEX, "")
     .replace(/\s{2,}/g, " ")
     .trim() + context;
 }
 
-// ─── Misc helpers ──────────────────────────────────────────────────────────
+// ─── Misc helpers ─────────────────────────────────────────────────────────────
 
 function fmtSize(bytes: number) {
   if (bytes < 1024) return `${bytes} B`;
@@ -69,10 +154,10 @@ function truncName(name: string, max = 20) {
   return `${name.slice(0, max - 1)}…`;
 }
 
-// ─── Component ────────────────────────────────────────────────────────────
+// ─── Component ────────────────────────────────────────────────────────────────
 
 interface CommandInputProps {
-  onSend: (text: string, files: File[]) => void;
+  onSend: (text: string, files: File[], meta?: Record<string, any>) => void;
   onStop: () => void;
   streaming: boolean;
   disabled?: boolean;
@@ -84,21 +169,26 @@ export function CommandInput({
   onSend, onStop, streaming, disabled = false,
   onCorrect, onNewConversation,
 }: CommandInputProps) {
-  const [text, setText]               = useState("");
-  const [files, setFiles]             = useState<File[]>([]);
-  const [isDragging, setIsDragging]   = useState(false);
-  const [interimVoice, setInterim]    = useState("");
+  const [text, setText]             = useState("");
+  const [files, setFiles]           = useState<File[]>([]);
+  const [isDragging, setIsDragging] = useState(false);
+  const [interimVoice, setInterim]  = useState("");
+
+  // Stackable output modifier pills
+  const [activeModifiers, setActiveModifiers] = useState<string[]>([]);
+  // Image generation mode (shows dedicated placeholder + sends generateImage flag)
+  const [imageMode, setImageMode]             = useState(false);
 
   // Palette state
-  const [paletteMode, setPaletteMode]       = useState<"command" | "at" | "hash" | null>(null);
-  const [paletteFilter, setPaletteFilter]   = useState("");
-  const [paletteIdx, setPaletteIdx]         = useState(0);
+  const [paletteMode, setPaletteMode]     = useState<"command" | "at" | "hash" | null>(null);
+  const [paletteFilter, setPaletteFilter] = useState("");
+  const [paletteIdx, setPaletteIdx]       = useState(0);
 
   const textareaRef  = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dragCount    = useRef(0);
 
-  // ── Auto-height ──────────────────────────────────────────
+  // ── Auto-height ───────────────────────────────────────────────
   const adjustHeight = useCallback(() => {
     const el = textareaRef.current;
     if (!el) return;
@@ -109,7 +199,7 @@ export function CommandInput({
 
   useEffect(() => { adjustHeight(); }, [text, adjustHeight]);
 
-  // ── Palette filtering ─────────────────────────────────────
+  // ── Palette filtering ─────────────────────────────────────────
   const filteredCmds = paletteMode === "command"
     ? COMMANDS.filter(c =>
         !paletteFilter || paletteFilter === "/"
@@ -129,7 +219,7 @@ export function CommandInput({
 
   useEffect(() => { setPaletteIdx(0); }, [paletteFilter, paletteMode]);
 
-  // ── Text change — detect /, @, # ─────────────────────────
+  // ── Text change — detect /, @, # ─────────────────────────────
   const handleTextChange = useCallback((e: ChangeEvent<HTMLTextAreaElement>) => {
     const val = e.target.value;
     setText(val);
@@ -154,12 +244,21 @@ export function CommandInput({
     setPaletteFilter("");
   }, []);
 
-  // ── Apply command ─────────────────────────────────────────
+  // ── Apply command ─────────────────────────────────────────────
   const applyCommand = useCallback((action: string) => {
-    if (action === "correct") onCorrect?.();
-    else if (action === "new") onNewConversation?.();
-    else if (action === "file") fileInputRef.current?.click();
-
+    if (action.startsWith("mod:")) {
+      const key = action.slice(4);
+      // Toggle modifier: selecting it again removes it
+      setActiveModifiers(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]);
+    } else if (action === "image") {
+      setImageMode(prev => !prev);
+    } else if (action === "correct") {
+      onCorrect?.();
+    } else if (action === "new") {
+      onNewConversation?.();
+    } else if (action === "file") {
+      fileInputRef.current?.click();
+    }
     stripToken();
     setTimeout(() => textareaRef.current?.focus(), 0);
   }, [onCorrect, onNewConversation, stripToken]);
@@ -184,21 +283,39 @@ export function CommandInput({
     setTimeout(() => textareaRef.current?.focus(), 0);
   }, []);
 
-  // ── Send ──────────────────────────────────────────────────
+  // ── Send ──────────────────────────────────────────────────────
   const handleSend = useCallback(() => {
     const trimmed = text.trim();
     if ((!trimmed && files.length === 0) || streaming) return;
 
-    const payload = processTokens(trimmed);
-    onSend(payload || trimmed, files);
+    // processTokens handles #citation, @cite, and any inline /modifier tokens
+    const processedText = processTokens(trimmed);
+
+    // Append instructions from pill-bar active modifiers (deduplicating with inline ones)
+    const pillInstructions = activeModifiers
+      .map(k => SLASH_MODIFIERS[k]?.instruction ?? "")
+      .filter(Boolean)
+      .join(" ");
+
+    const finalPayload = pillInstructions
+      ? `${processedText} ${pillInstructions}`.trim()
+      : processedText;
+
+    const meta: Record<string, any> = {};
+    if (imageMode) meta.generateImage = true;
+
+    onSend(finalPayload || trimmed, files, Object.keys(meta).length > 0 ? meta : undefined);
     setText("");
     setFiles([]);
     setInterim("");
+    setActiveModifiers([]);
+    setImageMode(false);
     setPaletteMode(null);
+    setPaletteFilter("");
     if (textareaRef.current) textareaRef.current.style.height = "auto";
-  }, [text, files, streaming, onSend]);
+  }, [text, files, streaming, onSend, activeModifiers, imageMode]);
 
-  // ── Keyboard ──────────────────────────────────────────────
+  // ── Keyboard ──────────────────────────────────────────────────
   const handleKeyDown = useCallback((e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (paletteMode) {
       if (e.key === "ArrowDown") { e.preventDefault(); setPaletteIdx(i => Math.min(i + 1, paletteItems.length - 1)); return; }
@@ -218,14 +335,14 @@ export function CommandInput({
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); }
   }, [paletteMode, paletteItems, paletteIdx, applyCommand, applyAt, applyHash, handleSend]);
 
-  // ── Voice ─────────────────────────────────────────────────
+  // ── Voice ─────────────────────────────────────────────────────
   const handleVoiceTranscript = useCallback((t: string) => {
     setInterim("");
     setText(prev => `${prev}${prev.trim() ? " " : ""}${t}`);
     textareaRef.current?.focus();
   }, []);
 
-  // ── Files ─────────────────────────────────────────────────
+  // ── Files ─────────────────────────────────────────────────────
   const addFiles = useCallback((fl: FileList | File[]) => {
     const arr = Array.from(fl);
     setFiles(prev => {
@@ -245,6 +362,12 @@ export function CommandInput({
   }, [addFiles]);
 
   const canSend = (text.trim().length > 0 || files.length > 0) && !streaming;
+
+  const dynamicPlaceholder = imageMode
+    ? "Describe the image or diagram to generate…"
+    : activeModifiers.length > 0
+    ? "Write your message — active modifiers will shape the output…"
+    : "Ask CZAR anything — essay, report, script, question… or type / for commands";
 
   // Groups for command palette rendering
   const cmdGroups = CMD_GROUPS.map(g => ({ g, items: filteredCmds.filter(c => c.group === g) })).filter(x => x.items.length > 0);
@@ -274,34 +397,59 @@ export function CommandInput({
 
               {cmdGroups.map(({ g, items }) => (
                 <div key={g}>
-                  <div className="px-3 pt-2 pb-0.5">
+                  <div className="px-3 pt-2 pb-0.5 flex items-center gap-2">
                     <span className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground/35">{g}</span>
+                    {g === "Modifiers" && (
+                      <span className="text-[8px] text-muted-foreground/25">— stack onto any message</span>
+                    )}
                   </div>
                   {items.map(cmd => {
                     const isActive = paletteIdx === globalIdx;
                     const thisIdx  = globalIdx++;
+                    const modKey   = cmd.action.startsWith("mod:") ? cmd.action.slice(4) : null;
+                    const isActiveMod = modKey ? activeModifiers.includes(modKey) : false;
+                    const mod      = modKey ? SLASH_MODIFIERS[modKey] : null;
                     return (
                       <button key={cmd.cmd}
                         onClick={() => applyCommand(cmd.action)}
                         onMouseEnter={() => setPaletteIdx(thisIdx)}
                         className={cn("w-full flex items-center gap-3 px-3 py-2 text-left transition-colors", isActive ? "bg-secondary" : "hover:bg-secondary/60")}>
-                        {cmd.action === "correct" ? (
+
+                        {modKey ? (
+                          <span className={cn(
+                            "w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 text-[9px] font-black transition-colors",
+                            isActiveMod ? mod?.colour : "bg-secondary text-muted-foreground/40"
+                          )}>
+                            {isActiveMod ? "✓" : "+"}
+                          </span>
+                        ) : cmd.action === "correct" ? (
                           <span className="w-5 h-5 rounded-full bg-amber-500/15 flex items-center justify-center flex-shrink-0">
                             <FileSearch size={10} className="text-amber-600 dark:text-amber-400" />
                           </span>
                         ) : cmd.group === "Visuals" ? (
-                          <span className="w-5 h-5 rounded-full bg-pink-500/15 text-[10px] flex items-center justify-center flex-shrink-0">🖼</span>
+                          <span className={cn(
+                            "w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 text-[10px] transition-colors",
+                            imageMode ? "bg-pink-500/25 text-pink-500" : "bg-pink-500/15"
+                          )}>🖼</span>
                         ) : (
                           <span className="w-5 h-5 rounded-full bg-secondary text-[10px] flex items-center justify-center flex-shrink-0 text-muted-foreground">↩</span>
                         )}
+
                         <div className="min-w-0 flex-1">
                           <div className="flex items-baseline gap-2">
                             <span className="text-[12px] font-semibold text-foreground">{cmd.label}</span>
                             <span className="text-[10px] text-muted-foreground/45 font-mono">{cmd.cmd}</span>
+                            {modKey && (
+                              <span className="text-[8px] font-bold uppercase tracking-wider text-muted-foreground/25">modifier</span>
+                            )}
                           </div>
                           <p className="text-[10.5px] text-muted-foreground/55 truncate">{cmd.desc}</p>
                         </div>
-                        {cmd.aliases.length > 0 && (
+
+                        {isActiveMod && (
+                          <span className="text-[9px] font-semibold text-emerald-500 flex-shrink-0">active</span>
+                        )}
+                        {!modKey && cmd.aliases.length > 0 && (
                           <span className="text-[9px] text-muted-foreground/25 font-mono hidden sm:block flex-shrink-0">{cmd.aliases.slice(0, 2).join(" ")}</span>
                         )}
                       </button>
@@ -367,8 +515,8 @@ export function CommandInput({
         </div>
       )}
 
-      {/* ── File chips ────────────────────────────────────────── */}
-      {files.length > 0 && (
+      {/* ── File chips OR attach hint ──────────────────────────── */}
+      {files.length > 0 ? (
         <div className="flex flex-wrap gap-1.5 px-3 pt-3 pb-1">
           {files.map((file, i) => (
             <div key={`${file.name}-${i}`} className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-secondary border border-border text-xs text-foreground max-w-[200px]">
@@ -380,15 +528,46 @@ export function CommandInput({
             </div>
           ))}
         </div>
-      )}
-
-      {/* ── Attach hint (when no files) ───────────────────────── */}
-      {files.length === 0 && (
+      ) : (
         <button type="button" onClick={() => fileInputRef.current?.click()}
           className="flex items-center justify-center gap-2 py-1.5 text-xs text-muted-foreground/50 hover:text-muted-foreground transition-colors border-b border-dashed border-border/50 mx-3 mt-2 hover:border-border">
           <Paperclip className="w-3 h-3" />
           <span>Drag & drop files, or click to attach</span>
         </button>
+      )}
+
+      {/* ── Active modifier pills ─────────────────────────────── */}
+      {(activeModifiers.length > 0 || imageMode) && (
+        <div className="flex flex-wrap items-center gap-1.5 px-3 pt-2 pb-0.5">
+          <span className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground/30 mr-0.5">Active:</span>
+
+          {imageMode && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-pink-500/15 text-pink-600 dark:text-pink-400">
+              Image
+              <button type="button" onClick={() => setImageMode(false)} className="ml-0.5 hover:opacity-70 transition-opacity" aria-label="Remove image mode">
+                <X className="w-2.5 h-2.5" />
+              </button>
+            </span>
+          )}
+
+          {activeModifiers.map(key => {
+            const mod = SLASH_MODIFIERS[key];
+            if (!mod) return null;
+            return (
+              <span key={key} className={cn("inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold", mod.colour)}>
+                {mod.label}
+                <button
+                  type="button"
+                  onClick={() => setActiveModifiers(p => p.filter(k => k !== key))}
+                  className="ml-0.5 hover:opacity-70 transition-opacity"
+                  aria-label={`Remove ${mod.label} modifier`}
+                >
+                  <X className="w-2.5 h-2.5" />
+                </button>
+              </span>
+            );
+          })}
+        </div>
       )}
 
       {/* ── Input row ─────────────────────────────────────────── */}
@@ -411,7 +590,7 @@ export function CommandInput({
             onKeyDown={handleKeyDown}
             disabled={disabled}
             rows={1}
-            placeholder={interimVoice ? "" : "Ask CZAR anything — essay, report, script, question… or type / for commands"}
+            placeholder={interimVoice ? "" : dynamicPlaceholder}
             aria-label="Message input"
             className={cn(
               "w-full resize-none rounded-lg bg-transparent px-1 py-2 text-sm text-foreground placeholder:text-muted-foreground/50",
