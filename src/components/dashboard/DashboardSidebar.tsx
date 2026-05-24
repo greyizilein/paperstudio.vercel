@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { LayoutDashboard, FolderOpen, Download, User, Settings, CreditCard, HelpCircle, LogOut, ShieldCheck, Bell, MessageSquare } from "lucide-react";
+import { LayoutDashboard, FolderOpen, Download, User, Settings, CreditCard, HelpCircle, LogOut, ShieldCheck, Bell, MessageSquare, PenLine } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { CzarIcon } from "@/components/icons/CzarIcon";
 import { usePsTheme } from "@/contexts/PsThemeContext";
@@ -21,14 +21,14 @@ interface DashboardSidebarProps {
 }
 
 const navItems = [
-  { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard" },
-  { icon: FolderOpen, label: "My Projects", path: "/dashboard?tab=projects" },
-  { icon: CzarIcon, label: "CZAR", path: "/czar", badge: "NEW" },
-  { icon: Download, label: "Exports", path: "/export" },
-  { icon: User, label: "Account", path: "/settings" },
-  { icon: Settings, label: "Settings", path: "/settings" },
-  { icon: CreditCard, label: "Usage & Billing", path: "/settings?tab=billing" },
-  { icon: HelpCircle, label: "Help & Support", path: "/help" },
+  { icon: LayoutDashboard, label: "Dashboard",     path: "/dashboard" },
+  { icon: PenLine,         label: "Writer",         path: "/dashboard" },
+  { icon: CzarIcon,        label: "CZAR",           path: "/czar", badge: "NEW" },
+  { icon: FolderOpen,      label: "My Projects",    path: "/dashboard?tab=projects" },
+  { icon: Download,        label: "Exports",        path: "/export" },
+  { icon: Settings,        label: "Settings",       path: "/settings" },
+  { icon: CreditCard,      label: "Usage & Billing", path: "/settings?tab=billing" },
+  { icon: HelpCircle,      label: "Help & Support", path: "/help" },
 ];
 
 export function DashboardSidebar({ userName, userInitials, tier = "Masters", onSignOut, userEmail, avatarUrl }: DashboardSidebarProps) {
@@ -90,12 +90,13 @@ export function DashboardSidebar({ userName, userInitials, tier = "Masters", onS
       {/* Nav */}
       <nav className="flex-1 px-3 space-y-0.5">
         {navItems.map((item) => {
+          const onWriter = location.pathname.startsWith("/writer") || location.pathname === "/new-project";
           const active =
             (item.label === "Dashboard" && location.pathname === "/dashboard" && !location.search) ||
+            (item.label === "Writer" && onWriter) ||
             (item.label === "My Projects" && location.pathname === "/dashboard" && location.search.includes("tab=projects")) ||
             (item.label === "CZAR" && location.pathname === "/czar") ||
             (item.label === "Exports" && location.pathname === "/export") ||
-            (item.label === "Account" && location.pathname === "/settings" && !location.search) ||
             (item.label === "Settings" && location.pathname === "/settings" && !location.search) ||
             (item.label === "Usage & Billing" && location.pathname === "/settings" && location.search.includes("tab=billing")) ||
             (item.label === "Help & Support" && location.pathname === "/help");
