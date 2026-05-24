@@ -320,6 +320,7 @@ export default function CzarPage() {
         },
         onDone: (e) => {
           const agentSnapshot = agentsRef.current.filter(a => a.name);
+          const finalMode = (e as any).mode || mode;
           setMessages(prev => prev.map(m =>
             m.id === assistantMsgId
               ? { ...m, streaming: false, agents: agentSnapshot }
@@ -333,6 +334,9 @@ export default function CzarPage() {
           }, 3500);
           if (e.conversation_id && e.conversation_id !== convId) {
             setConvId(e.conversation_id);
+          }
+          if (extraSettings.autoDownload && accText.trim()) {
+            downloadContent(accText, finalMode);
           }
         },
       };
@@ -362,9 +366,59 @@ export default function CzarPage() {
     setAgents(prev => prev.map(a => a.status === "working" ? { ...a, status: "done" } : a));
   }, []);
 
+  // Trigger a DOCX download from any markdown string
+  const downloadContent = useCallback(async (content: string, msgMode?: string) => {
+    if (!content.trim()) return;
+    try {
+      const [{ buildDocx }, { Packer }] = await Promise.all([
+        import("@/lib/czarDocUtils.tsx"),
+        import("docx"),
+      ]);
+      const blob = await Packer.toBlob(buildDocx(content));
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = DOC_FILENAMES[msgMode as CzarMode] ?? "czar-document.docx";
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch { /* silent */ }
+  }, []);
+
+  // Download the last complete assistant message
+  const handleDownloadLast = useCallback(() => {
+    const last = [...messages].reverse().find(
+      m => m.role === "assistant" && !m.streaming && m.content.trim().length > 0
+    );
+    if (last) downloadContent(last.content, last.mode);
+  }, [messages, downloadContent]);
+
+  // Detect messages whose sole intent is to download (not write + download)
+  function isDownloadIntent(text: string): boolean {
+    const t = text.toLowerCase().trim().replace(/[.!?]+$/, "");
+    if (t === "/download" || t === "download") return true;
+    // Strip polite filler from the start
+    const core = t
+      .replace(/^(please|can you|could you|just|hey czar|czar)\s+/g, "")
+      .trim();
+    const hasDownloadVerb = /\b(download|save|export)\b/.test(core);
+    if (!hasDownloadVerb) return false;
+    // Must not be mixed with a writing/research task
+    const hasWritingTask = /\b(write|draft|create|generate|make|produce|compose|discuss|explain|describe|analys[ei]s?|research|summari[sz]e|tell me|what is|what are|how does|why)\b/.test(core);
+    if (hasWritingTask) return false;
+    // Short message with a document reference → pure download intent
+    const hasDocRef = /\b(docx?|word(?:\s+doc(?:ument)?)?|document|file|this|it|the\s+(?:essay|report|paper|response|last\s+(?:response|message|output)))\b/.test(core);
+    const wordCount = core.split(/\s+/).filter(Boolean).length;
+    return hasDocRef && wordCount <= 10;
+  }
+
   const handleCommandSend = useCallback((text: string, files: File[], meta?: Record<string, any>) => {
+    // Pure download intent — trigger download without sending to the backend
+    if (files.length === 0 && !meta?.autoDownload && isDownloadIntent(text)) {
+      handleDownloadLast();
+      return;
+    }
     sendMessage(text, files, meta ?? {});
-  }, [sendMessage]);
+  }, [sendMessage, handleDownloadLast]);
 
   const handleSelectionAction = useCallback((action: string, selectedText: string) => {
     const prompts: Record<string, string> = {
@@ -514,6 +568,7 @@ export default function CzarPage() {
                 streaming={streaming}
                 onCorrect={() => setCorrectionModalOpen(true)}
                 onNewConversation={newConv}
+                onDownload={handleDownloadLast}
               />
             </Suspense>
             <p className="text-center text-[10px] text-muted-foreground/40 mt-1.5 px-2">

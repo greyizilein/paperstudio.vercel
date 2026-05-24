@@ -4,7 +4,7 @@ import {
 } from "react";
 import {
   ArrowUp, Square, Paperclip, X,
-  FileSearch, Hash, AtSign,
+  FileSearch, Hash, AtSign, FileDown,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { VoiceInput } from "./VoiceInput";
@@ -80,9 +80,10 @@ const COMMANDS: Cmd[] = [
   { cmd: "/structure", aliases: ["/outline", "/sections"], label: "Structure",  desc: "Numbered sections with descriptive subheadings", group: "Modifiers", action: "mod:structure" },
   { cmd: "/table",     aliases: ["/grid", "/compare"],     label: "Table",      desc: "Format key data as a structured table",          group: "Modifiers", action: "mod:table" },
   // ── Standalone actions ─────────────────────────────────────────────────────
-  { cmd: "/image",   aliases: ["/draw", "/diagram", "/figure", "/visual"], label: "Image / Diagram", desc: "Generate an image, diagram, or visual", group: "Visuals", action: "image"   },
-  { cmd: "/correct", aliases: ["/fix", "/edit", "/improve"],                label: "Correct",         desc: "Fix and improve a document or draft",   group: "Other",   action: "correct" },
-  { cmd: "/new",     aliases: ["/clear", "/reset", "/fresh"],               label: "New chat",         desc: "Start a fresh conversation",            group: "Other",   action: "new"     },
+  { cmd: "/image",    aliases: ["/draw", "/diagram", "/figure", "/visual"],  label: "Image / Diagram", desc: "Generate an image, diagram, or visual",              group: "Visuals", action: "image"    },
+  { cmd: "/download", aliases: ["/save", "/export", "/docx"],                label: "Download DOCX",   desc: "Download the last response as a formatted document", group: "Other",   action: "download" },
+  { cmd: "/correct",  aliases: ["/fix", "/edit", "/improve"],                label: "Correct",         desc: "Fix and improve a document or draft",               group: "Other",   action: "correct"  },
+  { cmd: "/new",      aliases: ["/clear", "/reset", "/fresh"],               label: "New chat",        desc: "Start a fresh conversation",                        group: "Other",   action: "new"      },
 ];
 
 const CMD_GROUPS = ["Modifiers", "Visuals", "Other"];
@@ -163,11 +164,12 @@ interface CommandInputProps {
   disabled?: boolean;
   onCorrect?: () => void;
   onNewConversation?: () => void;
+  onDownload?: () => void;
 }
 
 export function CommandInput({
   onSend, onStop, streaming, disabled = false,
-  onCorrect, onNewConversation,
+  onCorrect, onNewConversation, onDownload,
 }: CommandInputProps) {
   const [text, setText]             = useState("");
   const [files, setFiles]           = useState<File[]>([]);
@@ -252,6 +254,8 @@ export function CommandInput({
       setActiveModifiers(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]);
     } else if (action === "image") {
       setImageMode(prev => !prev);
+    } else if (action === "download") {
+      onDownload?.();
     } else if (action === "correct") {
       onCorrect?.();
     } else if (action === "new") {
@@ -261,7 +265,7 @@ export function CommandInput({
     }
     stripToken();
     setTimeout(() => textareaRef.current?.focus(), 0);
-  }, [onCorrect, onNewConversation, stripToken]);
+  }, [onCorrect, onNewConversation, onDownload, stripToken]);
 
   const applyAt = useCallback((action: string) => {
     if (action === "file") {
@@ -288,8 +292,26 @@ export function CommandInput({
     const trimmed = text.trim();
     if ((!trimmed && files.length === 0) || streaming) return;
 
+    // Detect and strip inline /download tokens
+    const DOWNLOAD_TOKEN_RE = /\/download\b/gi;
+    const hasDownloadToken = DOWNLOAD_TOKEN_RE.test(trimmed);
+    const textWithoutDownload = hasDownloadToken
+      ? trimmed.replace(/\/download\b/gi, "").replace(/\s{2,}/g, " ").trim()
+      : trimmed;
+
+    // Pure /download with no other task — trigger download and clear
+    if (hasDownloadToken && !textWithoutDownload && files.length === 0) {
+      onDownload?.();
+      setText("");
+      setInterim("");
+      setPaletteMode(null);
+      setPaletteFilter("");
+      if (textareaRef.current) textareaRef.current.style.height = "auto";
+      return;
+    }
+
     // processTokens handles #citation, @cite, and any inline /modifier tokens
-    const processedText = processTokens(trimmed);
+    const processedText = processTokens(textWithoutDownload || trimmed);
 
     // Append instructions from pill-bar active modifiers (deduplicating with inline ones)
     const pillInstructions = activeModifiers
@@ -303,6 +325,7 @@ export function CommandInput({
 
     const meta: Record<string, any> = {};
     if (imageMode) meta.generateImage = true;
+    if (hasDownloadToken) meta.autoDownload = true;
 
     onSend(finalPayload || trimmed, files, Object.keys(meta).length > 0 ? meta : undefined);
     setText("");
@@ -313,7 +336,7 @@ export function CommandInput({
     setPaletteMode(null);
     setPaletteFilter("");
     if (textareaRef.current) textareaRef.current.style.height = "auto";
-  }, [text, files, streaming, onSend, activeModifiers, imageMode]);
+  }, [text, files, streaming, onSend, activeModifiers, imageMode, onDownload]);
 
   // ── Keyboard ──────────────────────────────────────────────────
   const handleKeyDown = useCallback((e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -425,6 +448,10 @@ export function CommandInput({
                         ) : cmd.action === "correct" ? (
                           <span className="w-5 h-5 rounded-full bg-amber-500/15 flex items-center justify-center flex-shrink-0">
                             <FileSearch size={10} className="text-amber-600 dark:text-amber-400" />
+                          </span>
+                        ) : cmd.action === "download" ? (
+                          <span className="w-5 h-5 rounded-full bg-emerald-500/15 flex items-center justify-center flex-shrink-0">
+                            <FileDown size={10} className="text-emerald-600 dark:text-emerald-400" />
                           </span>
                         ) : cmd.group === "Visuals" ? (
                           <span className={cn(
