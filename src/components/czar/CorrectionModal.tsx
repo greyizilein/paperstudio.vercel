@@ -137,10 +137,8 @@ export function CorrectionModal({ open, onClose, onApplied }: CorrectionModalPro
     const ext = file.name.split(".").pop()?.toLowerCase();
     if (ext === "docx") {
       const buf = await file.arrayBuffer();
-      const bytes = new Uint8Array(buf);
-      let bin = "";
-      for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
-      await runParse({ docxBase64: btoa(bin), filename: file.name });
+      const b64 = btoa(String.fromCharCode(...new Uint8Array(buf)));
+      await runParse({ docxBase64: b64, filename: file.name });
     } else {
       const text = await file.text();
       await runParse({ plainText: text });
@@ -320,7 +318,7 @@ export function CorrectionModal({ open, onClose, onApplied }: CorrectionModalPro
               <input
                 id="czar-correction-file"
                 type="file"
-                accept=".docx,.pdf,.txt,.md"
+                accept=".docx,.txt,.md"
                 className="hidden"
                 onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); e.target.value = ""; }}
               />
@@ -333,7 +331,7 @@ export function CorrectionModal({ open, onClose, onApplied }: CorrectionModalPro
                 <p className="text-[12px] text-muted-foreground mt-1.5 leading-relaxed">
                   Scanning starts immediately on drop
                 </p>
-                <p className="text-[11px] text-muted-foreground/60 mt-1">.docx · .txt · .md</p>
+                <p className="text-[11px] text-muted-foreground/60 mt-1">.docx · .txt · .md · paste text below</p>
               </label>
 
               <div className="my-5 flex items-center gap-3">
