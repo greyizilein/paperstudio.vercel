@@ -8,16 +8,19 @@ const corsHeaders = {
 
 // Fixed NGN amounts (~₦1500/USD) — matches the USD shown in the UI exactly.
 const TIER_NGN: Record<string, number> = {
-  starter: 75_000,   // $50
-  standard: 150_000, // $100
-  pro: 180_000,      // $120
+  plus: 30_000,      // $20
+  starter: 75_000,   // $50 (legacy)
+  standard: 150_000, // $100 (legacy)
+  pro: 180_000,      // $120 (legacy)
 };
 const TIER_WORDS: Record<string, number> = {
+  plus: 50_000,
   starter: 20_000,
   standard: 40_000,
   pro: 80_000,
 };
 const TIER_USD_DISPLAY: Record<string, number> = {
+  plus: 20,
   starter: 50,
   standard: 100,
   pro: 120,
