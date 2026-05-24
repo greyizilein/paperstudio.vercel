@@ -381,6 +381,14 @@ export default function CzarPage() {
     setAgents(prev => prev.map(a => a.status === "working" ? { ...a, status: "done" } : a));
   }, []);
 
+  const handleCommandSend = useCallback((text: string, files: File[]) => {
+    if (mode === "correct") {
+      setCorrectionModalOpen(true);
+    } else {
+      sendMessage(text, files);
+    }
+  }, [mode, sendMessage]);
+
   const handleSelectionAction = useCallback((action: string, selectedText: string) => {
     const prompts: Record<string, string> = {
       improve: `Improve this passage: "${selectedText}"`,
@@ -504,6 +512,8 @@ export default function CzarPage() {
               userName={userName}
               userInitials={userInitials}
               avatarUrl={avatarUrl}
+              mode={mode}
+              onOpenCorrectionModal={() => setCorrectionModalOpen(true)}
             />
           ) : (
             <div className="relative max-w-3xl mx-auto px-4 py-6 pb-10 space-y-8">
@@ -530,7 +540,7 @@ export default function CzarPage() {
           <div className="max-w-3xl mx-auto px-4 py-3">
             <Suspense fallback={<InputFallback />}>
               <CommandInput
-                onSend={sendMessage}
+                onSend={handleCommandSend}
                 onStop={stopStream}
                 streaming={streaming}
                 placeholder={modePlaceholder(mode)}
@@ -1094,10 +1104,12 @@ const GREETING_POOL = [
   "Words are waiting.",
 ];
 
-function WelcomeScreen({ userName, userInitials, avatarUrl }: {
+function WelcomeScreen({ userName, userInitials, avatarUrl, mode, onOpenCorrectionModal }: {
   userName?: string;
   userInitials?: string;
   avatarUrl?: string;
+  mode?: CzarMode;
+  onOpenCorrectionModal?: () => void;
 }) {
   const [visible, setVisible] = useState(false);
   const greeting = useMemo(() => GREETING_POOL[Math.floor(Math.random() * GREETING_POOL.length)], []);
@@ -1113,6 +1125,31 @@ function WelcomeScreen({ userName, userInitials, avatarUrl }: {
     transform: visible ? "none" : "translateY(16px)",
     transition: `opacity 0.65s ${delay}ms, transform 0.65s ${delay}ms`,
   });
+
+  if (mode === "correct") {
+    return (
+      <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-4 py-10">
+        <div style={fadeIn(0)}>
+          <div className="w-16 h-16 mx-auto rounded-full bg-amber-500/15 ring-2 ring-amber-400/30 flex items-center justify-center mb-5 shadow-md">
+            <FileSearch className="w-7 h-7 text-amber-600 dark:text-amber-400" />
+          </div>
+        </div>
+        <div style={fadeIn(120)}>
+          <h2 className="text-2xl font-black text-foreground mb-2">Correct &amp; Improve</h2>
+          <p className="text-sm text-muted-foreground mb-3 max-w-sm leading-relaxed mx-auto">
+            Upload or paste your document. CZAR finds every correction — grammar, style, argument, register — as tracked changes. Accept or reject each one individually.
+          </p>
+          <p className="text-[11px] text-muted-foreground/50 mb-8">Grammar · Style · Structure · Argument · Register</p>
+          <button
+            onClick={onOpenCorrectionModal}
+            className="px-8 py-3 rounded-xl bg-foreground text-background font-bold text-sm hover:opacity-80 transition-opacity shadow-md"
+          >
+            Open Document
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="absolute inset-0 flex flex-col md:flex-row items-start px-5 py-6 gap-4 md:gap-10 md:px-14 md:items-center">
