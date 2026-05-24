@@ -107,6 +107,7 @@ export default function SettingsPage() {
   const [university, setUniversity] = useState("");
   const [email, setEmail] = useState("");
   const [subscription, setSubscription] = useState<Subscription>({ tier: "free", word_limit: 3000, words_used: 0, status: "active" });
+  const [czarSub, setCzarSub] = useState<{ tier: string; word_limit: number; words_used: number; bonus_words: number; bonus_used: number; status: string } | null>(null);
 
   // Payout
   const [bankName, setBankName] = useState("");
@@ -147,11 +148,13 @@ export default function SettingsPage() {
     if (!user) return;
     setLoading(true);
     try {
-      const [sub, profileRes] = await Promise.all([
+      const [sub, profileRes, czarRes] = await Promise.all([
         getUserSubscription(user.id),
         supabase.from("profiles").select("*").eq("user_id", user.id).maybeSingle(),
+        supabase.from("czar_subscriptions").select("tier, word_limit, words_used, bonus_words, bonus_used, status").eq("user_id", user.id).maybeSingle(),
       ]);
       setSubscription(sub);
+      if (czarRes.data) setCzarSub(czarRes.data as any);
       if (profileRes.data) {
         setDisplayName(profileRes.data.display_name || "");
         setUniversity(profileRes.data.university || "");
@@ -204,6 +207,26 @@ export default function SettingsPage() {
       const callbackUrl = `${window.location.origin}/payment/callback`;
       const res = await supabase.functions.invoke("create-paystack-checkout", {
         body: { tier, callback_url: callbackUrl },
+      });
+      if (res.error) {
+        let serverMsg = "";
+        try {
+          const body = await (res.error as any).context?.json?.();
+          serverMsg = body?.error ?? "";
+        } catch { /* body not JSON */ }
+        throw new Error(serverMsg || "Checkout failed. Please try again.");
+      }
+      const { authorization_url } = res.data;
+      if (authorization_url) window.location.href = authorization_url;
+    } catch (err: any) { toast.error(err.message); }
+  };
+
+  const handleCzarUpgrade = async () => {
+    if (!user) return;
+    try {
+      const callbackUrl = `${window.location.origin}/payment/callback`;
+      const res = await supabase.functions.invoke("create-czar-checkout", {
+        body: { tier: "plus", callback_url: callbackUrl },
       });
       if (res.error) {
         let serverMsg = "";
@@ -375,9 +398,9 @@ export default function SettingsPage() {
               </div>
             </div>
 
-            {/* Upgrade options */}
+            {/* Writer upgrade options */}
             <div>
-              <span className="text-[10px] font-extrabold uppercase tracking-wide text-muted-foreground">Upgrade</span>
+              <span className="text-[10px] font-extrabold uppercase tracking-wide text-muted-foreground">Upgrade Writer</span>
               <div className="grid gap-2.5 mt-2">
                 {plans.filter(p => p.tier !== subscription.tier).map(p => (
                   <div key={p.tier} id={`tier-${p.tier}`} className={`flex items-center justify-between bg-card border rounded-xl px-4 py-3 ${tierParam === p.tier ? "border-primary ring-2 ring-primary/20" : "border-border"}`}>
@@ -404,6 +427,58 @@ export default function SettingsPage() {
                   </div>
                 ))}
               </div>
+            </div>
+
+            {/* CZAR subscription */}
+            <div className="pt-2">
+              <span className="text-[10px] font-extrabold uppercase tracking-wide text-muted-foreground">CZAR — AI Research Assistant</span>
+              {(() => {
+                if (isAdmin) {
+                  return (
+                    <div className="mt-2 bg-card border border-border rounded-xl px-4 py-3">
+                      <div className="text-[13px] font-bold text-foreground">Unlimited (admin)</div>
+                      <div className="text-[11px] text-muted-foreground mt-0.5">All features enabled · no word limits</div>
+                    </div>
+                  );
+                }
+                const bonusRemaining = Math.max((czarSub?.bonus_words ?? 1000) - (czarSub?.bonus_used ?? 0), 0);
+                const paidRemaining  = Math.max((czarSub?.word_limit ?? 0) - (czarSub?.words_used ?? 0), 0);
+                const hasPaid = (czarSub?.word_limit ?? 0) > 0;
+                return (
+                  <>
+                    <div className="mt-2 bg-card border border-border rounded-xl px-4 py-3 space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[13px] font-bold text-foreground capitalize">
+                          {hasPaid ? "Plus" : "Free"}
+                        </span>
+                        <span className="text-[11px] font-mono text-muted-foreground">
+                          {(bonusRemaining + paidRemaining).toLocaleString()} words left
+                        </span>
+                      </div>
+                      <div className="text-[11px] text-muted-foreground">
+                        {bonusRemaining > 0 && <span>{bonusRemaining.toLocaleString()} free</span>}
+                        {bonusRemaining > 0 && paidRemaining > 0 && <span> · </span>}
+                        {paidRemaining > 0 && <span>{paidRemaining.toLocaleString()} paid</span>}
+                        {bonusRemaining === 0 && paidRemaining === 0 && <span className="text-destructive">Words exhausted</span>}
+                      </div>
+                    </div>
+                    {!hasPaid && (
+                      <div className="mt-2 flex items-center justify-between bg-card border border-border rounded-xl px-4 py-3">
+                        <div>
+                          <div className="text-[13px] font-bold text-foreground">CZAR Plus</div>
+                          <div className="text-[11px] text-muted-foreground">50,000 words · $20</div>
+                        </div>
+                        <button
+                          onClick={handleCzarUpgrade}
+                          className="px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-[11px] font-bold hover:bg-primary/90 transition-colors cursor-pointer"
+                        >
+                          Get Plus
+                        </button>
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
             </div>
           </TabsContent>
 

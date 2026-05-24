@@ -1,7 +1,7 @@
 // CZAR word-pack tier definitions.
 // Pricing is locked in USD per tier and processed in NGN at checkout.
 
-export type CzarTierId = "none" | "starter" | "standard" | "pro" | "custom";
+export type CzarTierId = "none" | "plus" | "starter" | "standard" | "pro" | "custom";
 
 export interface CzarTier {
   id: CzarTierId;
@@ -26,43 +26,17 @@ export const PAPERSTUDIO_CZAR_BONUS: Record<string, number> = {
 
 export const CZAR_TIERS: CzarTier[] = [
   {
-    id: "starter",
-    label: "Starter",
-    blurb: "A reliable lane for essays, briefs and quick research.",
-    words: 20_000,
-    priceUsd: 50,
-    features: [
-      "20,000 words",
-      "Claude Sonnet 4.5",
-      "Unlimited chats",
-      "Markdown + .docx export",
-    ],
-  },
-  {
-    id: "standard",
-    label: "Standard",
-    blurb: "Dissertation-grade output with extended thinking.",
-    words: 40_000,
-    priceUsd: 100,
+    id: "plus",
+    label: "Plus",
+    blurb: "50,000 words of full CZAR capability — essays, research, rewrites.",
+    words: 50_000,
+    priceUsd: 20,
     highlight: true,
     features: [
-      "40,000 words",
-      "Claude Sonnet 4.5 + extended thinking",
-      "Targeted document edits",
-      "PowerPoint + PDF export",
-    ],
-  },
-  {
-    id: "pro",
-    label: "Pro",
-    blurb: "Heaviest reasoning for thesis-level chapters and reviews.",
-    words: 80_000,
-    priceUsd: 120,
-    features: [
-      "80,000 words",
-      "Claude Sonnet 4.5 (max reasoning)",
-      "Inline figures & charts",
-      "Priority queue",
+      "50,000 words",
+      "All CZAR modes (Write, Research, Correct…)",
+      "DOCX download on every response",
+      "Unlimited conversations",
     ],
   },
   {
@@ -73,9 +47,8 @@ export const CZAR_TIERS: CzarTier[] = [
     priceUsd: 0,
     features: [
       "You choose the word count",
-      "Claude Sonnet 4.5 + extended thinking",
-      "All Pro features",
-      "Priority queue",
+      "All Plus features",
+      "Scales with your workload",
     ],
   },
 ];

@@ -188,7 +188,21 @@ export function CommandInput({
 
   const textareaRef  = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const dragCount    = useRef(0);
+
+  // ── Close palette on outside click ───────────────────────────
+  useEffect(() => {
+    if (!paletteMode) return;
+    const handler = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setPaletteMode(null);
+        setPaletteFilter("");
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [paletteMode]);
 
   // ── Auto-height ───────────────────────────────────────────────
   const adjustHeight = useCallback(() => {
@@ -398,6 +412,7 @@ export function CommandInput({
 
   return (
     <div
+      ref={containerRef}
       className={cn(
         "relative flex flex-col border border-border rounded-xl bg-background shadow-sm transition-shadow",
         isDragging && "ring-2 ring-primary/40 border-primary/40",

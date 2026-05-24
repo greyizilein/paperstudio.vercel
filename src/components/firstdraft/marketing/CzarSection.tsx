@@ -202,33 +202,42 @@ export const CzarSection = () => (
         </ul>
 
         {/* CTA */}
-        <Link to="/czar">
-          <button
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "10px",
-              background: "var(--ma-accent2)",
-              color: "#FFFFFF",
-              fontFamily: DA_FONTS.body,
-              fontWeight: 600,
-              fontSize: "1rem",
-              padding: "14px 30px",
-              borderRadius: "8px",
-              border: "none",
-              cursor: "pointer",
-              transition: "background 0.2s, transform 0.15s",
-              letterSpacing: "0.01em",
-            }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.opacity = "0.88"; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.opacity = "1"; }}
-            onMouseDown={(e) => { (e.currentTarget as HTMLButtonElement).style.transform = "scale(0.97)"; }}
-            onMouseUp={(e) => { (e.currentTarget as HTMLButtonElement).style.transform = "scale(1)"; }}
-          >
-            <QuillSmall />
-            Try CZAR free
-          </button>
-        </Link>
+        <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+          <Link to="/czar">
+            <button
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "10px",
+                background: "var(--ma-accent2)",
+                color: "#FFFFFF",
+                fontFamily: DA_FONTS.body,
+                fontWeight: 600,
+                fontSize: "1rem",
+                padding: "14px 30px",
+                borderRadius: "8px",
+                border: "none",
+                cursor: "pointer",
+                transition: "background 0.2s, transform 0.15s",
+                letterSpacing: "0.01em",
+              }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.opacity = "0.88"; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.opacity = "1"; }}
+              onMouseDown={(e) => { (e.currentTarget as HTMLButtonElement).style.transform = "scale(0.97)"; }}
+              onMouseUp={(e) => { (e.currentTarget as HTMLButtonElement).style.transform = "scale(1)"; }}
+            >
+              <QuillSmall />
+              Try CZAR free
+            </button>
+          </Link>
+          <p style={{ fontFamily: DA_FONTS.body, fontSize: "0.8rem", color: "var(--ma-text-dim)", margin: 0 }}>
+            <span style={{ color: "#4A7A38", fontWeight: 600 }}>1,000 words free</span>
+            {" · "}
+            <Link to="/settings?tab=billing" style={{ color: "var(--ma-text-muted)", textDecoration: "underline", textDecorationStyle: "dotted" }}>
+              $20 for 50,000 words
+            </Link>
+          </p>
+        </div>
       </motion.div>
 
       {/* Right: mock chat interface */}
