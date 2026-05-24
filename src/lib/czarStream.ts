@@ -29,7 +29,11 @@ export type CzarEventType =
   | "error"
   | "billing"
   | "done"
-  | "ping";
+  | "ping"
+  | "correction_summary"
+  | "correction_change"
+  | "clarification"
+  | "replace";
 
 export interface CzarMetaEvent {
   conversation_id: string;
@@ -41,9 +45,18 @@ export interface CzarMetaEvent {
 export interface CzarAgentEvent {
   id: string;
   name: string;
-  status: "starting" | "working" | "done" | "error";
+  status: "starting" | "working" | "done" | "error" | "clarification";
   action?: string;
   detail?: string;
+}
+
+export interface CzarClarificationEvent {
+  questions: string[];
+  title?: string;
+}
+
+export interface CzarReplaceEvent {
+  content: string;
 }
 
 export interface CzarDeltaEvent {
@@ -79,6 +92,25 @@ export interface CzarDoneEvent {
   words?: number;
 }
 
+export type CorrectionType = "grammar" | "style" | "structure" | "argument" | "register";
+
+export interface CorrectionChangeEvent {
+  id: string;
+  type: CorrectionType;
+  original: string;
+  corrected: string;
+  explanation: string;
+}
+
+export interface CorrectionSummaryEvent {
+  total: number;
+  by_type: Partial<Record<CorrectionType, number>>;
+  word_count_before: number;
+  word_count_after: number;
+  register_notes: string[];
+  original_text: string;
+}
+
 // ---------------------------------------------------------------------------
 // Handlers
 // ---------------------------------------------------------------------------
@@ -93,19 +125,24 @@ export interface CzarHandlers {
   onError?: (message: string, recoverable?: boolean) => void;
   onBilling?: (reason: string) => void;
   onDone?: (e: CzarDoneEvent) => void;
+  onCorrectionSummary?: (e: CorrectionSummaryEvent) => void;
+  onCorrectionChange?: (e: CorrectionChangeEvent) => void;
+  onClarification?: (e: CzarClarificationEvent) => void;
+  onReplace?: (e: CzarReplaceEvent) => void;
 }
 
 // ---------------------------------------------------------------------------
 // Request types
 // ---------------------------------------------------------------------------
 
-export type CzarMode = "chat" | "write" | "correct" | "research" | "plan";
+export type CzarMode = "chat" | "write" | "correct" | "research" | "plan" | "literature_review" | "screenplay" | "legal";
 
 export interface CzarRequest {
   conversation_id: string | null;
   user_message: string;
   attachments?: { storage_path: string; filename: string; size: number; mime: string }[];
   mode?: CzarMode;
+  previousMode?: CzarMode;
   settings?: Record<string, any>;
 }
 
@@ -145,6 +182,18 @@ function dispatch(eventType: string, payload: any, handlers: CzarHandlers): void
       handlers.onDone?.(payload as CzarDoneEvent);
       break;
     case "ping":
+      break;
+    case "correction_summary":
+      handlers.onCorrectionSummary?.(payload as CorrectionSummaryEvent);
+      break;
+    case "correction_change":
+      handlers.onCorrectionChange?.(payload as CorrectionChangeEvent);
+      break;
+    case "clarification":
+      handlers.onClarification?.(payload as CzarClarificationEvent);
+      break;
+    case "replace":
+      handlers.onReplace?.(payload as CzarReplaceEvent);
       break;
   }
 }

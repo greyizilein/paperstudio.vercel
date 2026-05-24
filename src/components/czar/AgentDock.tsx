@@ -10,6 +10,7 @@ import {
   Check,
   AlertCircle,
   Zap,
+  LayoutList,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -29,8 +30,10 @@ interface AgentDockProps {
 
 const AGENT_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   "File Reader": FileText,
+  "Architect": LayoutList,
   "Researcher": Search,
   "Writer": PenLine,
+  "CZAR Writer": PenLine,
   "Critic": MessageSquare,
   "Editor": CheckSquare,
   "Illustrator": Image,

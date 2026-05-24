@@ -1,27 +1,35 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   PanelLeftClose, PanelLeftOpen, Loader2, Square,
-  User, Bot, AlertCircle, Search, PenLine, Cpu,
-  LayoutPanelLeft, FileSearch, Clock, X,
+  Bot, AlertCircle, Search, PenLine, Cpu,
+  ChevronDown, ChevronRight, LayoutPanelLeft, FileSearch, Clock, X,
+  BookOpen, Film, Scale, Download, Volume2, VolumeX, Edit3, Eye, FileText, Sparkles,
+  Compass, FlaskConical, Pen, Library, Gavel, RefreshCw, ImageIcon,
+  Copy, Trash2, MoreHorizontal,
 } from "lucide-react";
 import { PsThemeToggle } from "@/components/ps/PsThemeToggle";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { Packer } from "docx";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import {
   streamCzar, loadMessages,
   type CzarRequest, type CzarMode, type CzarHandlers,
   type CzarMetaEvent, type CzarAgentEvent, type CzarToolEvent,
+  type CzarClarificationEvent,
+  type CorrectionSummaryEvent, type CorrectionChangeEvent,
 } from "@/lib/czarStream";
+import { buildDocx, stripMarkdown, markdownComponents, chatMarkdownComponents } from "@/lib/czarDocUtils.tsx";
+import { computeParaDiff, type DiffParagraph } from "@/lib/diffUtils";
 import { ConvSidebar } from "@/components/czar/ConvSidebar";
 import { UpgradeModal } from "@/components/czar/UpgradeModal";
 import { DashboardSidebar } from "@/components/dashboard/DashboardSidebar";
+import { CorrectionModal } from "@/components/czar/CorrectionModal";
 
 import { lazy, Suspense } from "react";
-const AgentDock = lazy(() => import("@/components/czar/AgentDock").then(m => ({ default: m.AgentDock })));
-const DocumentPanel = lazy(() => import("@/components/czar/DocumentPanel").then(m => ({ default: m.DocumentPanel })));
+import { AgentActivityDock, WritingGlow, WelcomeAurora, CzarObjectScene } from "@/components/czar/CzarVisuals";
 const CommandInput = lazy(() => import("@/components/czar/CommandInput").then(m => ({ default: m.CommandInput })));
 
 // ── Types ──────────────────────────────────────────────────────────
@@ -41,14 +49,41 @@ interface UIMessage {
   mode?: string;
   streaming?: boolean;
   error?: boolean;
+  agents?: LiveAgent[];
+  correctionApplied?: boolean;
+  correctionDiff?: DiffParagraph[];
+  correctionOriginalText?: string;
+  clarificationQuestions?: string[];
+  clarificationTitle?: string;
 }
 
-type MobileTab = "chat" | "document" | "agents";
+// ── Constants ──────────────────────────────────────────────────────
+
+const DOC_MODES = ["write", "correct", "research", "literature_review", "legal", "screenplay"];
+
+const DOC_FILENAMES: Partial<Record<CzarMode, string>> = {
+  write: "czar-essay.docx",
+  research: "czar-research.docx",
+  correct: "czar-corrected.docx",
+  literature_review: "czar-lit-review.docx",
+  legal: "czar-legal.docx",
+  screenplay: "czar-screenplay.docx",
+  plan: "czar-plan.docx",
+};
 
 // ── Helpers ────────────────────────────────────────────────────────
 
 function modeLabel(mode: CzarMode): string {
-  return { chat: "Chat", write: "Write", correct: "Correct", research: "Research", plan: "Plan" }[mode] ?? mode;
+  return {
+    chat: "Chat",
+    write: "Write",
+    correct: "Correct",
+    research: "Research",
+    plan: "Plan",
+    literature_review: "Lit Review",
+    screenplay: "Screenplay",
+    legal: "Legal",
+  }[mode] ?? mode;
 }
 
 function modeIcon(mode: CzarMode) {
@@ -59,16 +94,11 @@ function modeIcon(mode: CzarMode) {
     correct: <FileSearch className={cls} />,
     research: <Search className={cls} />,
     plan: <LayoutPanelLeft className={cls} />,
+    literature_review: <BookOpen className={cls} />,
+    screenplay: <Film className={cls} />,
+    legal: <Scale className={cls} />,
   }[mode] ?? <Cpu className={cls} />;
 }
-
-const MODE_COLOURS: Record<CzarMode, string> = {
-  chat: "bg-secondary text-muted-foreground",
-  write: "bg-blue-500/15 text-blue-600 dark:text-blue-400",
-  correct: "bg-amber-500/15 text-amber-600 dark:text-amber-400",
-  research: "bg-purple-500/15 text-purple-600 dark:text-purple-400",
-  plan: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
-};
 
 const MODE_DESCRIPTIONS: Record<CzarMode, string> = {
   chat: "Ask questions, get explanations",
@@ -76,7 +106,35 @@ const MODE_DESCRIPTIONS: Record<CzarMode, string> = {
   correct: "Fix and improve your draft",
   research: "Find and synthesise sources",
   plan: "Structure before you write",
+  literature_review: "Systematic review, PRISMA, synthesis",
+  screenplay: "Fountain format, scene headings, dialogue",
+  legal: "IRAC structure, statute and case law",
 };
+
+const MODE_COLOURS: Record<CzarMode, string> = {
+  chat: "bg-secondary text-muted-foreground",
+  write: "bg-blue-500/15 text-blue-600 dark:text-blue-400",
+  correct: "bg-amber-500/15 text-amber-600 dark:text-amber-400",
+  research: "bg-purple-500/15 text-purple-600 dark:text-purple-400",
+  plan: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
+  literature_review: "bg-rose-500/15 text-rose-600 dark:text-rose-400",
+  screenplay: "bg-orange-500/15 text-orange-600 dark:text-orange-400",
+  legal: "bg-slate-500/15 text-slate-600 dark:text-slate-400",
+};
+
+
+function modePlaceholder(mode: CzarMode): string {
+  return ({
+    chat: "Ask CZAR anything… or type / for commands",
+    write: "Describe what to write — topic, length, style, audience…",
+    correct: "Attach your document and describe what to improve…",
+    research: "What topic should I research?",
+    plan: "Describe the document you want to plan…",
+    literature_review: "Describe the research question or topic for your review…",
+    screenplay: "Describe the scene, characters, or story…",
+    legal: "Describe the legal issue, case, or document…",
+  } as Record<CzarMode, string>)[mode] ?? "Ask CZAR…";
+}
 
 // ── Main component ─────────────────────────────────────────────────
 
@@ -87,7 +145,6 @@ export default function CzarPage() {
   useEffect(() => { if (user === null) navigate("/auth"); }, [user]);
 
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [mobileTab, setMobileTab] = useState<MobileTab>("chat");
   const [mobileHistoryOpen, setMobileHistoryOpen] = useState(false);
 
   const [convId, setConvId] = useState<string | null>(null);
@@ -96,10 +153,10 @@ export default function CzarPage() {
   const abortRef = useRef<AbortController | null>(null);
   const agentClearRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const [docContent, setDocContent] = useState("");
-  const [docStreaming, setDocStreaming] = useState(false);
-
   const [agents, setAgents] = useState<LiveAgent[]>([]);
+  const agentsRef = useRef<LiveAgent[]>([]);
+  useEffect(() => { agentsRef.current = agents; }, [agents]);
+
   const [mode, setMode] = useState<CzarMode>("chat");
 
   const threadEndRef = useRef<HTMLDivElement>(null);
@@ -109,6 +166,8 @@ export default function CzarPage() {
 
   const [showUpgrade, setShowUpgrade] = useState(false);
   const [upgradeReason, setUpgradeReason] = useState("");
+
+  const [correctionModalOpen, setCorrectionModalOpen] = useState(false);
 
   const [userName, setUserName] = useState("");
   const [userInitials, setUserInitials] = useState("U");
@@ -134,11 +193,6 @@ export default function CzarPage() {
         content: m.content || "",
         mode: m.mode ?? undefined,
       })));
-      const assistantText = msgs
-        .filter(m => m.role === "assistant" && m.content)
-        .map(m => m.content!)
-        .join("\n\n---\n\n");
-      setDocContent(assistantText);
     } catch {
       // non-fatal
     }
@@ -149,10 +203,8 @@ export default function CzarPage() {
     if (agentClearRef.current) clearTimeout(agentClearRef.current);
     setConvId(null);
     setMessages([]);
-    setDocContent("");
     setAgents([]);
     setStreaming(false);
-    setDocStreaming(false);
   }, []);
 
   const selectConv = useCallback((id: string) => {
@@ -161,10 +213,8 @@ export default function CzarPage() {
     if (agentClearRef.current) clearTimeout(agentClearRef.current);
     setConvId(id);
     setStreaming(false);
-    setDocStreaming(false);
     setAgents([]);
     loadConv(id);
-    setMobileTab("chat");
     setMobileHistoryOpen(false);
   }, [convId, loadConv]);
 
@@ -180,11 +230,10 @@ export default function CzarPage() {
     return results;
   }, [user]);
 
-  const sendMessage = useCallback(async (text: string, files: File[]) => {
+  const sendMessage = useCallback(async (text: string, files: File[], extraSettings: Record<string, any> = {}) => {
     if (!user || streaming) return;
     if (!text.trim() && files.length === 0) return;
 
-    // Cancel any pending agent-clear from prior stream
     if (agentClearRef.current) {
       clearTimeout(agentClearRef.current);
       agentClearRef.current = null;
@@ -193,18 +242,14 @@ export default function CzarPage() {
     const userMsgId = `u_${Date.now()}`;
     const assistantMsgId = `a_${Date.now()}`;
 
+    const isApplyStep = extraSettings.correction_apply === true;
     setMessages(prev => [
       ...prev,
-      { id: userMsgId, role: "user", content: text, mode },
-      { id: assistantMsgId, role: "assistant", content: "", mode, streaming: true },
+      { id: userMsgId, role: "user", content: text, mode, correctionApplied: isApplyStep },
+      { id: assistantMsgId, role: "assistant", content: "", mode, streaming: true, correctionApplied: isApplyStep },
     ]);
     setStreaming(true);
-    setDocStreaming(true);
     setAgents([]);
-
-    if (["write", "correct", "research", "plan"].includes(mode)) {
-      setMobileTab("document");
-    }
 
     const ctrl = new AbortController();
     abortRef.current = ctrl;
@@ -214,7 +259,10 @@ export default function CzarPage() {
       const attachments = await uploadFiles(files);
 
       const handlers: CzarHandlers = {
-        onMeta: (e: CzarMetaEvent) => { setConvId(e.conversation_id); },
+        onMeta: (e: CzarMetaEvent) => {
+          setConvId(e.conversation_id);
+          if (e.mode) setMode(e.mode as CzarMode);
+        },
         onAgent: (e: CzarAgentEvent) => {
           setAgents(prev => {
             const idx = prev.findIndex(a => a.id === e.id);
@@ -231,9 +279,6 @@ export default function CzarPage() {
           setMessages(prev => prev.map(m =>
             m.id === assistantMsgId ? { ...m, content: accText } : m
           ));
-          if (["write", "correct", "research"].includes(mode)) {
-            setDocContent(accText);
-          }
         },
         onTool: (_e: CzarToolEvent) => {},
         onStatus: (e) => {
@@ -254,21 +299,52 @@ export default function CzarPage() {
               : m
           ));
           setStreaming(false);
-          setDocStreaming(false);
         },
         onBilling: (reason: string) => {
           setUpgradeReason(reason);
           setShowUpgrade(true);
           setMessages(prev => prev.filter(m => m.id !== assistantMsgId));
           setStreaming(false);
-          setDocStreaming(false);
+        },
+        onCorrectionSummary: (e: CorrectionSummaryEvent) => {
+          setMessages(prev => prev.map(m =>
+            m.id === assistantMsgId ? { ...m, correctionSummary: e } : m
+          ));
+        },
+        onCorrectionChange: (e: CorrectionChangeEvent) => {
+          setMessages(prev => prev.map(m =>
+            m.id === assistantMsgId
+              ? {
+                  ...m,
+                  correctionChanges: [
+                    ...(m.correctionChanges ?? []),
+                    { ...e, selected: true, overrideInstruction: "" },
+                  ],
+                }
+              : m
+          ));
+        },
+        onClarification: (e: CzarClarificationEvent) => {
+          setMessages(prev => prev.map(m =>
+            m.id === assistantMsgId
+              ? { ...m, clarificationQuestions: e.questions, clarificationTitle: e.title }
+              : m
+          ));
+        },
+        onReplace: (e) => {
+          accText = e.content;
+          setMessages(prev => prev.map(m =>
+            m.id === assistantMsgId ? { ...m, content: e.content } : m
+          ));
         },
         onDone: (e) => {
+          const agentSnapshot = agentsRef.current.filter(a => a.name);
           setMessages(prev => prev.map(m =>
-            m.id === assistantMsgId ? { ...m, streaming: false } : m
+            m.id === assistantMsgId
+              ? { ...m, streaming: false, agents: agentSnapshot }
+              : m
           ));
           setStreaming(false);
-          setDocStreaming(false);
           setAgents(prev => prev.map(a => a.status === "working" ? { ...a, status: "done" } : a));
           agentClearRef.current = setTimeout(() => {
             agentClearRef.current = null;
@@ -280,7 +356,12 @@ export default function CzarPage() {
         },
       };
 
-      await streamCzar({ conversation_id: convId, user_message: text, attachments, mode, settings: {} }, handlers, ctrl.signal);
+      await streamCzar({
+        conversation_id: convId,
+        user_message: text,
+        attachments,
+        settings: extraSettings,
+      }, handlers, ctrl.signal);
     } catch (err: any) {
       if (err?.name !== "AbortError") {
         setMessages(prev => prev.map(m =>
@@ -290,27 +371,17 @@ export default function CzarPage() {
         ));
       }
       setStreaming(false);
-      setDocStreaming(false);
     }
   }, [user, streaming, convId, mode, uploadFiles]);
 
   const stopStream = useCallback(() => {
     abortRef.current?.abort();
     setStreaming(false);
-    setDocStreaming(false);
     setMessages(prev => prev.map(m => m.streaming ? { ...m, streaming: false } : m));
     setAgents(prev => prev.map(a => a.status === "working" ? { ...a, status: "done" } : a));
   }, []);
 
   const handleSelectionAction = useCallback((action: string, selectedText: string) => {
-    if (action === "export") {
-      const blob = new Blob([docContent], { type: "text/plain" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url; a.download = "czar-document.txt"; a.click();
-      URL.revokeObjectURL(url);
-      return;
-    }
     const prompts: Record<string, string> = {
       improve: `Improve this passage: "${selectedText}"`,
       shorten: `Shorten this passage while keeping all key points: "${selectedText}"`,
@@ -319,12 +390,35 @@ export default function CzarPage() {
     };
     const prompt = prompts[action];
     if (prompt) sendMessage(prompt, []);
-  }, [docContent, sendMessage]);
+  }, [sendMessage]);
+
+  const handleMessageContentChange = useCallback((id: string, content: string) => {
+    setMessages(prev => prev.map(m => m.id === id ? { ...m, content } : m));
+  }, []);
+
+  const handleCorrectionApplied = useCallback((content: string, originalText: string, count: number) => {
+    const assistantMsgId = `a_${Date.now()}`;
+    const diff = originalText ? computeParaDiff(originalText, content) : undefined;
+    setMessages(prev => [...prev, {
+      id: assistantMsgId,
+      role: "assistant",
+      content,
+      mode: "correct",
+      correctionApplied: true,
+      correctionDiff: diff,
+      correctionOriginalText: originalText,
+    }]);
+  }, []);
+
+  const handleDismissDiff = useCallback((id: string) => {
+    setMessages(prev => prev.map(m => m.id === id ? { ...m, correctionDiff: undefined } : m));
+  }, []);
+
+  const handleDeleteMessage = useCallback((id: string) => {
+    setMessages(prev => prev.filter(m => m.id !== id));
+  }, []);
 
   if (!user) return null;
-
-  const isDocMode = ["write", "correct", "research"].includes(mode);
-  const activeAgents = agents.filter(a => a.status !== "idle");
 
   return (
     <div className="flex h-[100dvh] bg-background overflow-hidden">
@@ -358,12 +452,12 @@ export default function CzarPage() {
         </div>
       )}
 
-      {/* Main workstation */}
+      {/* Main */}
       <div className="flex-1 flex flex-col min-w-0 min-h-0">
+        {messages.length === 0 && <WelcomeAurora />}
 
         {/* Top bar */}
         <header className="flex items-center gap-2 px-3 h-11 border-b border-border flex-shrink-0 bg-background/95 backdrop-blur-sm">
-
           {/* Desktop: sidebar toggle */}
           <button onClick={() => setSidebarOpen(o => !o)}
             className="hidden lg:flex p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
@@ -384,9 +478,7 @@ export default function CzarPage() {
             <span>{modeLabel(mode)}</span>
           </div>
 
-          {/* Right side actions */}
           <div className="ml-auto flex items-center gap-1">
-            {/* Stop button — always visible during streaming so user can stop from any tab */}
             {streaming && (
               <button onClick={stopStream}
                 className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[12px] font-medium bg-destructive/10 text-destructive hover:bg-destructive/20 transition-colors">
@@ -404,248 +496,661 @@ export default function CzarPage() {
           </div>
         </header>
 
-        {/* Mobile tab bar */}
-        <div className="lg:hidden flex border-b border-border bg-background/95 backdrop-blur-sm flex-shrink-0">
-          {(["chat", "document", "agents"] as MobileTab[]).map(t => (
-            <button key={t} onClick={() => setMobileTab(t)}
-              className={`flex-1 py-2 text-[11px] font-semibold tracking-wide transition-colors ${
-                mobileTab === t ? "text-foreground border-b-2 border-primary" : "text-muted-foreground/70"
-              }`}>
-              {t === "chat" ? "Chat" : t === "document" ? "Document" : "Agents"}
-              {t === "agents" && activeAgents.filter(a => a.status === "working").length > 0 && (
-                <span className="ml-1 inline-block w-1.5 h-1.5 rounded-full bg-blue-500 align-middle" />
-              )}
-            </button>
-          ))}
-        </div>
-
-        {/* Content area */}
-        <div className="flex-1 min-h-0 flex">
-
-          {/* Left: Chat panel */}
-          <div className={`flex flex-col min-h-0 ${
-            isDocMode ? "w-full lg:w-[400px] lg:border-r lg:border-border" : "w-full"
-          } ${mobileTab !== "chat" ? "hidden lg:flex" : "flex"}`}>
-
-            {/* Agent dock */}
-            {activeAgents.length > 0 && (
-              <div className="flex-shrink-0 px-3 pt-2">
-                <Suspense fallback={null}>
-                  <AgentDock agents={agents} />
-                </Suspense>
-              </div>
-            )}
-
-            {/* Message thread */}
-            <div className="flex-1 overflow-y-auto px-4 py-3 space-y-4">
-              {messages.length === 0 && (
-                <WelcomeScreen mode={mode} onExample={(text) => sendMessage(text, [])} />
-              )}
+        {/* Thread */}
+        <div className={`flex-1 relative min-h-0 ${messages.length > 0 ? "overflow-y-auto" : "overflow-hidden"}`}>
+          <WritingGlow visible={streaming || messages.length > 0} />
+          {messages.length === 0 ? (
+            <WelcomeScreen
+              userName={userName}
+              userInitials={userInitials}
+              avatarUrl={avatarUrl}
+            />
+          ) : (
+            <div className="relative max-w-3xl mx-auto px-4 py-6 pb-10 space-y-8">
               {messages.map(msg => (
-                <MessageBubble key={msg.id} msg={msg} />
+                <CzarMessage
+                  key={msg.id}
+                  msg={msg}
+                  currentAgents={agents}
+                  userInitials={userInitials}
+                  onContentChange={handleMessageContentChange}
+                  onSelectionAction={handleSelectionAction}
+                  onDismissDiff={handleDismissDiff}
+                  onClarificationAnswer={(answer) => sendMessage(answer, [])}
+                  onDeleteMessage={handleDeleteMessage}
+                />
               ))}
               <div ref={threadEndRef} />
             </div>
+          )}
+        </div>
 
-            {/* Input */}
-            <div className="flex-shrink-0 px-3 pb-3 pt-2">
-              <Suspense fallback={<InputFallback />}>
-                <CommandInput
-                  onSend={sendMessage}
-                  onStop={stopStream}
-                  streaming={streaming}
-                  placeholder={modePlaceholder(mode)}
-                  mode={mode}
-                  onModeChange={setMode}
-                  onNewConversation={newConv}
-                />
-              </Suspense>
-            </div>
+        {/* Input */}
+        <div className="flex-shrink-0 bg-background sticky bottom-0 z-[100]">
+          <div className="max-w-3xl mx-auto px-4 py-3">
+            <Suspense fallback={<InputFallback />}>
+              <CommandInput
+                onSend={sendMessage}
+                onStop={stopStream}
+                streaming={streaming}
+                placeholder={modePlaceholder(mode)}
+                mode={mode}
+                onModeChange={setMode}
+                onNewConversation={newConv}
+              />
+            </Suspense>
+            <p className="text-center text-[10px] text-muted-foreground/40 mt-1.5 px-2">
+              CZAR can make mistakes — verify important information.
+            </p>
           </div>
-
-          {/* Right: Document panel */}
-          {isDocMode && (
-            <div className={`flex-1 min-w-0 min-h-0 ${mobileTab !== "document" ? "hidden lg:flex" : "flex"} flex-col`}>
-              <Suspense fallback={<div className="flex-1 flex items-center justify-center"><Loader2 className="animate-spin text-muted-foreground" size={24} /></div>}>
-                <DocumentPanel
-                  content={docContent}
-                  streaming={docStreaming}
-                  mode={mode}
-                  onSelectionAction={handleSelectionAction}
-                  className="flex-1 min-h-0"
-                />
-              </Suspense>
-            </div>
-          )}
-
-          {/* Document tab empty state — shown when not in a document-generating mode */}
-          {mobileTab === "document" && !isDocMode && (
-            <div className="lg:hidden flex-1 flex flex-col items-center justify-center px-6 py-10 text-center">
-              <PenLine size={32} className="text-muted-foreground/25 mb-4" />
-              <p className="text-[13px] font-semibold text-muted-foreground mb-1">Document panel</p>
-              <p className="text-[12px] text-muted-foreground/60 mb-5 leading-relaxed">
-                Switch to Write, Correct, or Research mode to generate a document here.
-              </p>
-              <div className="flex flex-wrap gap-2 justify-center">
-                {(["write", "correct", "research"] as CzarMode[]).map(m => (
-                  <button key={m}
-                    onClick={() => { setMode(m); setMobileTab("chat"); }}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold ${MODE_COLOURS[m]}`}
-                  >
-                    {modeIcon(m)}
-                    {modeLabel(m)}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Mobile agents tab */}
-          {mobileTab === "agents" && (
-            <div className="lg:hidden flex-1 overflow-y-auto p-4">
-              <Suspense fallback={null}>
-                <AgentDock agents={agents} expanded />
-              </Suspense>
-              {agents.length === 0 && (
-                <div className="flex flex-col items-center justify-center h-48 text-center">
-                  <Cpu size={28} className="text-muted-foreground/30 mb-3" />
-                  <p className="text-[13px] text-muted-foreground">No agents running</p>
-                  <p className="text-[11px] text-muted-foreground/60 mt-1">Agents appear here when CZAR is working</p>
-                </div>
-              )}
-            </div>
-          )}
         </div>
       </div>
 
+      <AgentActivityDock agents={agents} visible={streaming} />
+
       <UpgradeModal open={showUpgrade} onClose={() => setShowUpgrade(false)} reason={upgradeReason} />
+
+      <CorrectionModal
+        open={correctionModalOpen}
+        onClose={() => setCorrectionModalOpen(false)}
+        onApplied={handleCorrectionApplied}
+      />
     </div>
   );
 }
 
 // ── Sub-components ─────────────────────────────────────────────────
 
-function MessageBubble({ msg }: { msg: UIMessage }) {
-  const isUser = msg.role === "user";
+function ClarificationCard({ questions, title, onAnswer }: {
+  questions: string[];
+  title?: string;
+  onAnswer: (answer: string) => void;
+}) {
+  const [answers, setAnswers] = useState<Record<number, string>>({});
+  const allAnswered = questions.every((_, i) => (answers[i] || "").trim().length > 0);
+
+  const handleSubmit = () => {
+    const combined = questions.map((q, i) => `${q}\n${answers[i] || ""}`).join("\n\n");
+    onAnswer(combined);
+  };
+
   return (
-    <div className={`flex gap-3 ${isUser ? "justify-end" : "justify-start"}`}>
-      {!isUser && (
-        <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-          <Bot size={14} className="text-primary" />
-        </div>
-      )}
-      <div className={`max-w-[85%] lg:max-w-[75%] ${isUser ? "order-first" : ""}`}>
-        <div
-          className={`px-3.5 py-2.5 rounded-2xl text-[13.5px] leading-relaxed ${
-            isUser
-              ? "bg-primary text-primary-foreground rounded-tr-sm whitespace-pre-wrap"
-              : msg.error
-              ? "bg-destructive/10 text-destructive border border-destructive/20 rounded-tl-sm"
-              : "bg-secondary text-foreground rounded-tl-sm"
-          }`}
-        >
-          {msg.error && <AlertCircle size={13} className="inline mr-1.5 mb-0.5" />}
-          {isUser ? (
-            <>
-              {msg.content || (msg.streaming ? "" : "—")}
-              {msg.streaming && <span className="inline-block w-0.5 h-4 bg-current ml-0.5 align-middle animate-pulse" />}
-            </>
-          ) : (
-            <div className="prose prose-sm dark:prose-invert max-w-none prose-p:my-1.5 prose-headings:my-2 prose-ul:my-1 prose-ol:my-1 prose-pre:bg-background/50 prose-pre:border prose-pre:border-border prose-code:text-primary prose-code:bg-primary/10 prose-code:px-1 prose-code:rounded prose-blockquote:border-l-primary/40">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                {msg.content || (msg.streaming ? "​" : "—")}
-              </ReactMarkdown>
-              {msg.streaming && <span className="inline-block w-0.5 h-4 bg-current ml-0.5 align-middle animate-pulse" />}
-            </div>
-          )}
-        </div>
-        {msg.mode && msg.mode !== "chat" && !isUser && (
-          <span className="text-[10px] text-muted-foreground/40 mt-0.5 block ml-1">{msg.mode} mode</span>
-        )}
+    <div className="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50/60 dark:bg-amber-950/20 p-4 space-y-3">
+      <div className="flex items-center gap-2">
+        <Sparkles size={13} className="text-amber-600 dark:text-amber-400 flex-shrink-0" />
+        <p className="text-[12px] font-bold text-amber-700 dark:text-amber-400">
+          A few details will help me write this better
+          {title ? ` — "${title}"` : ""}
+        </p>
       </div>
-      {isUser && (
-        <div className="w-7 h-7 rounded-full bg-secondary flex items-center justify-center flex-shrink-0 mt-0.5">
-          <User size={14} className="text-muted-foreground" />
+      {questions.map((q, i) => (
+        <div key={i} className="space-y-1">
+          <label className="block text-[11px] font-semibold text-foreground/80">{q}</label>
+          <input
+            type="text"
+            value={answers[i] || ""}
+            onChange={e => setAnswers(prev => ({ ...prev, [i]: e.target.value }))}
+            onKeyDown={e => { if (e.key === "Enter" && allAnswered) handleSubmit(); }}
+            className="w-full px-2.5 py-1.5 rounded-lg border border-border text-[12px] bg-background text-foreground outline-none focus:border-amber-400 dark:focus:border-amber-600 placeholder:text-muted-foreground/40"
+            placeholder="Your answer…"
+          />
+        </div>
+      ))}
+      <button
+        onClick={handleSubmit}
+        disabled={!allAnswered}
+        className="px-4 py-1.5 rounded-lg text-[12px] font-bold bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-40 transition-colors"
+      >
+        Continue →
+      </button>
+    </div>
+  );
+}
+
+const AGENT_ICON_MAP: Record<string, React.ReactNode> = {
+  planner:    <Compass size={10} />,
+  architect:  <Compass size={10} />,
+  researcher: <FlaskConical size={10} />,
+  writer:     <Pen size={10} />,
+  editor:     <Library size={10} />,
+  critic:     <Gavel size={10} />,
+  revision:   <RefreshCw size={10} />,
+  illustrator:<ImageIcon size={10} />,
+};
+
+function AgentStepsBlock({ agents, isLive }: { agents: LiveAgent[]; isLive: boolean }) {
+  const named = agents.filter(a => a.name);
+  const [open, setOpen] = useState(isLive);
+
+  useEffect(() => {
+    if (!isLive) {
+      const t = setTimeout(() => setOpen(false), 2000);
+      return () => clearTimeout(t);
+    }
+  }, [isLive]);
+
+  if (named.length === 0) return null;
+
+  const working = named.filter(a => a.status === "working");
+  const allDone = named.every(a => a.status === "done" || a.status === "error");
+  const hasRevision = named.some(a => a.id === "revision");
+
+  return (
+    <div className="mb-4">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="flex items-center gap-1.5 text-[12px] text-muted-foreground hover:text-foreground transition-colors group"
+      >
+        {open ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+        <span className="font-medium">
+          {allDone
+            ? `${named.length} agent${named.length !== 1 ? "s" : ""}${hasRevision ? " · revised" : ""}`
+            : working.length > 0
+            ? `${working[0].name}${working[0].action ? ` · ${working[0].action}` : ""}`
+            : "Preparing…"
+          }
+        </span>
+        {!allDone && isLive && (
+          <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse ml-0.5" />
+        )}
+      </button>
+      {open && (
+        <div className="mt-2 ml-3 border-l-2 border-border pl-3 space-y-1.5">
+          {named.map(a => (
+            <div key={a.id} className="flex items-start gap-2 min-w-0">
+              <span className={`mt-0.5 w-1.5 h-1.5 rounded-full flex-shrink-0 ${
+                a.status === "done" ? "bg-emerald-500"
+                : a.status === "working" ? "bg-blue-500 animate-pulse"
+                : a.status === "error" ? "bg-destructive"
+                : a.status === "clarification" ? "bg-amber-500 animate-pulse"
+                : "bg-muted-foreground/30"
+              }`} />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-muted-foreground/60">{AGENT_ICON_MAP[a.id.toLowerCase()] ?? <Bot size={10} />}</span>
+                  <span className="text-[12px] font-medium text-foreground/80">{a.name}</span>
+                  {a.action && (
+                    <span className="text-[11px] text-muted-foreground/60 truncate">{a.action}</span>
+                  )}
+                </div>
+                {a.detail && a.status === "done" && (
+                  <p className="text-[10.5px] text-muted-foreground/50 mt-0.5 leading-snug">{a.detail}</p>
+                )}
+              </div>
+            </div>
+          ))}
         </div>
       )}
     </div>
   );
 }
 
-function WelcomeScreen({ mode, onExample }: { mode: CzarMode; onExample: (t: string) => void }) {
-  const examples: Record<CzarMode, string[]> = {
-    chat: [
-      "What is the difference between deductive and inductive reasoning?",
-      "Explain the PICO framework in simple terms",
-      "How do I structure a strong argument in an essay?",
-    ],
-    write: [
-      "Write a 2000-word literature review on climate change adaptation in Sub-Saharan Africa",
-      "Write a methodology chapter for a mixed-methods study on student mental health",
-      "Write a research proposal on the impact of social media on adolescent self-esteem",
-    ],
-    correct: [
-      "Upload your document and I'll correct grammar, citations, structure, and argument quality",
-      "I'll identify every weakness in your draft and show you exactly how to fix them",
-      "Upload your essay and I'll rewrite weak sections and fill citation gaps",
-    ],
-    research: [
-      "Find and synthesise key literature on blockchain in healthcare",
-      "Research the current evidence on mindfulness interventions for anxiety",
-      "Build a bibliography on urban planning and climate resilience",
-    ],
-    plan: [
-      "Plan a 10,000-word dissertation on gender inequality in STEM fields",
-      "Create a detailed outline for a systematic literature review",
-      "Structure a business report on the impact of remote work on productivity",
-    ],
-  };
+function InlineDocMessage({ msg, onContentChange, onSelectionAction, onDismissDiff }: {
+  msg: UIMessage;
+  onContentChange?: (id: string, content: string) => void;
+  onSelectionAction?: (action: string, text: string) => void;
+  onDismissDiff?: (id: string) => void;
+}) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [editContent, setEditContent] = useState(msg.content);
+  const [selectionToolbar, setSelectionToolbar] = useState<{ x: number; y: number; text: string } | null>(null);
 
-  const icons: Record<CzarMode, React.ReactNode> = {
-    chat: <Cpu size={28} className="text-muted-foreground/20" />,
-    write: <PenLine size={28} className="text-blue-400/30" />,
-    correct: <FileSearch size={28} className="text-amber-400/30" />,
-    research: <Search size={28} className="text-purple-400/30" />,
-    plan: <LayoutPanelLeft size={28} className="text-emerald-400/30" />,
-  };
+  useEffect(() => {
+    if (!isEditMode) setEditContent(msg.content);
+  }, [msg.content, isEditMode]);
 
-  const titles: Record<CzarMode, string> = {
-    chat: "Ask CZAR anything",
-    write: "What shall I write?",
-    correct: "Upload content to correct",
-    research: "What shall I research?",
-    plan: "What shall I plan?",
+  useEffect(() => () => { window.speechSynthesis.cancel(); }, []);
+  useEffect(() => {
+    if (isSpeaking) { window.speechSynthesis.cancel(); setIsSpeaking(false); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [msg.content]);
+
+  const handleSpeak = useCallback(() => {
+    if (isSpeaking) { window.speechSynthesis.cancel(); setIsSpeaking(false); return; }
+    const text = stripMarkdown(msg.content);
+    if (!text) return;
+    const utterance = new SpeechSynthesisUtterance(text);
+    const voices = window.speechSynthesis.getVoices();
+    const ukVoice = voices.find(v => v.lang === "en-GB") ?? voices.find(v => v.lang.startsWith("en"));
+    if (ukVoice) utterance.voice = ukVoice;
+    utterance.lang = "en-GB";
+    utterance.onend = () => setIsSpeaking(false);
+    utterance.onerror = () => setIsSpeaking(false);
+    window.speechSynthesis.speak(utterance);
+    setIsSpeaking(true);
+  }, [isSpeaking, msg.content]);
+
+  const handleDownload = useCallback(async () => {
+    const doc = buildDocx(msg.content);
+    const blob = await Packer.toBlob(doc);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    const filename = DOC_FILENAMES[msg.mode as CzarMode] ?? "czar-document.docx";
+    a.href = url; a.download = filename; a.click();
+    URL.revokeObjectURL(url);
+  }, [msg.content, msg.mode]);
+
+  const handleToggleEdit = useCallback(() => {
+    if (isEditMode) onContentChange?.(msg.id, editContent);
+    setIsEditMode(e => !e);
+  }, [isEditMode, editContent, msg.id, onContentChange]);
+
+  const handleMouseUp = useCallback(() => {
+    if (isEditMode) return;
+    const sel = window.getSelection();
+    if (!sel || sel.isCollapsed || !sel.toString().trim()) { setSelectionToolbar(null); return; }
+    const selectedText = sel.toString().trim();
+    const range = sel.getRangeAt(0);
+    const rect = range.getBoundingClientRect();
+    const containerRect = containerRef.current?.getBoundingClientRect();
+    if (!containerRect) return;
+    setSelectionToolbar({
+      x: rect.left - containerRect.left + rect.width / 2,
+      y: rect.top - containerRect.top - 8,
+      text: selectedText,
+    });
+  }, [isEditMode]);
+
+  useEffect(() => {
+    const handler = () => {
+      const sel = window.getSelection();
+      if (!sel || sel.isCollapsed) setSelectionToolbar(null);
+    };
+    document.addEventListener("selectionchange", handler);
+    return () => document.removeEventListener("selectionchange", handler);
+  }, []);
+
+  const filename = DOC_FILENAMES[msg.mode as CzarMode] ?? "czar-document.docx";
+
+  return (
+    <div ref={containerRef} className="relative" onMouseUp={handleMouseUp}>
+      {/* ── Diff view (correction mode only) ── */}
+      {msg.correctionDiff && !isEditMode && (
+        <div className="mb-5 rounded-xl border border-border overflow-hidden">
+          <style>{`
+            .czar-diff-del { background: rgba(239,68,68,0.18); color: #b91c1c; text-decoration: line-through; border-radius: 2px; padding: 0 1px; }
+            .dark .czar-diff-del { color: #f87171; }
+            .czar-diff-ins { background: rgba(34,197,94,0.18); color: #15803d; border-radius: 2px; padding: 0 1px; }
+            .dark .czar-diff-ins { color: #4ade80; }
+          `}</style>
+          {/* Diff toolbar */}
+          <div className="flex items-center gap-3 px-4 py-2.5 bg-amber-500/5 border-b border-border flex-wrap">
+            <span className="text-[11px] font-bold text-amber-600 dark:text-amber-400">Corrections applied</span>
+            <span className="flex gap-1.5 text-[10px]">
+              <span className="px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300 font-semibold">~ modified</span>
+              <span className="px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/40 text-emerald-800 dark:text-emerald-300 font-semibold">+ added</span>
+              <span className="px-1.5 py-0.5 rounded bg-red-100 dark:bg-red-900/40 text-red-800 dark:text-red-300 font-semibold">– deleted</span>
+            </span>
+            <div className="ml-auto flex items-center gap-2">
+              <button onClick={handleDownload} className="text-[11px] px-2.5 py-1 rounded-lg border border-border text-muted-foreground hover:text-foreground transition-colors">⬇ Download</button>
+              <button onClick={() => onDismissDiff?.(msg.id)} className="text-[11px] text-muted-foreground hover:text-foreground transition-colors">Dismiss</button>
+              <button onClick={() => onDismissDiff?.(msg.id)} className="text-[11px] px-3 py-1 rounded-lg bg-foreground text-background font-semibold hover:opacity-80 transition-opacity">Accept all</button>
+            </div>
+          </div>
+          {/* Diff paragraphs */}
+          <div className="px-5 py-4 space-y-1 max-h-[60vh] overflow-y-auto">
+            {msg.correctionDiff.map((para, i) => {
+              const isHeading = /^#{1,4}\s/.test(para.text.trimStart());
+              return (
+                <div
+                  key={i}
+                  className={[
+                    "px-3 py-2 rounded-md border-l-4 text-[13.5px] leading-relaxed transition-colors",
+                    para.type === "unchanged" ? "border-transparent" :
+                    para.type === "modified"  ? "bg-amber-500/8 border-amber-500" :
+                    para.type === "added"     ? "bg-emerald-500/10 border-emerald-500" :
+                                                "bg-red-500/10 border-red-500 opacity-70",
+                  ].join(" ")}
+                >
+                  {para.type === "modified" && para.diffHtml && !isHeading ? (
+                    <p dangerouslySetInnerHTML={{ __html: para.diffHtml.replace(/diff-del/g, "czar-diff-del").replace(/diff-ins/g, "czar-diff-ins") }} className="text-foreground" />
+                  ) : para.type === "deleted" ? (
+                    <p className="line-through text-muted-foreground">{para.text}</p>
+                  ) : (
+                    <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents as any}>{para.text}</ReactMarkdown>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {isEditMode ? (
+        <textarea
+          value={editContent}
+          onChange={e => setEditContent(e.target.value)}
+          className="w-full min-h-[60vh] bg-transparent text-sm text-foreground font-mono leading-relaxed resize-none outline-none border border-border rounded-md p-4 focus:border-primary/50 transition-colors"
+          spellCheck
+        />
+      ) : (
+        <div>
+          <ReactMarkdown
+            remarkPlugins={[remarkGfm]}
+            components={markdownComponents as React.ComponentProps<typeof ReactMarkdown>["components"]}
+          >
+            {msg.content || (msg.streaming ? "​" : "")}
+          </ReactMarkdown>
+          {msg.streaming && (
+            <span
+              className="inline-block w-0.5 h-4 bg-foreground/70 align-text-bottom ml-0.5"
+              style={{ animation: "czarCursor 1s step-end infinite" }}
+              aria-hidden="true"
+            />
+          )}
+        </div>
+      )}
+
+      {/* Download card — shown after streaming */}
+      {!msg.streaming && msg.content && (
+        <div className="mt-6 flex flex-wrap items-center gap-3 p-3 border border-border rounded-xl bg-secondary/20">
+          <div className="w-9 h-9 rounded-lg bg-background border border-border flex items-center justify-center flex-shrink-0">
+            <FileText className="w-4 h-4 text-muted-foreground" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="text-[12px] font-medium text-foreground truncate">{filename}</div>
+            <div className="text-[10.5px] text-muted-foreground/60">Document · DOCX</div>
+          </div>
+          <div className="flex items-center gap-1.5 flex-shrink-0 flex-wrap">
+            <button
+              onClick={handleSpeak}
+              className="flex items-center gap-1 px-2.5 py-1.5 text-xs rounded-lg border border-border text-muted-foreground hover:text-foreground hover:bg-background transition-colors"
+            >
+              {isSpeaking ? <VolumeX className="w-3 h-3" /> : <Volume2 className="w-3 h-3" />}
+              {isSpeaking ? "Stop" : "Listen"}
+            </button>
+            <button
+              onClick={handleToggleEdit}
+              className="flex items-center gap-1 px-2.5 py-1.5 text-xs rounded-lg border border-border text-muted-foreground hover:text-foreground hover:bg-background transition-colors"
+            >
+              {isEditMode ? <Eye className="w-3 h-3" /> : <Edit3 className="w-3 h-3" />}
+              {isEditMode ? "Done" : "Edit"}
+            </button>
+            <button
+              onClick={handleDownload}
+              className="flex items-center gap-1 px-3 py-1.5 text-xs rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors font-medium"
+            >
+              <Download className="w-3 h-3" />
+              Download
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Floating selection toolbar */}
+      {selectionToolbar && onSelectionAction && (
+        <div
+          className="absolute z-50 flex items-center gap-0.5 bg-foreground rounded-lg shadow-lg px-1 py-1"
+          style={{ left: selectionToolbar.x, top: selectionToolbar.y, transform: "translate(-50%, -100%)" }}
+          onMouseDown={e => e.preventDefault()}
+        >
+          {["Improve", "Shorten", "Expand", "Rewrite"].map(action => (
+            <button
+              key={action}
+              onClick={() => {
+                onSelectionAction(action.toLowerCase(), selectionToolbar.text);
+                setSelectionToolbar(null);
+                window.getSelection()?.removeAllRanges();
+              }}
+              className="px-2.5 py-1 text-xs font-medium text-background hover:bg-background/15 rounded-md transition-colors whitespace-nowrap"
+            >
+              {action}
+            </button>
+          ))}
+        </div>
+      )}
+
+      <style>{`
+        @keyframes czarCursor {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0; }
+        }
+      `}</style>
+    </div>
+  );
+}
+
+function UserMessage({ msg, userInitials, onDelete }: {
+  msg: UIMessage;
+  userInitials: string;
+  onDelete?: (id: string) => void;
+}) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [menuOpen]);
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(msg.content).catch(() => {});
+    setMenuOpen(false);
   };
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-[300px] text-center px-4 py-8">
-      <div className="mb-3">{icons[mode]}</div>
-      <h2 className="text-[15px] font-semibold text-foreground mb-1">{titles[mode]}</h2>
-      <p className="text-[12px] text-muted-foreground mb-5 max-w-[280px]">
-        {mode === "correct" ? "Attach a file or paste your text, then send" : "Type, speak, or attach files to get started"}
-      </p>
-      <div className="flex flex-col gap-1.5 w-full max-w-[320px]">
-        {examples[mode].map((ex, i) => (
-          <button key={i} onClick={() => onExample(ex)}
-            className="text-left px-3.5 py-2.5 rounded-xl border border-border text-[12px] text-muted-foreground hover:text-foreground hover:border-primary/40 hover:bg-secondary/50 transition-all leading-relaxed">
-            {ex}
-          </button>
-        ))}
+    <div className="flex justify-end gap-2 group">
+      {/* Options button — shown on hover */}
+      <div className="relative flex items-start mt-1 opacity-0 group-hover:opacity-100 transition-opacity" ref={menuRef}>
+        <button
+          onClick={() => setMenuOpen(o => !o)}
+          className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+          title="Message options"
+        >
+          <MoreHorizontal size={13} />
+        </button>
+        {menuOpen && (
+          <div className="absolute right-0 top-6 z-50 bg-background border border-border rounded-xl shadow-lg overflow-hidden min-w-[120px] animate-in fade-in duration-100">
+            <button
+              onClick={handleCopy}
+              className="w-full flex items-center gap-2 px-3 py-2 text-[12px] text-foreground hover:bg-secondary transition-colors"
+            >
+              <Copy size={12} className="text-muted-foreground" />
+              Copy
+            </button>
+            {onDelete && (
+              <button
+                onClick={() => { onDelete(msg.id); setMenuOpen(false); }}
+                className="w-full flex items-center gap-2 px-3 py-2 text-[12px] text-destructive hover:bg-destructive/10 transition-colors"
+              >
+                <Trash2 size={12} />
+                Delete
+              </button>
+            )}
+          </div>
+        )}
       </div>
+      <div className="max-w-[80%] px-4 py-2.5 rounded-2xl rounded-tr-sm bg-primary text-primary-foreground text-[13.5px] leading-relaxed whitespace-pre-wrap">
+        {msg.content}
+      </div>
+      <div className="w-7 h-7 rounded-full bg-secondary border border-border flex items-center justify-center flex-shrink-0 mt-0.5 text-xs font-semibold text-muted-foreground">
+        {userInitials}
+      </div>
+    </div>
+  );
+}
+
+function CzarMessage({
+  msg, currentAgents, userInitials,
+  onContentChange, onSelectionAction, onDismissDiff, onClarificationAnswer, onDeleteMessage,
+}: {
+  msg: UIMessage;
+  currentAgents: LiveAgent[];
+  userInitials: string;
+  onContentChange: (id: string, content: string) => void;
+  onSelectionAction: (action: string, text: string) => void;
+  onDismissDiff: (id: string) => void;
+  onClarificationAnswer: (answer: string) => void;
+  onDeleteMessage?: (id: string) => void;
+}) {
+  const isDocMsg = DOC_MODES.includes(msg.mode ?? "");
+
+  if (msg.role === "user") {
+    // Correction mode is a document flow — hide all user trigger messages from the thread
+    if (msg.mode === "correct") return null;
+    return (
+      <UserMessage
+        msg={msg}
+        userInitials={userInitials}
+        onDelete={onDeleteMessage}
+      />
+    );
+  }
+
+  // For assistant messages: show live agents if streaming, frozen agents if done
+  const agentsToShow = msg.streaming ? currentAgents : (msg.agents ?? []);
+
+  return (
+    <div className="flex gap-3">
+      <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+        <Bot size={14} className="text-primary" />
+      </div>
+      <div className="flex-1 min-w-0">
+        {/* Agent steps */}
+        {agentsToShow.filter(a => a.name).length > 0 && (
+          <AgentStepsBlock agents={agentsToShow} isLive={!!msg.streaming} />
+        )}
+
+        {/* Clarification card — shown when planner needs more info */}
+        {msg.clarificationQuestions && msg.clarificationQuestions.length > 0 && (
+          <ClarificationCard
+            questions={msg.clarificationQuestions}
+            title={msg.clarificationTitle}
+            onAnswer={onClarificationAnswer}
+          />
+        )}
+
+        {/* Mode badge */}
+        {msg.mode && msg.mode !== "chat" && (
+          <div className="flex items-center gap-1 mb-3">
+            <span className={`inline-flex items-center gap-1 text-[10.5px] font-semibold px-2 py-0.5 rounded-full ${MODE_COLOURS[msg.mode as CzarMode] ?? "bg-secondary text-muted-foreground"}`}>
+              {modeIcon(msg.mode as CzarMode)}
+              {modeLabel(msg.mode as CzarMode)}
+            </span>
+          </div>
+        )}
+
+        {/* Error */}
+        {msg.error && (
+          <div className="flex items-center gap-2 text-destructive text-sm p-3 rounded-xl border border-destructive/20 bg-destructive/5">
+            <AlertCircle size={14} className="flex-shrink-0" />
+            <span>{msg.content || "Something went wrong. Please try again."}</span>
+          </div>
+        )}
+
+        {/* Corrected document — placed in thread after modal completes */}
+        {!msg.error && msg.mode === "correct" && msg.correctionApplied && (
+          <InlineDocMessage
+            msg={msg}
+            onContentChange={onContentChange}
+            onSelectionAction={onSelectionAction}
+            onDismissDiff={onDismissDiff}
+          />
+        )}
+
+        {/* Standard doc content (non-correction doc modes) */}
+        {!msg.error && isDocMsg && msg.mode !== "correct" && (
+          <InlineDocMessage
+            msg={msg}
+            onContentChange={onContentChange}
+            onSelectionAction={onSelectionAction}
+          />
+        )}
+
+        {!msg.error && !isDocMsg && (
+          <div className="prose prose-sm dark:prose-invert max-w-none prose-p:my-1.5 prose-headings:my-2 prose-ul:my-1 prose-ol:my-1 prose-pre:bg-secondary prose-pre:border prose-pre:border-border prose-code:text-primary prose-code:bg-primary/10 prose-code:px-1 prose-code:rounded text-[13.5px] leading-relaxed text-foreground">
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              components={chatMarkdownComponents as React.ComponentProps<typeof ReactMarkdown>["components"]}
+            >
+              {msg.content || (msg.streaming ? "​" : "—")}
+            </ReactMarkdown>
+            {msg.streaming && (
+              <span className="inline-block w-0.5 h-4 bg-current ml-0.5 align-middle animate-pulse" />
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+const GREETING_POOL = [
+  "The blank page ends here.",
+  "What are we building today?",
+  "Ready when you are.",
+  "Your ideas deserve better words.",
+  "Let's put it into words.",
+  "Something great starts here.",
+  "What's been on your mind?",
+  "Time to write something great.",
+  "Let's make it count.",
+  "Words are waiting.",
+];
+
+function WelcomeScreen({ userName, userInitials, avatarUrl }: {
+  userName?: string;
+  userInitials?: string;
+  avatarUrl?: string;
+}) {
+  const [visible, setVisible] = useState(false);
+  const greeting = useMemo(() => GREETING_POOL[Math.floor(Math.random() * GREETING_POOL.length)], []);
+  const firstName = userName?.split(" ")[0] || "";
+
+  useEffect(() => {
+    const t = setTimeout(() => setVisible(true), 60);
+    return () => clearTimeout(t);
+  }, []);
+
+  const fadeIn = (delay = 0): React.CSSProperties => ({
+    opacity: visible ? 1 : 0,
+    transform: visible ? "none" : "translateY(16px)",
+    transition: `opacity 0.65s ${delay}ms, transform 0.65s ${delay}ms`,
+  });
+
+  return (
+    <div className="absolute inset-0 flex flex-col md:flex-row items-start px-5 py-6 gap-4 md:gap-10 md:px-14 md:items-center">
+
+      {/* ── Greeting — always left-aligned, compact on mobile ── */}
+      <div className="flex flex-col items-start text-left flex-shrink-0 md:flex-1 md:max-w-sm">
+        <div className="flex items-center gap-2.5 mb-4" style={fadeIn(0)}>
+          {avatarUrl ? (
+            <img src={avatarUrl} alt="" className="w-9 h-9 rounded-full object-cover ring-2 ring-border" />
+          ) : (
+            <div className="w-9 h-9 rounded-full bg-foreground text-background flex items-center justify-center text-sm font-bold select-none">
+              {userInitials ?? "U"}
+            </div>
+          )}
+          {firstName && (
+            <span className="text-sm text-muted-foreground font-medium">Hi {firstName}</span>
+          )}
+        </div>
+        <h1
+          className="text-3xl sm:text-4xl md:text-5xl font-bold font-heading text-foreground leading-tight"
+          style={fadeIn(120)}
+        >
+          {greeting}
+        </h1>
+      </div>
+
+      {/* ── SVG Tour — fills remaining space on both mobile and desktop ── */}
+      <div
+        className="w-full flex-1 min-h-0 md:max-w-[480px] flex items-center justify-center"
+        style={fadeIn(260)}
+      >
+        <CzarObjectScene />
+      </div>
+
     </div>
   );
 }
 
 function InputFallback() {
-  return <div className="h-[80px] rounded-2xl border border-border bg-secondary/30 animate-pulse" />;
-}
-
-function modePlaceholder(mode: CzarMode): string {
-  return {
-    chat: "Ask CZAR anything…",
-    write: "Describe what to write — topic, length, style, audience…",
-    correct: "Attach your document and describe what to improve…",
-    research: "What topic should I research?",
-    plan: "Describe the document you want to plan…",
-  }[mode] ?? "Ask CZAR…";
+  return <div className="h-20 rounded-xl border border-border bg-background/50 animate-pulse" />;
 }
