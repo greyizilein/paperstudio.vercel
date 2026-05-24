@@ -6,7 +6,7 @@ import {
   ChevronDown, ChevronRight, LayoutPanelLeft, FileSearch, Clock, X,
   BookOpen, Film, Scale, Download, Volume2, VolumeX, Edit3, Eye, FileText, Sparkles,
   Compass, FlaskConical, Pen, Library, Gavel, RefreshCw, ImageIcon,
-  Copy, Trash2, MoreHorizontal, Check, FileDown,
+  Copy, Trash2, MoreHorizontal, Check, FileDown, LayoutGrid,
 } from "lucide-react";
 import { PsThemeToggle } from "@/components/ps/PsThemeToggle";
 import ReactMarkdown from "react-markdown";
@@ -26,6 +26,7 @@ import { computeParaDiff, type DiffParagraph } from "@/lib/diffUtils";
 import { ConvSidebar } from "@/components/czar/ConvSidebar";
 import { UpgradeModal } from "@/components/czar/UpgradeModal";
 import { DashboardSidebar } from "@/components/dashboard/DashboardSidebar";
+import { MobileDashboardSheet } from "@/components/dashboard/MobileDashboardSheet";
 import { CorrectionModal } from "@/components/czar/CorrectionModal";
 
 import { lazy, Suspense } from "react";
@@ -113,6 +114,7 @@ export default function CzarPage() {
 
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mobileHistoryOpen, setMobileHistoryOpen] = useState(false);
+  const [mobileDashboardOpen, setMobileDashboardOpen] = useState(false);
 
   const [convId, setConvId] = useState<string | null>(null);
   const [messages, setMessages] = useState<UIMessage[]>([]);
@@ -502,6 +504,13 @@ export default function CzarPage() {
             <Clock size={16} />
           </button>
 
+          {/* Mobile: dashboard button */}
+          <button onClick={() => setMobileDashboardOpen(true)}
+            className="lg:hidden p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+            title="Dashboard">
+            <LayoutGrid size={16} />
+          </button>
+
           <div className="ml-auto flex items-center gap-1">
             {streaming && (
               <button onClick={stopStream}
@@ -577,6 +586,17 @@ export default function CzarPage() {
         open={correctionModalOpen}
         onClose={() => setCorrectionModalOpen(false)}
         onApplied={handleCorrectionApplied}
+      />
+
+      <MobileDashboardSheet
+        open={mobileDashboardOpen}
+        onClose={() => setMobileDashboardOpen(false)}
+        userName={userName}
+        userInitials={userInitials}
+        tier={userTier}
+        userEmail={user.email}
+        avatarUrl={avatarUrl}
+        onSignOut={async () => { await supabase.auth.signOut(); navigate("/auth"); }}
       />
     </div>
   );

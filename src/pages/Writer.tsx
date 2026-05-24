@@ -4,7 +4,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import {
   Check, Copy, Download, Settings, X, Plus, Trash2,
   Loader2, Sparkles, StopCircle, Wand2, BarChart2, Upload, Lock, MoreVertical, Image as ImageIcon, Cpu,
-  FolderOpen, ChevronRight, ArrowLeft, PenLine, FileEdit, Columns2, GripVertical, Share2, MessageCircle, MessageSquare
+  FolderOpen, ChevronRight, ArrowLeft, PenLine, FileEdit, Columns2, GripVertical, Share2, MessageCircle, MessageSquare, LayoutGrid
 } from "lucide-react";
 import { CzarIcon } from "@/components/icons/CzarIcon";
 
@@ -42,6 +42,8 @@ import { AI_MODELS, DEFAULT_MODEL_ID, TIER_COLORS, getModelById, isModelLockedFo
 import { useAuth } from "@/contexts/AuthContext";
 import { fetchProjects, updateProject, getUserSubscription, incrementWordsUsed, deleteProject, type Subscription } from "@/lib/projectService";
 import { UserProfilePopover } from "@/components/dashboard/UserProfilePopover";
+import { DashboardSidebar } from "@/components/dashboard/DashboardSidebar";
+import { MobileDashboardSheet } from "@/components/dashboard/MobileDashboardSheet";
 import { BookLoader } from "@/components/ui/BookLoader";
 import { Checkbox } from "@/components/ui/checkbox";
 import { DataQualityModal } from "@/components/writer/DataQualityModal";
@@ -294,6 +296,7 @@ export default function WriterPage() {
     }
   }, [subscription?.tier, selectedModelId, user?.email]);
   const [mobileChaptersOpen, setMobileChaptersOpen] = useState(false);
+  const [mobileDashboardOpen, setMobileDashboardOpen] = useState(false);
   // AI score estimator removed
   const [isGeneratingImages, setIsGeneratingImages] = useState(false);
   // Inline figure generation tracking
@@ -2140,17 +2143,43 @@ ${thesisArea}`);
     toast.success("Author added.");
   };
 
+  const writerUserName     = user?.user_metadata?.full_name || user?.email?.split("@")[0] || "User";
+  const writerUserInitials = (user?.user_metadata?.full_name?.[0] || user?.email?.[0] || "U").toUpperCase();
+  const writerSignOut      = async () => { const { supabase: sb } = await import("@/integrations/supabase/client"); await sb.auth.signOut(); navigate("/auth"); };
+
   return (
-    <div className="h-[100dvh] flex flex-col bg-background overflow-hidden">
+    <div className="h-[100dvh] flex bg-background overflow-hidden">
+      {/* Dashboard sidebar — desktop only (hidden on mobile) */}
+      <DashboardSidebar
+        userName={writerUserName}
+        userInitials={writerUserInitials}
+        tier={subscription.tier}
+        userEmail={user?.email}
+        avatarUrl={user?.user_metadata?.avatar_url}
+        onSignOut={writerSignOut}
+      />
+
+      {/* Main column */}
+      <div className="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden">
+
       {/* Top Nav */}
       <nav className="relative h-11 border-b border-transparent flex items-center px-2 sm:px-4 gap-1.5 sm:gap-2.5 flex-shrink-0 bg-background">
+        {/* Back button — mobile only; desktop uses sidebar */}
         <button
           onClick={() => navigate("/")}
           aria-label="Back to home"
           title="Home"
-          className="inline-flex items-center justify-center w-7 h-7 rounded-md text-muted-foreground hover:bg-secondary hover:text-foreground transition-all flex-shrink-0"
+          className="lg:hidden inline-flex items-center justify-center w-7 h-7 rounded-md text-muted-foreground hover:bg-secondary hover:text-foreground transition-all flex-shrink-0"
         >
           <ArrowLeft size={15} />
+        </button>
+        {/* Dashboard button — mobile only */}
+        <button
+          onClick={() => setMobileDashboardOpen(true)}
+          aria-label="Dashboard"
+          className="lg:hidden inline-flex items-center justify-center w-7 h-7 rounded-md text-muted-foreground hover:bg-secondary hover:text-foreground transition-all flex-shrink-0"
+        >
+          <LayoutGrid size={15} />
         </button>
         <div className="text-[12px] sm:text-[13px] text-muted-foreground overflow-hidden text-ellipsis whitespace-nowrap flex-1 min-w-0 hidden sm:block">
           <strong className="text-foreground font-bold">{project.title.slice(0, 40)}</strong>
@@ -4084,6 +4113,20 @@ ${thesisArea}`);
           </div>
         </div>
       )}
+
+      </div> {/* end Main column */}
+
+      {/* Mobile dashboard sheet */}
+      <MobileDashboardSheet
+        open={mobileDashboardOpen}
+        onClose={() => setMobileDashboardOpen(false)}
+        userName={writerUserName}
+        userInitials={writerUserInitials}
+        tier={subscription.tier}
+        userEmail={user?.email}
+        avatarUrl={user?.user_metadata?.avatar_url}
+        onSignOut={writerSignOut}
+      />
     </div>
   );
 }
