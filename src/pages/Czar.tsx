@@ -261,7 +261,13 @@ export default function CzarPage() {
       const handlers: CzarHandlers = {
         onMeta: (e: CzarMetaEvent) => {
           setConvId(e.conversation_id);
-          if (e.mode) setMode(e.mode as CzarMode);
+          // Only let the backend override the mode for specialist modes that are
+          // auto-detected from content (literature_review, screenplay, legal).
+          // For all other modes the user's explicit selection takes priority.
+          const SPECIALIST_MODES: CzarMode[] = ["literature_review", "screenplay", "legal"];
+          if (e.mode && SPECIALIST_MODES.includes(e.mode as CzarMode)) {
+            setMode(e.mode as CzarMode);
+          }
         },
         onAgent: (e: CzarAgentEvent) => {
           setAgents(prev => {
@@ -360,6 +366,7 @@ export default function CzarPage() {
         conversation_id: convId,
         user_message: text,
         attachments,
+        mode,
         settings: extraSettings,
       }, handlers, ctrl.signal);
     } catch (err: any) {

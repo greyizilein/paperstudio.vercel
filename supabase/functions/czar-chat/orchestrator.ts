@@ -17,7 +17,7 @@ type CzarMode = "chat" | "write" | "correct" | "research" | "plan" | "literature
 type WriteFunction = (event: string, data: Record<string, unknown>) => void;
 
 interface ModelChoice {
-  provider: "anthropic" | "google";
+  provider: "anthropic" | "google" | "qwen";
   model: string;
   thinking: boolean;
   label: string;
