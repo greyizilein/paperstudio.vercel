@@ -4,52 +4,22 @@ import {
 } from "react";
 import {
   ArrowUp, Square, Paperclip, X,
-  Cpu, PenLine, Search, LayoutPanelLeft, FileSearch,
-  Hash, AtSign,
+  FileSearch, Hash, AtSign,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { VoiceInput } from "./VoiceInput";
-import type { CzarMode } from "@/lib/czarStream";
-
-// ─── Mode catalogue ────────────────────────────────────────────────────────
-
-const MODES = [
-  { mode: "chat"     as CzarMode, n: 1, label: "Chat",     desc: "Ask questions, get explanations",   numCls: "bg-secondary text-muted-foreground",           ringCls: "ring-muted-foreground/30"  },
-  { mode: "write"    as CzarMode, n: 2, label: "Write",    desc: "Generate full documents",            numCls: "bg-blue-500 text-white",                      ringCls: "ring-blue-500/60"          },
-  { mode: "plan"     as CzarMode, n: 3, label: "Plan",     desc: "Structure before you write",         numCls: "bg-emerald-500 text-white",                   ringCls: "ring-emerald-500/60"       },
-  { mode: "research" as CzarMode, n: 4, label: "Research", desc: "Find and synthesise sources",        numCls: "bg-purple-500 text-white",                    ringCls: "ring-purple-500/60"        },
-  { mode: "correct"  as CzarMode, n: 5, label: "Correct",  desc: "Fix and improve your draft",         numCls: "bg-amber-500 text-white",                     ringCls: "ring-amber-500/60"         },
-] as const;
-
-function modeInfo(m: CzarMode) {
-  return MODES.find(x => x.mode === m) ?? MODES[0];
-}
-
-function ModeIcon({ mode, size = 13 }: { mode: CzarMode; size?: number }) {
-  const p = { size, className: "flex-shrink-0" };
-  if (mode === "chat")     return <Cpu {...p} />;
-  if (mode === "write")    return <PenLine {...p} />;
-  if (mode === "plan")     return <LayoutPanelLeft {...p} />;
-  if (mode === "research") return <Search {...p} />;
-  if (mode === "correct")  return <FileSearch {...p} />;
-  return null;
-}
 
 // ─── Command catalogue ─────────────────────────────────────────────────────
 
 interface Cmd { cmd: string; aliases: string[]; label: string; desc: string; group: string; action: string }
 
 const COMMANDS: Cmd[] = [
-  { cmd: "/chat",     aliases: ["/1", "/c"],                                                              label: "Chat",            desc: "Ask questions & get explanations",  group: "Modes",   action: "mode:chat"     },
-  { cmd: "/write",    aliases: ["/2", "/w"],                                                              label: "Write",           desc: "Generate full documents",           group: "Modes",   action: "mode:write"    },
-  { cmd: "/plan",     aliases: ["/3", "/p"],                                                              label: "Plan",            desc: "Structure your document first",     group: "Modes",   action: "mode:plan"     },
-  { cmd: "/research", aliases: ["/4", "/r"],                                                              label: "Research",        desc: "Find and synthesise sources",       group: "Modes",   action: "mode:research" },
-  { cmd: "/correct",  aliases: ["/5", "/fix", "/edit"],                                                   label: "Correct",         desc: "Fix and improve a draft",           group: "Modes",   action: "mode:correct"  },
-  { cmd: "/image",    aliases: ["/draw", "/drawing", "/figure", "/diagram", "/chart", "/illustration", "/visual"], label: "Image / Diagram", desc: "Generate a visual, chart, or diagram", group: "Visuals", action: "image" },
-  { cmd: "/new",      aliases: ["/clear", "/reset", "/start"],                                            label: "New conversation", desc: "Start fresh",                      group: "Other",   action: "new"           },
+  { cmd: "/correct",  aliases: ["/fix", "/edit"],                                                                     label: "Correct",          desc: "Fix and improve a draft",               group: "Other",   action: "correct" },
+  { cmd: "/image",    aliases: ["/draw", "/drawing", "/figure", "/diagram", "/chart", "/illustration", "/visual"],    label: "Image / Diagram",  desc: "Generate a visual, chart, or diagram",  group: "Visuals", action: "image"   },
+  { cmd: "/new",      aliases: ["/clear", "/reset", "/start"],                                                        label: "New conversation", desc: "Start fresh",                           group: "Other",   action: "new"     },
 ];
 
-const CMD_GROUPS = ["Modes", "Visuals", "Other"];
+const CMD_GROUPS = ["Visuals", "Other"];
 
 const AT_ITEMS = [
   { token: "@file", label: "Attach file",  desc: "Open the file picker", action: "file" },
@@ -64,22 +34,6 @@ const HASH_ITEMS = [
   { token: "#ieee",      label: "IEEE",      desc: "Use IEEE referencing" },
   { token: "#mla",       label: "MLA",       desc: "Use MLA referencing" },
 ];
-
-// ─── Auto mode detection ───────────────────────────────────────────────────
-
-const AUTO_DETECT: Array<{ pattern: RegExp; mode: CzarMode }> = [
-  { pattern: /\b(write|draft|compose|generate|produce|create)\b.{0,80}\b(essay|report|chapter|paper|dissertation|thesis|letter|proposal|article|document)\b/i, mode: "write" },
-  { pattern: /\b(plan|outline|structure|organise|organize)\b/i, mode: "plan" },
-  { pattern: /\b(research|find sources?|synthesise|synthesize|literature review|search for papers|find papers?)\b/i, mode: "research" },
-  { pattern: /\b(correct|fix|improve|proofread|review|check)\b.{0,30}\b(my|this|the)\b/i, mode: "correct" },
-];
-
-function detectMode(text: string): CzarMode | null {
-  for (const { pattern, mode } of AUTO_DETECT) {
-    if (pattern.test(text)) return mode;
-  }
-  return null;
-}
 
 // Strip @/# tokens and build context note to append to payload
 function processTokens(text: string): string {
@@ -122,15 +76,13 @@ interface CommandInputProps {
   onStop: () => void;
   streaming: boolean;
   disabled?: boolean;
-  placeholder?: string;
-  mode: CzarMode;
-  onModeChange: (m: CzarMode) => void;
+  onCorrect?: () => void;
   onNewConversation?: () => void;
 }
 
 export function CommandInput({
-  onSend, onStop, streaming, disabled = false, placeholder,
-  mode, onModeChange, onNewConversation,
+  onSend, onStop, streaming, disabled = false,
+  onCorrect, onNewConversation,
 }: CommandInputProps) {
   const [text, setText]               = useState("");
   const [files, setFiles]             = useState<File[]>([]);
@@ -138,7 +90,6 @@ export function CommandInput({
   const [interimVoice, setInterim]    = useState("");
 
   // Palette state
-  const [showModePopup, setShowModePopup]   = useState(false);
   const [paletteMode, setPaletteMode]       = useState<"command" | "at" | "hash" | null>(null);
   const [paletteFilter, setPaletteFilter]   = useState("");
   const [paletteIdx, setPaletteIdx]         = useState(0);
@@ -146,8 +97,6 @@ export function CommandInput({
   const textareaRef  = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dragCount    = useRef(0);
-
-  const cur = modeInfo(mode);
 
   // ── Auto-height ──────────────────────────────────────────
   const adjustHeight = useCallback(() => {
@@ -207,21 +156,19 @@ export function CommandInput({
 
   // ── Apply command ─────────────────────────────────────────
   const applyCommand = useCallback((action: string) => {
-    if (action.startsWith("mode:")) onModeChange(action.slice(5) as CzarMode);
-    else if (action === "image") onModeChange("write");
+    if (action === "correct") onCorrect?.();
     else if (action === "new") onNewConversation?.();
     else if (action === "file") fileInputRef.current?.click();
 
     stripToken();
     setTimeout(() => textareaRef.current?.focus(), 0);
-  }, [onModeChange, onNewConversation, stripToken]);
+  }, [onCorrect, onNewConversation, stripToken]);
 
   const applyAt = useCallback((action: string) => {
     if (action === "file") {
       stripToken();
       fileInputRef.current?.click();
     } else {
-      // Keep @cite in text
       setPaletteMode(null);
     }
     setTimeout(() => textareaRef.current?.focus(), 0);
@@ -242,11 +189,6 @@ export function CommandInput({
     const trimmed = text.trim();
     if ((!trimmed && files.length === 0) || streaming) return;
 
-    if (mode === "chat") {
-      const detected = detectMode(trimmed);
-      if (detected) onModeChange(detected);
-    }
-
     const payload = processTokens(trimmed);
     onSend(payload || trimmed, files);
     setText("");
@@ -254,7 +196,7 @@ export function CommandInput({
     setInterim("");
     setPaletteMode(null);
     if (textareaRef.current) textareaRef.current.style.height = "auto";
-  }, [text, files, streaming, mode, onSend, onModeChange]);
+  }, [text, files, streaming, onSend]);
 
   // ── Keyboard ──────────────────────────────────────────────
   const handleKeyDown = useCallback((e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -338,14 +280,15 @@ export function CommandInput({
                   {items.map(cmd => {
                     const isActive = paletteIdx === globalIdx;
                     const thisIdx  = globalIdx++;
-                    const mi       = cmd.group === "Modes" ? modeInfo(cmd.action.replace("mode:", "") as CzarMode) : null;
                     return (
                       <button key={cmd.cmd}
                         onClick={() => applyCommand(cmd.action)}
                         onMouseEnter={() => setPaletteIdx(thisIdx)}
                         className={cn("w-full flex items-center gap-3 px-3 py-2 text-left transition-colors", isActive ? "bg-secondary" : "hover:bg-secondary/60")}>
-                        {mi ? (
-                          <span className={cn("w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0", mi.numCls)}>{mi.n}</span>
+                        {cmd.action === "correct" ? (
+                          <span className="w-5 h-5 rounded-full bg-amber-500/15 flex items-center justify-center flex-shrink-0">
+                            <FileSearch size={10} className="text-amber-600 dark:text-amber-400" />
+                          </span>
                         ) : cmd.group === "Visuals" ? (
                           <span className="w-5 h-5 rounded-full bg-pink-500/15 text-[10px] flex items-center justify-center flex-shrink-0">🖼</span>
                         ) : (
@@ -417,34 +360,6 @@ export function CommandInput({
         </div>
       )}
 
-      {/* ── Mode popup ────────────────────────────────────────── */}
-      {showModePopup && (
-        <>
-          <div className="fixed inset-0 z-[90]" onClick={() => setShowModePopup(false)} />
-          <div className="absolute bottom-full mb-2 left-0 z-[100] bg-background border border-border rounded-xl shadow-2xl overflow-hidden w-60">
-            <div className="px-3 py-2 border-b border-border bg-secondary/40">
-              <span className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground/50">Mode</span>
-            </div>
-            {MODES.map(m => (
-              <button key={m.mode}
-                onClick={() => { onModeChange(m.mode); setShowModePopup(false); }}
-                className={cn("w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-secondary transition-colors", mode === m.mode && "bg-secondary/60")}>
-                <span className={cn("w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0", m.numCls)}>{m.n}</span>
-                <ModeIcon mode={m.mode} />
-                <div className="min-w-0 flex-1">
-                  <div className="text-[12px] font-semibold text-foreground">{m.label}</div>
-                  <div className="text-[10px] text-muted-foreground/55 leading-snug">{m.desc}</div>
-                </div>
-                {mode === m.mode && <span className="w-1.5 h-1.5 rounded-full bg-primary flex-shrink-0" />}
-              </button>
-            ))}
-            <div className="px-3 py-2 border-t border-border bg-secondary/20">
-              <p className="text-[9.5px] text-muted-foreground/40">or type <span className="font-mono">/chat /write /plan /research</span></p>
-            </div>
-          </div>
-        </>
-      )}
-
       {/* ── Drag overlay ──────────────────────────────────────── */}
       {isDragging && (
         <div className="absolute inset-0 z-20 flex items-center justify-center rounded-xl bg-primary/5 border-2 border-dashed border-primary/40 pointer-events-none">
@@ -496,7 +411,7 @@ export function CommandInput({
             onKeyDown={handleKeyDown}
             disabled={disabled}
             rows={1}
-            placeholder={interimVoice ? "" : placeholder ?? "Ask CZAR anything… or type / for commands"}
+            placeholder={interimVoice ? "" : "Ask CZAR anything — essay, report, script, question… or type / for commands"}
             aria-label="Message input"
             className={cn(
               "w-full resize-none rounded-lg bg-transparent px-1 py-2 text-sm text-foreground placeholder:text-muted-foreground/50",
@@ -513,18 +428,18 @@ export function CommandInput({
           )}
         </div>
 
-        {/* Mode badge — numbered circle */}
-        <button
-          type="button"
-          onClick={() => { setShowModePopup(o => !o); setPaletteMode(null); }}
-          title={`Mode: ${cur.label} — click to change`}
-          className={cn(
-            "flex-shrink-0 mb-0.5 w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold transition-all ring-2 hover:scale-110",
-            cur.numCls, cur.ringCls
-          )}
-        >
-          {cur.n}
-        </button>
+        {/* Correct document shortcut */}
+        {onCorrect && (
+          <button
+            type="button"
+            onClick={onCorrect}
+            disabled={disabled}
+            title="Correct & improve a document"
+            className="flex-shrink-0 mb-0.5 w-7 h-7 rounded-full flex items-center justify-center text-amber-600 dark:text-amber-400 hover:bg-amber-500/15 transition-colors"
+          >
+            <FileSearch className="w-3.5 h-3.5" />
+          </button>
+        )}
 
         {/* Voice input */}
         <div className="flex-shrink-0 mb-0.5">

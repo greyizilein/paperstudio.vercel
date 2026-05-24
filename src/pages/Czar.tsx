@@ -100,17 +100,6 @@ function modeIcon(mode: CzarMode) {
   }[mode] ?? <Cpu className={cls} />;
 }
 
-const MODE_DESCRIPTIONS: Record<CzarMode, string> = {
-  chat: "Ask questions, get explanations",
-  write: "Generate full documents",
-  correct: "Fix and improve your draft",
-  research: "Find and synthesise sources",
-  plan: "Structure before you write",
-  literature_review: "Systematic review, PRISMA, synthesis",
-  screenplay: "Fountain format, scene headings, dialogue",
-  legal: "IRAC structure, statute and case law",
-};
-
 const MODE_COLOURS: Record<CzarMode, string> = {
   chat: "bg-secondary text-muted-foreground",
   write: "bg-blue-500/15 text-blue-600 dark:text-blue-400",
@@ -122,19 +111,6 @@ const MODE_COLOURS: Record<CzarMode, string> = {
   legal: "bg-slate-500/15 text-slate-600 dark:text-slate-400",
 };
 
-
-function modePlaceholder(mode: CzarMode): string {
-  return ({
-    chat: "Ask CZAR anything… or type / for commands",
-    write: "Describe what to write — topic, length, style, audience…",
-    correct: "Attach your document and describe what to improve…",
-    research: "What topic should I research?",
-    plan: "Describe the document you want to plan…",
-    literature_review: "Describe the research question or topic for your review…",
-    screenplay: "Describe the scene, characters, or story…",
-    legal: "Describe the legal issue, case, or document…",
-  } as Record<CzarMode, string>)[mode] ?? "Ask CZAR…";
-}
 
 // ── Main component ─────────────────────────────────────────────────
 
@@ -261,11 +237,10 @@ export default function CzarPage() {
       const handlers: CzarHandlers = {
         onMeta: (e: CzarMetaEvent) => {
           setConvId(e.conversation_id);
-          // Only let the backend override the mode for specialist modes that are
-          // auto-detected from content (literature_review, screenplay, legal).
-          // For all other modes the user's explicit selection takes priority.
-          const SPECIALIST_MODES: CzarMode[] = ["literature_review", "screenplay", "legal"];
-          if (e.mode && SPECIALIST_MODES.includes(e.mode as CzarMode)) {
+          if (e.mode) {
+            setMessages(prev => prev.map(m =>
+              m.id === assistantMsgId ? { ...m, mode: e.mode as string } : m
+            ));
             setMode(e.mode as CzarMode);
           }
         },
@@ -366,7 +341,6 @@ export default function CzarPage() {
         conversation_id: convId,
         user_message: text,
         attachments,
-        mode,
         settings: extraSettings,
       }, handlers, ctrl.signal);
     } catch (err: any) {
@@ -389,12 +363,8 @@ export default function CzarPage() {
   }, []);
 
   const handleCommandSend = useCallback((text: string, files: File[]) => {
-    if (mode === "correct") {
-      setCorrectionModalOpen(true);
-    } else {
-      sendMessage(text, files);
-    }
-  }, [mode, sendMessage]);
+    sendMessage(text, files);
+  }, [sendMessage]);
 
   const handleSelectionAction = useCallback((action: string, selectedText: string) => {
     const prompts: Record<string, string> = {
@@ -487,12 +457,6 @@ export default function CzarPage() {
             <Clock size={16} />
           </button>
 
-          {/* Mode badge — read-only; mode switching is in the input area */}
-          <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[12px] font-semibold select-none ${MODE_COLOURS[mode]}`}>
-            {modeIcon(mode)}
-            <span>{modeLabel(mode)}</span>
-          </div>
-
           <div className="ml-auto flex items-center gap-1">
             {streaming && (
               <button onClick={stopStream}
@@ -519,8 +483,6 @@ export default function CzarPage() {
               userName={userName}
               userInitials={userInitials}
               avatarUrl={avatarUrl}
-              mode={mode}
-              onOpenCorrectionModal={() => setCorrectionModalOpen(true)}
             />
           ) : (
             <div className="relative max-w-3xl mx-auto px-4 py-6 pb-10 space-y-8">
@@ -550,9 +512,7 @@ export default function CzarPage() {
                 onSend={handleCommandSend}
                 onStop={stopStream}
                 streaming={streaming}
-                placeholder={modePlaceholder(mode)}
-                mode={mode}
-                onModeChange={setMode}
+                onCorrect={() => setCorrectionModalOpen(true)}
                 onNewConversation={newConv}
               />
             </Suspense>
@@ -1118,12 +1078,10 @@ const GREETING_POOL = [
   "Words are waiting.",
 ];
 
-function WelcomeScreen({ userName, userInitials, avatarUrl, mode, onOpenCorrectionModal }: {
+function WelcomeScreen({ userName, userInitials, avatarUrl }: {
   userName?: string;
   userInitials?: string;
   avatarUrl?: string;
-  mode?: CzarMode;
-  onOpenCorrectionModal?: () => void;
 }) {
   const [visible, setVisible] = useState(false);
   const greeting = useMemo(() => GREETING_POOL[Math.floor(Math.random() * GREETING_POOL.length)], []);
@@ -1139,31 +1097,6 @@ function WelcomeScreen({ userName, userInitials, avatarUrl, mode, onOpenCorrecti
     transform: visible ? "none" : "translateY(16px)",
     transition: `opacity 0.65s ${delay}ms, transform 0.65s ${delay}ms`,
   });
-
-  if (mode === "correct") {
-    return (
-      <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-4 py-10">
-        <div style={fadeIn(0)}>
-          <div className="w-16 h-16 mx-auto rounded-full bg-amber-500/15 ring-2 ring-amber-400/30 flex items-center justify-center mb-5 shadow-md">
-            <FileSearch className="w-7 h-7 text-amber-600 dark:text-amber-400" />
-          </div>
-        </div>
-        <div style={fadeIn(120)}>
-          <h2 className="text-2xl font-black text-foreground mb-2">Correct &amp; Improve</h2>
-          <p className="text-sm text-muted-foreground mb-3 max-w-sm leading-relaxed mx-auto">
-            Upload or paste your document. CZAR finds every correction — grammar, style, argument, register — as tracked changes. Accept or reject each one individually.
-          </p>
-          <p className="text-[11px] text-muted-foreground/50 mb-8">Grammar · Style · Structure · Argument · Register</p>
-          <button
-            onClick={onOpenCorrectionModal}
-            className="px-8 py-3 rounded-xl bg-foreground text-background font-bold text-sm hover:opacity-80 transition-opacity shadow-md"
-          >
-            Open Document
-          </button>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="absolute inset-0 flex flex-col md:flex-row items-start px-5 py-6 gap-4 md:gap-10 md:px-14 md:items-center">
