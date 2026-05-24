@@ -1400,8 +1400,8 @@ Rules:
         }
       }
     } else {
-      // ── Image generation shortcut (chat mode + explicit photo request) ────────
-      if (mode === "chat" && isPhotoRequest(req.user_message) && !signal.aborted) {
+      // ── Image generation (chat mode — explicit /image command or natural photo request) ──
+      if (mode === "chat" && (req.settings?.generateImage === true || isPhotoRequest(req.user_message)) && !signal.aborted) {
         write("agent", {
           id: "illustrator",
           name: "Illustrator",

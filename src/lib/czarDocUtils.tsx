@@ -1,5 +1,9 @@
 import { useState } from "react";
-import { Document, Paragraph, TextRun, HeadingLevel, AlignmentType } from "docx";
+import {
+  Document, Paragraph, TextRun, HeadingLevel, AlignmentType,
+  Table, TableRow, TableCell, WidthType,
+  Footer, PageNumber,
+} from "docx";
 import { Copy, Check, X, Download, Code2, ExternalLink, ZoomIn } from "lucide-react";
 
 export function stripMarkdown(text: string): string {
@@ -19,7 +23,8 @@ export function stripMarkdown(text: string): string {
 
 export function parseInlineRuns(text: string): TextRun[] {
   const runs: TextRun[] = [];
-  const pattern = /(\*\*(.+?)\*\*|\*(.+?)\*|`(.+?)`)/g;
+  // Order matters: *** before **, * before lone *
+  const pattern = /(\*\*\*(.+?)\*\*\*|\*\*(.+?)\*\*|\*(.+?)\*|~~(.+?)~~|`(.+?)`)/g;
   let last = 0;
   let match: RegExpExecArray | null;
 
@@ -27,12 +32,17 @@ export function parseInlineRuns(text: string): TextRun[] {
     if (match.index > last) {
       runs.push(new TextRun({ text: text.slice(last, match.index) }));
     }
-    if (match[0].startsWith("**")) {
-      runs.push(new TextRun({ text: match[2], bold: true }));
+    if (match[0].startsWith("***")) {
+      runs.push(new TextRun({ text: match[2], bold: true, italics: true }));
+    } else if (match[0].startsWith("**")) {
+      runs.push(new TextRun({ text: match[3], bold: true }));
     } else if (match[0].startsWith("*")) {
-      runs.push(new TextRun({ text: match[3], italics: true }));
+      runs.push(new TextRun({ text: match[4], italics: true }));
+    } else if (match[0].startsWith("~~")) {
+      runs.push(new TextRun({ text: match[5], strike: true }));
     } else {
-      runs.push(new TextRun({ text: match[4], font: "Courier New" }));
+      // inline code — monospace, slightly smaller, muted
+      runs.push(new TextRun({ text: match[6], font: "Courier New", size: 18, color: "444444" }));
     }
     last = match.index + match[0].length;
   }
@@ -44,40 +54,266 @@ export function parseInlineRuns(text: string): TextRun[] {
   return runs.length > 0 ? runs : [new TextRun({ text })];
 }
 
+// ── Table helpers ─────────────────────────────────────────────────────────────
+
+function isTableLine(line: string): boolean {
+  const t = line.trim();
+  return t.startsWith("|") && t.endsWith("|") && t.length > 2;
+}
+
+function isTableSeparator(line: string): boolean {
+  return /^\|[-:\s|]+\|$/.test(line.trim());
+}
+
+function parseTableCells(row: string): string[] {
+  return row.trim()
+    .replace(/^\||\|$/g, "")
+    .split("|")
+    .map(c => c.trim());
+}
+
+function buildMarkdownTable(rows: string[]): Table {
+  const sepIdx = rows.findIndex(r => isTableSeparator(r));
+  const headerRow = rows[sepIdx > 0 ? sepIdx - 1 : 0];
+  const bodyRows = sepIdx >= 0 ? rows.slice(sepIdx + 1).filter(r => r.trim() && !isTableSeparator(r)) : rows.slice(1);
+
+  const headerCells = parseTableCells(headerRow);
+  const colCount = Math.max(1, headerCells.length);
+
+  const tableRows: TableRow[] = [
+    new TableRow({
+      tableHeader: true,
+      children: headerCells.map(cellText =>
+        new TableCell({
+          shading: { type: "clear" as any, color: "auto", fill: "1F3864" },
+          children: [new Paragraph({
+            children: [new TextRun({ text: cellText, bold: true, color: "FFFFFF", font: "Calibri", size: 20 })],
+            spacing: { before: 80, after: 80 },
+          })],
+        })
+      ),
+    }),
+    ...bodyRows.map((row, rowIdx) => {
+      const cells = parseTableCells(row);
+      return new TableRow({
+        children: Array.from({ length: colCount }, (_, ci) => {
+          const cellText = cells[ci] ?? "";
+          const isAlt = rowIdx % 2 === 1;
+          return new TableCell({
+            ...(isAlt ? { shading: { type: "clear" as any, color: "auto", fill: "F5F7FA" } } : {}),
+            children: [new Paragraph({
+              children: parseInlineRuns(cellText),
+              spacing: { before: 60, after: 60 },
+            })],
+          });
+        }),
+      });
+    }),
+  ];
+
+  return new Table({
+    width: { size: 100, type: WidthType.PERCENTAGE },
+    rows: tableRows,
+  });
+}
+
+// ── Professional document builder ─────────────────────────────────────────────
+// Produces Calibri 11pt body · 1-inch margins · styled headings · page footer.
+// Base64 images are stripped and replaced with a figure placeholder.
+
 export function buildDocx(markdown: string): Document {
-  const lines = markdown.split("\n");
-  const paragraphs: Paragraph[] = [];
+  // Strip base64-embedded images — replace with italic figure caption
+  const cleaned = markdown.replace(
+    /!\[([^\]]*)\]\(data:[^)]+\)/g,
+    (_, alt) => `\n*[Figure${alt ? `: ${alt}` : ""}]*\n`
+  );
 
-  for (const line of lines) {
-    const trimmed = line.trim();
+  const rawLines = cleaned.split("\n");
+  const blocks: (Paragraph | Table)[] = [];
 
-    if (/^### /.test(trimmed)) {
-      paragraphs.push(new Paragraph({ text: trimmed.replace(/^### /, ""), heading: HeadingLevel.HEADING_3 }));
-    } else if (/^## /.test(trimmed)) {
-      paragraphs.push(new Paragraph({ text: trimmed.replace(/^## /, ""), heading: HeadingLevel.HEADING_2 }));
-    } else if (/^# /.test(trimmed)) {
-      paragraphs.push(new Paragraph({ text: trimmed.replace(/^# /, ""), heading: HeadingLevel.HEADING_1 }));
-    } else if (/^[-*+] /.test(trimmed)) {
-      const text = trimmed.replace(/^[-*+] /, "");
-      paragraphs.push(new Paragraph({ bullet: { level: 0 }, children: parseInlineRuns(text) }));
-    } else if (/^\d+\. /.test(trimmed)) {
-      const text = trimmed.replace(/^\d+\. /, "");
-      paragraphs.push(new Paragraph({ numbering: { reference: "default-numbering", level: 0 }, children: parseInlineRuns(text) }));
-    } else if (trimmed === "") {
-      paragraphs.push(new Paragraph({ text: "" }));
-    } else {
-      paragraphs.push(new Paragraph({ children: parseInlineRuns(trimmed), alignment: AlignmentType.LEFT }));
-    }
+  // Detect document title: first non-empty H1 heading
+  let docTitle: string | undefined;
+  const firstH1Idx = rawLines.findIndex(l => /^# /.test(l.trim()) && l.trim().length > 2);
+  if (firstH1Idx >= 0) {
+    docTitle = rawLines[firstH1Idx].replace(/^# /, "").trim();
+    rawLines[firstH1Idx] = ""; // clear from normal processing
   }
 
+  // State-machine line parser
+  let i = 0;
+  while (i < rawLines.length) {
+    const line = rawLines[i];
+    const trimmed = line.trim();
+
+    // ── Code fence ───────────────────────────────────────────────
+    if (trimmed.startsWith("```") || trimmed.startsWith("~~~")) {
+      const fence = trimmed.slice(0, 3);
+      const closingRe = fence === "```" ? /^```\s*$/ : /^~~~\s*$/;
+      i++;
+      const codeLines: string[] = [];
+      while (i < rawLines.length && !closingRe.test(rawLines[i].trim())) {
+        codeLines.push(rawLines[i]);
+        i++;
+      }
+      if (codeLines.length > 0) {
+        // Interleave text runs with line-break runs
+        const codeRuns: TextRun[] = [];
+        codeLines.forEach((cl, idx) => {
+          codeRuns.push(new TextRun({ text: cl || " ", font: "Courier New", size: 18 }));
+          if (idx < codeLines.length - 1) codeRuns.push(new TextRun({ break: 1 }));
+        });
+        blocks.push(new Paragraph({
+          children: codeRuns,
+          shading: { type: "clear" as any, color: "auto", fill: "F2F2F2" },
+          spacing: { before: 120, after: 120 },
+        }));
+      }
+      i++; // skip closing fence
+      continue;
+    }
+
+    // ── Markdown table ────────────────────────────────────────────
+    if (isTableLine(trimmed)) {
+      const tableLines: string[] = [];
+      while (i < rawLines.length && (isTableLine(rawLines[i].trim()) || isTableSeparator(rawLines[i].trim()))) {
+        tableLines.push(rawLines[i]);
+        i++;
+      }
+      if (tableLines.length >= 2) {
+        blocks.push(new Paragraph({ text: "", spacing: { before: 120, after: 40 } }));
+        blocks.push(buildMarkdownTable(tableLines));
+        blocks.push(new Paragraph({ text: "", spacing: { before: 40, after: 120 } }));
+      }
+      continue;
+    }
+
+    // ── Headings ─────────────────────────────────────────────────
+    if (/^### /.test(trimmed)) {
+      blocks.push(new Paragraph({ text: trimmed.replace(/^### /, ""), heading: HeadingLevel.HEADING_3 }));
+    } else if (/^## /.test(trimmed)) {
+      blocks.push(new Paragraph({ text: trimmed.replace(/^## /, ""), heading: HeadingLevel.HEADING_2 }));
+    } else if (/^# /.test(trimmed)) {
+      // Secondary H1 (not the title)
+      blocks.push(new Paragraph({ text: trimmed.replace(/^# /, ""), heading: HeadingLevel.HEADING_1 }));
+    }
+    // ── Bullet list ───────────────────────────────────────────────
+    else if (/^[-*+] /.test(trimmed)) {
+      blocks.push(new Paragraph({
+        bullet: { level: 0 },
+        children: parseInlineRuns(trimmed.replace(/^[-*+] /, "")),
+        spacing: { after: 60 },
+      }));
+    }
+    // ── Numbered list ─────────────────────────────────────────────
+    else if (/^\d+\. /.test(trimmed)) {
+      blocks.push(new Paragraph({
+        numbering: { reference: "default-numbering", level: 0 },
+        children: parseInlineRuns(trimmed.replace(/^\d+\. /, "")),
+        spacing: { after: 60 },
+      }));
+    }
+    // ── Blockquote ────────────────────────────────────────────────
+    else if (/^> /.test(trimmed)) {
+      blocks.push(new Paragraph({
+        indent: { left: 720 },
+        children: [new TextRun({ text: trimmed.replace(/^> /, ""), italics: true, color: "595959" })],
+        spacing: { after: 120 },
+      }));
+    }
+    // ── Horizontal rule ───────────────────────────────────────────
+    else if (/^---+$/.test(trimmed) || /^\*\*\*+$/.test(trimmed)) {
+      blocks.push(new Paragraph({
+        text: "",
+        border: { bottom: { color: "CCCCCC", space: 1, value: "single" as any, size: 6 } },
+        spacing: { before: 160, after: 160 },
+      }));
+    }
+    // ── Empty line ────────────────────────────────────────────────
+    else if (trimmed === "") {
+      blocks.push(new Paragraph({ text: "", spacing: { after: 80 } }));
+    }
+    // ── Regular paragraph ─────────────────────────────────────────
+    else {
+      blocks.push(new Paragraph({
+        children: parseInlineRuns(trimmed),
+        alignment: AlignmentType.LEFT,
+        spacing: { after: 160 },
+      }));
+    }
+
+    i++;
+  }
+
+  // Prepend title paragraph if detected
+  const finalBlocks: (Paragraph | Table)[] = [];
+  if (docTitle) {
+    finalBlocks.push(
+      new Paragraph({
+        children: [new TextRun({ text: docTitle, bold: true, font: "Calibri", size: 52, color: "1F3864" })],
+        alignment: AlignmentType.CENTER,
+        spacing: { before: 480, after: 560 },
+      }),
+      // Thin rule under title
+      new Paragraph({
+        text: "",
+        border: { bottom: { color: "1F3864", space: 1, value: "single" as any, size: 8 } },
+        spacing: { before: 0, after: 320 },
+      })
+    );
+  }
+  finalBlocks.push(...blocks);
+
   return new Document({
+    title: docTitle,
+    creator: "CZAR",
+    styles: {
+      default: {
+        document: {
+          run: { font: "Calibri", size: 22 },
+          paragraph: { spacing: { after: 160 } },
+        },
+        heading1: {
+          run: { font: "Calibri", size: 36, bold: true, color: "1F3864" },
+          paragraph: { spacing: { before: 480, after: 160 } },
+        },
+        heading2: {
+          run: { font: "Calibri", size: 28, bold: true, color: "1F3864" },
+          paragraph: { spacing: { before: 360, after: 120 } },
+        },
+        heading3: {
+          run: { font: "Calibri", size: 24, bold: true, color: "2E74B5" },
+          paragraph: { spacing: { before: 240, after: 80 } },
+        },
+      },
+    },
     numbering: {
       config: [{
         reference: "default-numbering",
         levels: [{ level: 0, format: "decimal" as any, text: "%1.", alignment: AlignmentType.LEFT }],
       }],
     },
-    sections: [{ children: paragraphs }],
+    sections: [{
+      properties: {
+        page: {
+          margin: { top: 1440, right: 1440, bottom: 1440, left: 1440 },
+        },
+      },
+      footers: {
+        default: new Footer({
+          children: [
+            new Paragraph({
+              alignment: AlignmentType.CENTER,
+              children: [
+                new TextRun({ children: [PageNumber.CURRENT], font: "Calibri", size: 16, color: "888888" }),
+                new TextRun({ text: " / ", font: "Calibri", size: 16, color: "888888" }),
+                new TextRun({ children: [PageNumber.TOTAL_PAGES], font: "Calibri", size: 16, color: "888888" }),
+              ],
+            }),
+          ],
+        }),
+      },
+      children: finalBlocks,
+    }],
   });
 }
 

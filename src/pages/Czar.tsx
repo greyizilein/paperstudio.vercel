@@ -6,7 +6,7 @@ import {
   ChevronDown, ChevronRight, LayoutPanelLeft, FileSearch, Clock, X,
   BookOpen, Film, Scale, Download, Volume2, VolumeX, Edit3, Eye, FileText, Sparkles,
   Compass, FlaskConical, Pen, Library, Gavel, RefreshCw, ImageIcon,
-  Copy, Trash2, MoreHorizontal,
+  Copy, Trash2, MoreHorizontal, Check, FileDown,
 } from "lucide-react";
 import { PsThemeToggle } from "@/components/ps/PsThemeToggle";
 import ReactMarkdown from "react-markdown";
@@ -362,8 +362,8 @@ export default function CzarPage() {
     setAgents(prev => prev.map(a => a.status === "working" ? { ...a, status: "done" } : a));
   }, []);
 
-  const handleCommandSend = useCallback((text: string, files: File[]) => {
-    sendMessage(text, files);
+  const handleCommandSend = useCallback((text: string, files: File[], meta?: Record<string, any>) => {
+    sendMessage(text, files, meta ?? {});
   }, [sendMessage]);
 
   const handleSelectionAction = useCallback((action: string, selectedText: string) => {
@@ -538,6 +538,58 @@ export default function CzarPage() {
 
 // ── Sub-components ─────────────────────────────────────────────────
 
+// Hover-reveal action row under chat-style assistant messages
+function AssistantActions({ content }: { content: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = useCallback(() => {
+    navigator.clipboard.writeText(content).catch(() => {});
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1800);
+  }, [content]);
+
+  const handleSaveDocx = useCallback(async () => {
+    try {
+      const [{ buildDocx }, { Packer }] = await Promise.all([
+        import("@/lib/czarDocUtils.tsx"),
+        import("docx"),
+      ]);
+      const blob = await Packer.toBlob(buildDocx(content));
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "czar-response.docx";
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch { /* silently ignore download errors */ }
+  }, [content]);
+
+  const wordCount = content.trim().split(/\s+/).filter(Boolean).length;
+
+  return (
+    <div className="flex items-center gap-0.5 mt-2 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
+      <button
+        type="button"
+        onClick={handleCopy}
+        className="flex items-center gap-1.5 px-2 py-1 rounded-lg text-[11px] text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+      >
+        {copied ? <Check size={11} className="text-emerald-500" /> : <Copy size={11} />}
+        {copied ? "Copied" : "Copy"}
+      </button>
+      {wordCount >= 80 && (
+        <button
+          type="button"
+          onClick={handleSaveDocx}
+          className="flex items-center gap-1.5 px-2 py-1 rounded-lg text-[11px] text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+        >
+          <FileDown size={11} />
+          Save DOCX
+        </button>
+      )}
+    </div>
+  );
+}
+
 function ClarificationCard({ questions, title, onAnswer }: {
   questions: string[];
   title?: string;
@@ -673,6 +725,7 @@ function InlineDocMessage({ msg, onContentChange, onSelectionAction, onDismissDi
   const [isEditMode, setIsEditMode] = useState(false);
   const [editContent, setEditContent] = useState(msg.content);
   const [selectionToolbar, setSelectionToolbar] = useState<{ x: number; y: number; text: string } | null>(null);
+  const [docCopied, setDocCopied] = useState(false);
 
   useEffect(() => {
     if (!isEditMode) setEditContent(msg.content);
@@ -708,6 +761,12 @@ function InlineDocMessage({ msg, onContentChange, onSelectionAction, onDismissDi
     a.href = url; a.download = filename; a.click();
     URL.revokeObjectURL(url);
   }, [msg.content, msg.mode]);
+
+  const handleDocCopy = useCallback(() => {
+    navigator.clipboard.writeText(msg.content).catch(() => {});
+    setDocCopied(true);
+    setTimeout(() => setDocCopied(false), 1800);
+  }, [msg.content]);
 
   const handleToggleEdit = useCallback(() => {
     if (isEditMode) onContentChange?.(msg.id, editContent);
@@ -831,6 +890,13 @@ function InlineDocMessage({ msg, onContentChange, onSelectionAction, onDismissDi
             <div className="text-[10.5px] text-muted-foreground/60">Document · DOCX</div>
           </div>
           <div className="flex items-center gap-1.5 flex-shrink-0 flex-wrap">
+            <button
+              onClick={handleDocCopy}
+              className="flex items-center gap-1 px-2.5 py-1.5 text-xs rounded-lg border border-border text-muted-foreground hover:text-foreground hover:bg-background transition-colors"
+            >
+              {docCopied ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
+              {docCopied ? "Copied" : "Copy"}
+            </button>
             <button
               onClick={handleSpeak}
               className="flex items-center gap-1 px-2.5 py-1.5 text-xs rounded-lg border border-border text-muted-foreground hover:text-foreground hover:bg-background transition-colors"
@@ -1048,15 +1114,20 @@ function CzarMessage({
 
         {/* Chat-style rendering for short/conversational responses and non-doc modes */}
         {!msg.error && !showAsDoc && msg.mode !== "correct" && (
-          <div className="prose prose-sm dark:prose-invert max-w-none prose-p:my-1.5 prose-headings:my-2 prose-ul:my-1 prose-ol:my-1 prose-pre:bg-secondary prose-pre:border prose-pre:border-border prose-code:text-primary prose-code:bg-primary/10 prose-code:px-1 prose-code:rounded text-[13.5px] leading-relaxed text-foreground">
-            <ReactMarkdown
-              remarkPlugins={[remarkGfm]}
-              components={chatMarkdownComponents as React.ComponentProps<typeof ReactMarkdown>["components"]}
-            >
-              {msg.content || (msg.streaming ? "​" : "—")}
-            </ReactMarkdown>
-            {msg.streaming && (
-              <span className="inline-block w-0.5 h-4 bg-current ml-0.5 align-middle animate-pulse" />
+          <div className="group">
+            <div className="prose prose-sm dark:prose-invert max-w-none prose-p:my-1.5 prose-headings:my-2 prose-ul:my-1 prose-ol:my-1 prose-pre:bg-secondary prose-pre:border prose-pre:border-border prose-code:text-primary prose-code:bg-primary/10 prose-code:px-1 prose-code:rounded text-[13.5px] leading-relaxed text-foreground">
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                components={chatMarkdownComponents as React.ComponentProps<typeof ReactMarkdown>["components"]}
+              >
+                {msg.content || (msg.streaming ? "​" : "—")}
+              </ReactMarkdown>
+              {msg.streaming && (
+                <span className="inline-block w-0.5 h-4 bg-current ml-0.5 align-middle animate-pulse" />
+              )}
+            </div>
+            {!msg.streaming && !msg.error && msg.content && (
+              <AssistantActions content={msg.content} />
             )}
           </div>
         )}
