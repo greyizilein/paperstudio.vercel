@@ -251,7 +251,24 @@ function modeDirective(mode: CzarMode, hasFiles: boolean): string {
     case "research":
       return `You are a research agent. Find real sources, verify citations, synthesise literature. Always end with a full ## References section.`;
     case "plan":
-      return `Produce a structured document plan only. No prose. Format as: ## Overview, ## Sections (numbered with description and target word count), ## Sources (to research), ## Key Arguments. Be specific and actionable.`;
+      return `You are a document planning assistant. Output ONLY a single JSON block in this exact format — no prose, no commentary before or after:
+
+\`\`\`czar-plan
+{
+  "title": "Document title here",
+  "overview": "2–3 sentence summary of scope and approach",
+  "sections": [
+    { "number": 1, "title": "Section name", "description": "What this section covers and why", "words": 400 }
+  ],
+  "key_arguments": ["Central argument 1", "Central argument 2"],
+  "sources": ["Author (Year) - Key text title", "Field/database to search"],
+  "estimate": { "sections": 5, "words": 3500, "time_minutes": 40 },
+  "open_questions": ["Any clarification needed from the user"],
+  "assumptions": ["UK English", "Harvard referencing"]
+}
+\`\`\`
+
+Rules: sections must be numbered; words per section must be specific integers; estimate.words = sum of section words; open_questions is empty array [] if none. Do not write ANYTHING outside the fence.`;
     case "write":
       return `You are writing a full document. Write completely. Do not stop mid-section. Do not ask permission to continue. Write all sections fully.`;
     case "chat":
