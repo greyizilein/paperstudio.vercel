@@ -913,8 +913,13 @@ export async function runOrchestrator(opts: OrchestratorOptions): Promise<string
   const plan = await runPlannerAgent(userMessage, fileContext, write, signal, workspace);
   if (signal.aborted) return "";
 
-  // Clarification is informational — pipeline always continues regardless of
-  // workspace.needsClarification; the frontend decides what to show the user.
+  // Brief is too vague to produce good work — stop the pipeline here.
+  // The clarification event was already emitted in runPlannerAgent; the
+  // frontend renders ClarificationCard and waits for the user to answer.
+  // Continuing would waste API calls and produce a confused, useless document.
+  if (workspace.needsClarification) {
+    return "";
+  }
 
   // ── Phase 2: Researcher ──────────────────────────────────────────────────
   const fallbackPlan: PlannerOutput = {

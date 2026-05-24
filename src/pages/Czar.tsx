@@ -1016,6 +1016,12 @@ function CzarMessage({
   // For assistant messages: show live agents if streaming, frozen agents if done
   const agentsToShow = msg.streaming ? currentAgents : (msg.agents ?? []);
 
+  // Only render the full document UI (InlineDocMessage + download card) for substantial
+  // content. Short conversational responses (clarification prompts, errors, brief
+  // acknowledgements) fall back to regular chat rendering even in doc modes.
+  const docWordCount = msg.content.trim().split(/\s+/).filter(Boolean).length;
+  const showAsDoc = isDocMsg && msg.mode !== "correct" && (msg.streaming || docWordCount >= 50);
+
   return (
     <div className="flex gap-3">
       <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5">
@@ -1064,8 +1070,8 @@ function CzarMessage({
           />
         )}
 
-        {/* Standard doc content (non-correction doc modes) */}
-        {!msg.error && isDocMsg && msg.mode !== "correct" && (
+        {/* Standard doc content — only for substantial multi-paragraph documents */}
+        {!msg.error && showAsDoc && (
           <InlineDocMessage
             msg={msg}
             onContentChange={onContentChange}
@@ -1073,7 +1079,8 @@ function CzarMessage({
           />
         )}
 
-        {!msg.error && !isDocMsg && (
+        {/* Chat-style rendering for short/conversational responses and non-doc modes */}
+        {!msg.error && !showAsDoc && msg.mode !== "correct" && (
           <div className="prose prose-sm dark:prose-invert max-w-none prose-p:my-1.5 prose-headings:my-2 prose-ul:my-1 prose-ol:my-1 prose-pre:bg-secondary prose-pre:border prose-pre:border-border prose-code:text-primary prose-code:bg-primary/10 prose-code:px-1 prose-code:rounded text-[13.5px] leading-relaxed text-foreground">
             <ReactMarkdown
               remarkPlugins={[remarkGfm]}
