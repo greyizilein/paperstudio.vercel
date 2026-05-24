@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import {
   PanelLeftClose, PanelLeftOpen, Loader2, Square,
   User, Bot, AlertCircle, Search, PenLine, Cpu,
-  ChevronDown, LayoutPanelLeft, FileSearch, Clock, X,
+  LayoutPanelLeft, FileSearch, Clock, X,
 } from "lucide-react";
 import { PsThemeToggle } from "@/components/ps/PsThemeToggle";
 import ReactMarkdown from "react-markdown";
@@ -101,9 +101,6 @@ export default function CzarPage() {
 
   const [agents, setAgents] = useState<LiveAgent[]>([]);
   const [mode, setMode] = useState<CzarMode>("chat");
-  const [showModeMenu, setShowModeMenu] = useState(false);
-  const modeButtonRef = useRef<HTMLButtonElement>(null);
-  const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0 });
 
   const threadEndRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -381,47 +378,10 @@ export default function CzarPage() {
             <Clock size={16} />
           </button>
 
-          {/* Mode selector */}
-          <div className="relative">
-            <button
-              ref={modeButtonRef}
-              onClick={() => {
-                if (streaming) return;
-                if (!showModeMenu && modeButtonRef.current) {
-                  const r = modeButtonRef.current.getBoundingClientRect();
-                  setDropdownPos({ top: r.bottom + 6, left: r.left });
-                }
-                setShowModeMenu(o => !o);
-              }}
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[12px] font-semibold transition-colors ${streaming ? "opacity-50 cursor-not-allowed" : "cursor-pointer"} ${MODE_COLOURS[mode]}`}
-            >
-              {modeIcon(mode)}
-              <span>{modeLabel(mode)}</span>
-              <ChevronDown size={11} className={`transition-transform ${showModeMenu ? "rotate-180" : ""}`} />
-            </button>
-            {showModeMenu && (
-              <>
-                <div className="fixed inset-0 z-[190]" onClick={() => setShowModeMenu(false)} />
-                <div
-                  className="fixed z-[200] bg-background border border-border rounded-xl shadow-2xl overflow-hidden w-52 animate-in fade-in duration-150"
-                  style={{ top: dropdownPos.top, left: dropdownPos.left }}
-                >
-                  {(["chat", "write", "correct", "research", "plan"] as CzarMode[]).map(m => (
-                    <button key={m}
-                      onClick={() => { setMode(m); setShowModeMenu(false); }}
-                      className={`w-full flex items-start gap-3 px-3 py-2.5 text-left hover:bg-secondary transition-colors ${mode === m ? "bg-secondary/60" : ""}`}
-                    >
-                      <span className={`mt-0.5 ${mode === m ? "text-foreground" : "text-muted-foreground"}`}>{modeIcon(m)}</span>
-                      <div className="min-w-0">
-                        <div className={`text-[12px] font-semibold ${mode === m ? "text-foreground" : "text-muted-foreground"}`}>{modeLabel(m)}</div>
-                        <div className="text-[10.5px] text-muted-foreground/60 leading-snug">{MODE_DESCRIPTIONS[m]}</div>
-                      </div>
-                      {mode === m && <span className="ml-auto mt-1 w-1.5 h-1.5 rounded-full bg-primary flex-shrink-0" />}
-                    </button>
-                  ))}
-                </div>
-              </>
-            )}
+          {/* Mode badge — read-only; mode switching is in the input area */}
+          <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[12px] font-semibold select-none ${MODE_COLOURS[mode]}`}>
+            {modeIcon(mode)}
+            <span>{modeLabel(mode)}</span>
           </div>
 
           {/* Right side actions */}
@@ -495,6 +455,9 @@ export default function CzarPage() {
                   onStop={stopStream}
                   streaming={streaming}
                   placeholder={modePlaceholder(mode)}
+                  mode={mode}
+                  onModeChange={setMode}
+                  onNewConversation={newConv}
                 />
               </Suspense>
             </div>
