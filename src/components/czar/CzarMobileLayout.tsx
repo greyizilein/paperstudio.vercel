@@ -216,67 +216,62 @@ export function CzarMobileLayout({
   const anyPanelOpen = histOpen || settingsOpen || modeSheetOpen || correctionOpen;
 
   return (
-    <div className="flex flex-col h-full overflow-hidden bg-background">
+    <div
+      className="flex flex-col h-full overflow-hidden"
+      style={{
+        background: isDark
+          ? "radial-gradient(ellipse at 30% 40%, rgba(21,128,61,.22) 0%, transparent 60%), radial-gradient(ellipse at 75% 70%, rgba(20,83,45,.16) 0%, transparent 55%), hsl(var(--background))"
+          : "radial-gradient(ellipse at 30% 40%, rgba(134,239,172,.45) 0%, transparent 60%), radial-gradient(ellipse at 75% 70%, rgba(187,247,208,.35) 0%, transparent 55%), radial-gradient(ellipse at 60% 20%, rgba(167,243,208,.25) 0%, transparent 50%), #f8fdf9",
+      }}
+    >
 
-      {/* Stop button — fixed top-right while streaming */}
-      {streaming && (
-        <button
-          onClick={onStop}
-          className="fixed z-[200] flex items-center gap-1.5 px-3.5 py-1.5 bg-destructive text-white rounded-full text-[13px] font-semibold shadow-lg"
-          style={{ top: "calc(14px + env(safe-area-inset-top, 0px))", right: 16 }}
-        >
-          <span className="w-2 h-2 bg-white rounded-[1px] flex-shrink-0" />
-          Stop
-        </button>
-      )}
+      {/* ── PERSISTENT TOP BAR — always visible ── */}
+      <div
+        className="flex-shrink-0 flex items-center justify-between px-4 z-[70]"
+        style={{
+          paddingTop: "calc(14px + env(safe-area-inset-top, 0px))",
+          paddingBottom: 10,
+        }}
+      >
+        <div className="flex items-center gap-2">
+          {/* Avatar → dashboard */}
+          <button onClick={() => navigate("/dashboard")} className="flex-shrink-0">
+            <PsAvatar initials={userInitials} sizeClass="w-10 h-10 text-[16px]" avatarUrl={avatarUrl} />
+          </button>
+          {/* History button */}
+          <button
+            onClick={() => setHistOpen(true)}
+            className="w-8 h-8 rounded-full bg-black/[.07] dark:bg-white/10 flex items-center justify-center text-foreground/60 transition-colors active:bg-black/[.14]"
+            aria-label="Conversations"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9">
+              <circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/>
+            </svg>
+          </button>
+        </div>
+        <div className="flex items-center gap-0.5">
+          {/* Day / Night toggle */}
+          <button
+            onClick={toggleMode}
+            className="w-9 h-9 flex items-center justify-center rounded-lg text-foreground/60 hover:bg-black/[.05] dark:hover:bg-white/10 transition-colors"
+            aria-label={isDark ? "Light mode" : "Dark mode"}
+          >
+            {isDark ? <Sun size={18} /> : <Moon size={18} />}
+          </button>
+          {/* Settings */}
+          <button
+            onClick={() => setSettingsOpen(true)}
+            className="w-9 h-9 flex items-center justify-center rounded-lg text-foreground/60 hover:bg-black/[.05] dark:hover:bg-white/10 transition-colors"
+            aria-label="Settings"
+          >
+            <Settings size={18} />
+          </button>
+        </div>
+      </div>
 
-      {/* ── WELCOME SCREEN ── */}
+      {/* ── WELCOME SCREEN — only when no messages ── */}
       {!hasMessages && (
-        <div
-          className="flex-1 flex flex-col px-5 overflow-hidden"
-          style={{
-            paddingTop: "calc(20px + env(safe-area-inset-top, 0px))",
-            background: isDark
-              ? "radial-gradient(ellipse at 30% 40%, rgba(21,128,61,.28) 0%, transparent 60%), radial-gradient(ellipse at 75% 70%, rgba(20,83,45,.2) 0%, transparent 55%), hsl(var(--background))"
-              : "radial-gradient(ellipse at 30% 40%, rgba(134,239,172,.55) 0%, transparent 60%), radial-gradient(ellipse at 75% 70%, rgba(187,247,208,.40) 0%, transparent 55%), radial-gradient(ellipse at 60% 20%, rgba(167,243,208,.30) 0%, transparent 50%), #f8fdf9",
-          }}
-        >
-          <div className="flex items-start justify-between mb-7">
-            <div className="flex items-center gap-2">
-              {/* Avatar → dashboard */}
-              <button onClick={() => navigate("/dashboard")} className="flex-shrink-0">
-                <PsAvatar initials={userInitials} sizeClass="w-10 h-10 text-[16px]" avatarUrl={avatarUrl} />
-              </button>
-              {/* History button next to avatar */}
-              <button
-                onClick={() => setHistOpen(true)}
-                className="w-8 h-8 rounded-full bg-black/[.07] dark:bg-white/10 flex items-center justify-center text-foreground/60 transition-colors active:bg-black/[.14]"
-                aria-label="Conversations"
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9">
-                  <circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/>
-                </svg>
-              </button>
-            </div>
-            <div className="flex items-center gap-0.5">
-              {/* Day / Night toggle */}
-              <button
-                onClick={toggleMode}
-                className="w-9 h-9 flex items-center justify-center rounded-lg text-foreground/60 hover:bg-black/[.05] dark:hover:bg-white/10 transition-colors"
-                aria-label={isDark ? "Light mode" : "Dark mode"}
-              >
-                {isDark ? <Sun size={18} /> : <Moon size={18} />}
-              </button>
-              {/* Settings */}
-              <button
-                onClick={() => setSettingsOpen(true)}
-                className="w-9 h-9 flex items-center justify-center rounded-lg text-foreground/60 hover:bg-black/[.05] dark:hover:bg-white/10 transition-colors"
-                aria-label="Settings"
-              >
-                <Settings size={18} />
-              </button>
-            </div>
-          </div>
+        <div className="flex-1 flex flex-col px-5 pt-4 overflow-hidden">
           <p className="text-[14px] text-muted-foreground mb-2">
             Hi {userName.split(" ")[0] || "there"}
           </p>
@@ -290,11 +285,11 @@ export function CzarMobileLayout({
       {hasMessages && (
         <div
           ref={threadRef}
-          className="flex-1 overflow-y-auto overflow-x-hidden px-4 pt-4 pb-2 bg-background"
+          className="flex-1 overflow-y-auto overflow-x-hidden px-4 pb-2"
           style={{ WebkitOverflowScrolling: "touch" as any }}
         >
           {messages.map(msg => (
-            <MobileMessage key={msg.id} msg={msg} userInitials={userInitials} />
+            <MobileMessage key={msg.id} msg={msg} userInitials={userInitials} streaming={streaming} />
           ))}
         </div>
       )}
@@ -304,7 +299,7 @@ export function CzarMobileLayout({
         className="flex-shrink-0 px-3"
         style={{ paddingTop: 8, paddingBottom: "calc(8px + env(safe-area-inset-bottom, 0px))" }}
       >
-        <div className="bg-background border border-border rounded-[18px] overflow-hidden shadow-sm">
+        <div className="bg-background/80 backdrop-blur-sm border border-border rounded-[18px] overflow-hidden shadow-sm">
           {/* Attach hint — clicking opens file picker */}
           <button
             onClick={() => fileInputRef.current?.click()}
@@ -371,16 +366,26 @@ export function CzarMobileLayout({
               <button className="w-8 h-8 rounded-full flex items-center justify-center text-muted-foreground active:bg-secondary transition-colors" title="Voice input">
                 <Mic size={18} />
               </button>
-              {/* Send */}
-              <button
-                onClick={handleSend}
-                disabled={(!text.trim() && files.length === 0) || streaming}
-                className={`w-8 h-8 rounded-full flex items-center justify-center transition-all active:scale-90 ${(text.trim() || files.length > 0) && !streaming ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                  <line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/>
-                </svg>
-              </button>
+              {/* Send / Stop — same button */}
+              {streaming ? (
+                <button
+                  onClick={onStop}
+                  className="w-8 h-8 rounded-full flex items-center justify-center bg-destructive text-white transition-all active:scale-90"
+                  aria-label="Stop"
+                >
+                  <span className="w-3 h-3 rounded-[2px] bg-white" />
+                </button>
+              ) : (
+                <button
+                  onClick={handleSend}
+                  disabled={!text.trim() && files.length === 0}
+                  className={`w-8 h-8 rounded-full flex items-center justify-center transition-all active:scale-90 ${(text.trim() || files.length > 0) ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/>
+                  </svg>
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -635,7 +640,29 @@ function SettingsPickerRow({
   );
 }
 
-function MobileMessage({ msg, userInitials }: { msg: MobileMsg; userInitials: string }) {
+function AgentStatus({ mode, active }: { mode?: string; active: boolean }) {
+  return (
+    <div className="text-[13px] text-muted-foreground mb-2.5">
+      <div className="flex items-center gap-1.5 font-medium mb-1">
+        <span className="text-[11px] text-muted-foreground">v</span>
+        <span>Preparing…</span>
+        <span className="w-2 h-2 rounded-full bg-green-500 inline-block" />
+      </div>
+      <div className="flex items-center gap-1.5 pl-4 border-l border-border text-[12px] text-muted-foreground">
+        <span className="w-2 h-2 rounded-full bg-border inline-block flex-shrink-0" />
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="flex-shrink-0">
+          <path d="M11 4H4a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+          <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+        </svg>
+        <span>CZAR Writer</span>
+        <span className="text-muted-foreground/40">·</span>
+        <span>{mode ?? "chat"} mode</span>
+      </div>
+    </div>
+  );
+}
+
+function MobileMessage({ msg, userInitials, streaming }: { msg: MobileMsg; userInitials: string; streaming: boolean }) {
   const [copied, setCopied] = useState(false);
 
   if (msg.role === "user") {
@@ -653,15 +680,14 @@ function MobileMessage({ msg, userInitials }: { msg: MobileMsg; userInitials: st
 
   return (
     <div className="flex items-start gap-2.5 mb-6">
+      {/* Amber circular icon — matches the prototype exactly */}
       <div className="w-8 h-8 rounded-full bg-amber-100 dark:bg-amber-900/40 border border-amber-200 dark:border-amber-700 flex items-center justify-center flex-shrink-0 mt-0.5 text-base select-none">
         🤖
       </div>
       <div className="flex-1 min-w-0">
+        {/* Preparing state — agent status block */}
         {msg.streaming && !msg.content && (
-          <div className="flex items-center gap-1.5 text-[13px] text-muted-foreground">
-            <Loader2 size={12} className="animate-spin" />
-            <span>Thinking…</span>
-          </div>
+          <AgentStatus mode={msg.mode} active={true} />
         )}
         {msg.content && (
           <div className="text-[15px] leading-[1.7] text-foreground prose prose-sm max-w-none">
@@ -670,8 +696,12 @@ function MobileMessage({ msg, userInitials }: { msg: MobileMsg; userInitials: st
             </ReactMarkdown>
           </div>
         )}
-        {msg.streaming && msg.content && (
-          <span className="inline-block w-[2px] h-4 bg-foreground align-middle ml-0.5 animate-pulse" />
+        {/* Blinking cursor while streaming */}
+        {msg.streaming && (
+          <span
+            className="inline-block w-[2px] bg-foreground align-middle ml-0.5"
+            style={{ height: 16, animation: "blink 1s step-end infinite" }}
+          />
         )}
         {!msg.streaming && !msg.error && msg.content && (
           <button
