@@ -28,6 +28,7 @@ import { UpgradeModal } from "@/components/czar/UpgradeModal";
 import { DashboardSidebar } from "@/components/dashboard/DashboardSidebar";
 import { MobileDashboardSheet } from "@/components/dashboard/MobileDashboardSheet";
 import { CorrectionModal } from "@/components/czar/CorrectionModal";
+import { CzarMobileLayout } from "@/components/czar/CzarMobileLayout";
 
 import { lazy, Suspense } from "react";
 import { WritingGlow, WelcomeAurora, CzarObjectScene } from "@/components/czar/CzarVisuals";
@@ -493,57 +494,29 @@ export default function CzarPage() {
           </div>
         )}
 
-        {/* Main content — full width, never pushed by sidebar */}
-        <div className="flex flex-col h-full relative min-w-0 min-h-0">
+        {/* ── DESKTOP main — hidden on mobile ── */}
+        <div className="hidden lg:flex flex-col flex-1 relative min-w-0 min-h-0">
           {messages.length === 0 && <WelcomeAurora />}
 
-          {/* Desktop: floating sidebar toggle (top-left) */}
+          {/* Floating sidebar toggle (top-left) */}
           <button
             onClick={() => setSidebarOpen(o => !o)}
-            className="hidden lg:flex absolute top-2 left-3 z-[60] p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+            className="absolute top-2 left-3 z-[60] p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
             title={sidebarOpen ? "Hide history" : "Show history"}
           >
             {sidebarOpen ? <PanelLeftClose size={16} /> : <PanelLeftOpen size={16} />}
           </button>
 
-          {/* Desktop: floating theme toggle (top-right) */}
-          <div className="hidden lg:flex absolute top-2 right-3 z-[60] items-center gap-1">
+          {/* Floating theme toggle (top-right) */}
+          <div className="absolute top-2 right-3 z-[60] flex items-center gap-1">
             <PsThemeToggle size={15} />
           </div>
-
-          {/* Mobile top bar — hidden on desktop */}
-          <header className="flex lg:hidden items-center gap-2 px-3 h-11 border-b border-border flex-shrink-0 bg-background/95 backdrop-blur-sm">
-            <button onClick={() => setMobileHistoryOpen(true)}
-              className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
-              title="Conversation history">
-              <Clock size={16} />
-            </button>
-            <button onClick={() => setMobileDashboardOpen(true)}
-              className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
-              title="Dashboard">
-              <LayoutGrid size={16} />
-            </button>
-            <div className="ml-auto flex items-center gap-1">
-              {streaming && (
-                <button onClick={stopStream}
-                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[12px] font-medium bg-destructive/10 text-destructive hover:bg-destructive/20 transition-colors">
-                  <Square size={11} className="fill-current" />
-                  <span>Stop</span>
-                </button>
-              )}
-              <PsThemeToggle size={15} />
-            </div>
-          </header>
 
           {/* Thread */}
           <div className={`flex-1 relative min-h-0 ${messages.length > 0 ? "overflow-y-auto" : "overflow-hidden"}`}>
             <WritingGlow visible={streaming || messages.length > 0} />
             {messages.length === 0 ? (
-              <WelcomeScreen
-                userName={userName}
-                userInitials={userInitials}
-                avatarUrl={avatarUrl}
-              />
+              <WelcomeScreen userName={userName} userInitials={userInitials} avatarUrl={avatarUrl} />
             ) : (
               <div className="relative max-w-3xl mx-auto px-4 py-6 pb-10 space-y-8">
                 {messages.map(msg => (
@@ -582,6 +555,24 @@ export default function CzarPage() {
               </p>
             </div>
           </div>
+        </div>
+
+        {/* ── MOBILE main — hidden on desktop ── */}
+        <div className="flex lg:hidden flex-col flex-1 min-w-0 min-h-0">
+          <CzarMobileLayout
+            messages={messages}
+            streaming={streaming}
+            convId={convId}
+            mode={mode}
+            onModeChange={setMode}
+            userName={userName}
+            userInitials={userInitials}
+            avatarUrl={avatarUrl}
+            onSend={handleCommandSend}
+            onStop={stopStream}
+            onNewConv={newConv}
+            onSelectConv={selectConv}
+          />
         </div>
 
       </div>{/* end right container */}
