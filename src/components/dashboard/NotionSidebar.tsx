@@ -2,13 +2,12 @@ import { useEffect, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import {
   Home, Search, Inbox, Plus, FileText, Settings, HelpCircle, LogOut,
-  ChevronRight, ShieldCheck, Download, MessageSquare,
+  ChevronRight, ShieldCheck, Download,
 } from "lucide-react";
 import { CzarIcon } from "@/components/icons/CzarIcon";
 import { PsAvatar } from "@/components/ps/PsAvatar";
 import { supabase } from "@/integrations/supabase/client";
 import { NotificationPanel } from "@/components/dashboard/NotificationPanel";
-import { MessagePanel } from "@/components/dashboard/MessagePanel";
 
 const ADMIN_EMAIL = "grey.izilein@gmail.com";
 
@@ -55,24 +54,19 @@ export function NotionSidebar({
   const [recents, setRecents] = useState<RecentProject[]>([]);
   const [unreadInbox, setUnreadInbox] = useState(0);
   const [inboxOpen, setInboxOpen] = useState(false);
-  const [messagesOpen, setMessagesOpen] = useState(false);
-  const [unreadMessages, setUnreadMessages] = useState(0);
-
   useEffect(() => {
     let cancelled = false;
     (async () => {
       const { data: u } = await supabase.auth.getUser();
       const uid = u?.user?.id;
       if (!uid) return;
-      const [{ data: projs }, { data: notifs }, { data: msgs }] = await Promise.all([
+      const [{ data: projs }, { data: notifs }] = await Promise.all([
         supabase.from("projects").select("id,title").eq("user_id", uid).order("updated_at", { ascending: false }).limit(8),
         supabase.from("notifications").select("id").eq("user_id", uid).eq("read", false).limit(99),
-        supabase.from("messages" as any).select("id").eq("user_id", uid).eq("from_admin", true).eq("read", false).limit(99),
       ]);
       if (cancelled) return;
       if (projs) setRecents(projs as RecentProject[]);
       setUnreadInbox(notifs?.length ?? 0);
-      setUnreadMessages((msgs as any[])?.length ?? 0);
     })();
     return () => { cancelled = true; };
   }, [location.pathname]);
@@ -91,8 +85,6 @@ export function NotionSidebar({
       active: isActive(() => location.pathname.startsWith("/czar")) },
     { icon: Inbox,    label: "Inbox",  onClick: () => { if (onOpenInbox) { onOpenInbox(); } else { setInboxOpen(true); } },
       active: inboxOpen, count: unreadInbox },
-    { icon: MessageSquare, label: "Messages", onClick: () => setMessagesOpen(true),
-      active: messagesOpen, count: unreadMessages },
   ];
 
   const bottom = [
@@ -239,11 +231,6 @@ export function NotionSidebar({
         open={inboxOpen}
         onClose={() => setInboxOpen(false)}
         onUnreadChange={(n) => { setUnreadInbox(n); onUnreadChange?.(n); }}
-      />
-      <MessagePanel
-        open={messagesOpen}
-        onClose={() => setMessagesOpen(false)}
-        onUnreadChange={(n) => setUnreadMessages(n)}
       />
     </aside>
   );
