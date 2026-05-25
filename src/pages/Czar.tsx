@@ -237,7 +237,8 @@ export default function CzarPage() {
             setMessages(prev => prev.map(m =>
               m.id === assistantMsgId ? { ...m, mode: e.mode as string } : m
             ));
-            setMode(e.mode as CzarMode);
+            // Only auto-update mode from "chat" — preserve explicit user selections
+            setMode(prev => prev === "chat" ? (e.mode as CzarMode) : prev);
           }
         },
         onAgent: (e: CzarAgentEvent) => {
@@ -340,6 +341,7 @@ export default function CzarPage() {
       await streamCzar({
         conversation_id: convId,
         user_message: text,
+        mode,
         attachments,
         settings: extraSettings,
       }, handlers, ctrl.signal);

@@ -1593,9 +1593,8 @@ Rules:
         }
       }
     } else {
-      // ── Image generation (chat mode — explicit /image command or ANY image/diagram/figure request) ──
-      // This now handles BOTH photorealistic images AND academic diagrams/charts/graphs
-      if (mode === "chat" && (req.settings?.generateImage === true || isImageRequest(req.user_message)) && !signal.aborted) {
+      // ── Image generation — explicit /image command works in any mode; natural requests only in chat ──
+      if ((req.settings?.generateImage === true || (mode === "chat" && isImageRequest(req.user_message))) && !signal.aborted) {
         write("agent", {
           id: "illustrator",
           name: "Illustrator",
