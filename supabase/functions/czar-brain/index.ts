@@ -537,6 +537,121 @@ async function getAuth(authHeader: string, svc: SupabaseClient): Promise<{ userI
 }
 
 // ---------------------------------------------------------------------------
+// Two-Pass Self-Correction (for high-stakes domains: academic, professional, legal)
+// Pass 1: Draft generation (non-streaming, fast)
+// Pass 2: Critique — identify AI-tells, citation issues, structural failures
+// Pass 3: Final polish incorporating critique
+// ---------------------------------------------------------------------------
+
+async function generateWithSelfCorrection(
+  system: string,
+  messages: { role: string; content: string }[],
+  domain: DomainType,
+  write: WriteFunction,
+  signal: AbortSignal,
+): Promise<string> {
+  const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
+  if (!apiKey) throw new Error("ANTHROPIC_API_KEY missing for self-correction");
+
+  const callSync = async (sys: string, msgs: { role: string; content: string }[]): Promise<string> => {
+    const resp = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "Content-Type": "application/json" },
+      body: JSON.stringify({ model: C_SONNET, max_tokens: 12000, system: sys, messages: msgs }),
+      signal,
+    });
+    if (!resp.ok) throw new Error(`Anthropic ${resp.status}`);
+    const d = await resp.json();
+    return d?.content?.[0]?.text ?? "";
+  };
+
+  // Pass 1: Draft
+  write("agent", { id: "corrector", name: "Self-Correction", status: "working", action: "Pass 1: Drafting…" });
+  const draft = await callSync(system + "\n\n[MODE: DRAFT — focus on completeness and accuracy]", messages);
+
+  if (signal.aborted || draft.length < 100) return draft;
+
+  // Pass 2: Critique
+  write("agent", { id: "corrector", name: "Self-Correction", status: "working", action: "Pass 2: Critiquing draft…" });
+
+  const domainCriteria: Record<string, string> = {
+    academic:     "Check: uncited empirical claims, fabricated citations, banned phrases (Furthermore/Moreover/In conclusion as openers), em-dash overuse, triple-item lists, heading hierarchy violations (H3 without H2), missing References section, passive voice obscuring agency.",
+    professional: "Check: conclusion buried after paragraph 1, vague recommendations ('consider improving' vs specific + time-bound), passive voice hiding agency, banned jargon (synergy/leverage/bandwidth/paradigm shift), numbers without context, no executive summary when >1500 words.",
+    journalistic: "Check: lede >35 words, unattributed claims, false balance, passive voice hiding who did what, editorialising in news copy, statistics without source, clichés (shocking revelation / sparked outrage).",
+  };
+
+  const critiquePrompt = `You are a strict editor. Review this draft against these specific criteria:
+
+${domainCriteria[domain] ?? "Check: AI fingerprint phrases, passive voice, structural issues, banned filler words."}
+
+Universal checks:
+- Banned phrases present: "It is important to note", "Delving into", "In the realm of", "Furthermore" (as opener), "In conclusion" (as opener), "This essay will explore", "Feel free to", "I hope this"
+- Three or more consecutive sentences with same structure/length
+- Preamble before real content / postscript after real content
+
+DRAFT TO REVIEW:
+${draft.slice(0, 6000)}
+
+Output ONLY a numbered list of specific, actionable fixes. Maximum 10 items. No prose. If no fixes needed, output: "PASS".`;
+
+  const critique = await callSync("You are a strict editor who identifies specific issues in drafts.", [{ role: "user", content: critiquePrompt }]);
+
+  if (signal.aborted || critique.trim() === "PASS" || critique.trim().length < 10) {
+    write("agent", { id: "corrector", name: "Self-Correction", status: "done", action: "Draft passed critique — no changes needed" });
+    return draft;
+  }
+
+  // Pass 3: Final polish (streaming to user)
+  write("agent", { id: "corrector", name: "Self-Correction", status: "working", action: "Pass 3: Applying corrections…" });
+
+  const finalSystem = system + `\n\n[MODE: FINAL POLISH — apply these specific fixes before outputting:]\n${critique}\n\nOutput ONLY the corrected final version. No preamble. No explanation of changes.`;
+
+  // Stream the final version directly to the user
+  const apiKeyFinal = Deno.env.get("ANTHROPIC_API_KEY")!;
+  const resp = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: { "x-api-key": apiKeyFinal, "anthropic-version": "2023-06-01", "Content-Type": "application/json" },
+    body: JSON.stringify({ model: C_SONNET, max_tokens: 16000, stream: true, system: finalSystem, messages }),
+    signal,
+  });
+
+  if (!resp.ok) {
+    // Fallback to draft if final pass fails
+    write("agent", { id: "corrector", name: "Self-Correction", status: "done", action: "Final pass failed — using reviewed draft" });
+    return draft;
+  }
+
+  const reader = resp.body!.getReader();
+  const dec = new TextDecoder();
+  let acc = "", buf = "";
+  try {
+    while (true) {
+      if (signal.aborted) break;
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      let nl: number;
+      while ((nl = buf.indexOf("\n")) !== -1) {
+        const line = buf.slice(0, nl).trim(); buf = buf.slice(nl + 1);
+        if (!line.startsWith("data:")) continue;
+        const payload = line.slice(5).trim();
+        if (!payload || payload === "[DONE]") continue;
+        try {
+          const ev = JSON.parse(payload);
+          if (ev.type === "content_block_delta" && ev.delta?.type === "text_delta" && ev.delta?.text) {
+            acc += ev.delta.text;
+            write("delta", { text: ev.delta.text });
+          }
+        } catch {}
+      }
+    }
+  } finally { reader.releaseLock(); }
+
+  write("agent", { id: "corrector", name: "Self-Correction", status: "done", action: `Self-correction complete — ${wordCount(acc)} words` });
+  return acc;
+}
+
+// ---------------------------------------------------------------------------
 // Streaming: Anthropic
 // ---------------------------------------------------------------------------
 
@@ -833,9 +948,16 @@ async function runMain(
     const msgLen = req.user_message.length;
     const useOpus = isPremium && msgLen > 400;
 
+    // High-stakes domains get two-pass self-correction when Anthropic is available
+    const isHighStakes = ["academic", "professional"].includes(domain);
+    const useSelfCorrection = isHighStakes && !!(Deno.env.get("ANTHROPIC_API_KEY")) && msgLen > 200;
+
     let fullResponse = "";
     try {
-      if (useOpus) {
+      if (useSelfCorrection) {
+        // Two-pass: Draft → Critique → Final (all via Anthropic)
+        fullResponse = await generateWithSelfCorrection(system, messages, domain, write, signal);
+      } else if (useOpus) {
         fullResponse = await streamAnthropic(C_OPUS, system, messages, true, write, signal);
       } else {
         fullResponse = await streamGoogle(G_FAST, system, messages, write, signal);

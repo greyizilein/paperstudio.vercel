@@ -11,116 +11,93 @@ import type {
 import { DEFAULT_DOMAIN_STYLES } from "@/types/czar";
 
 // ---------------------------------------------------------------------------
-// Signal catalogue
+// Signal catalogue — regex-based for precision (no false matches on substrings)
 // ---------------------------------------------------------------------------
 
+interface RegexSignal {
+  pattern: RegExp;
+  weight: number;
+  domain: DomainType;
+  styleHint?: StyleOverlay;
+}
+
+const REGEX_SIGNALS: RegexSignal[] = [
+  // Academic
+  { pattern: /\b(essay|research paper|literature review|dissertation|thesis|journal article|academic|scholarly|peer-reviewed)\b/i, weight: 0.8, domain: "academic" },
+  { pattern: /\b(citation|reference|bibliography|APA|Harvard|Chicago|IEEE|MLA|OSCOLA|Vancouver)\b/i, weight: 0.7, domain: "academic" },
+  { pattern: /\b(hypothesis|methodology|empirical|quantitative|qualitative|mixed methods)\b/i, weight: 0.8, domain: "academic" },
+  { pattern: /\b(theoretical framework|conceptual model|validity|reliability|systematic review)\b/i, weight: 0.85, domain: "academic" },
+  { pattern: /\b(coursework|assignment|case study|abstract|research gap)\b/i, weight: 0.7, domain: "academic" },
+  { pattern: /\b(critically analyse|compare and contrast|evaluate the extent|discuss the argument)\b/i, weight: 0.9, domain: "academic" },
+  { pattern: /\bAPA\b/, weight: 0.8, domain: "academic", styleHint: "apa" },
+  { pattern: /\bHarvard referencing\b/i, weight: 0.85, domain: "academic", styleHint: "harvard" },
+  { pattern: /\bChicago style\b/i, weight: 0.8, domain: "academic", styleHint: "chicago" },
+  { pattern: /\bMLA( format| style)?\b/i, weight: 0.8, domain: "academic", styleHint: "mla" },
+  { pattern: /\bIEEE\b/, weight: 0.8, domain: "academic", styleHint: "ieee" },
+  { pattern: /\bVancouver( style)?\b/i, weight: 0.75, domain: "academic", styleHint: "vancouver" },
+  { pattern: /\bOSCOLA\b/i, weight: 0.8, domain: "academic", styleHint: "oscola" },
+
+  // Fiction
+  { pattern: /\b(story|novel|chapter|short story|flash fiction|narrative|tale)\b/i, weight: 0.75, domain: "fiction" },
+  { pattern: /\b(character|protagonist|antagonist|dialogue|scene|plot)\b/i, weight: 0.55, domain: "fiction" },
+  { pattern: /\b(creative writing|opening chapter|flash fiction)\b/i, weight: 0.85, domain: "fiction" },
+  { pattern: /\b(stream of consciousness)\b/i, weight: 0.9, domain: "fiction", styleHint: "stream_of_consciousness" },
+  { pattern: /\b(minimalist prose|literary minimalism)\b/i, weight: 0.8, domain: "fiction", styleHint: "literary_minimalist" },
+  { pattern: /\b(screenplay|script|Fountain|INT\.|EXT\.|FADE IN)\b/i, weight: 0.9, domain: "fiction" },
+
+  // Professional
+  { pattern: /\b(report|proposal|brief|memo|executive summary|business plan)\b/i, weight: 0.8, domain: "professional" },
+  { pattern: /\b(technical documentation|API docs|SOP|procedure|guide)\b/i, weight: 0.85, domain: "professional", styleHint: "technical" },
+  { pattern: /\b(pitch deck|investor memo|white paper|board paper|policy brief)\b/i, weight: 0.85, domain: "professional", styleHint: "executive" },
+  { pattern: /\b(strategy document|management report|stakeholder|market analysis)\b/i, weight: 0.8, domain: "professional" },
+  { pattern: /\b(executive summary)\b/i, weight: 0.85, domain: "professional", styleHint: "executive" },
+  { pattern: /\b(consulting report|McKinsey|pyramid principle|BLUF)\b/i, weight: 0.9, domain: "professional", styleHint: "consulting" },
+
+  // Journalistic
+  { pattern: /\b(article|news story|feature|investigative|reporting)\b/i, weight: 0.7, domain: "journalistic" },
+  { pattern: /\b(lede|nut graf|inverted pyramid|byline|dateline)\b/i, weight: 0.9, domain: "journalistic" },
+  { pattern: /\b(source|attribution|fact.check|press release)\b/i, weight: 0.7, domain: "journalistic" },
+  { pattern: /\b(news article|breaking news)\b/i, weight: 0.9, domain: "journalistic", styleHint: "inverted_pyramid" },
+  { pattern: /\b(op.ed|editorial|opinion piece)\b/i, weight: 0.85, domain: "journalistic", styleHint: "editorial" },
+  { pattern: /\b(feature article|longform|profile piece)\b/i, weight: 0.85, domain: "journalistic", styleHint: "feature" },
+  { pattern: /\b(investigative report|data journalism)\b/i, weight: 0.9, domain: "journalistic", styleHint: "investigative" },
+
+  // Personal
+  { pattern: /\b(personal statement|scholarship application)\b/i, weight: 0.9, domain: "personal", styleHint: "personal_statement" },
+  { pattern: /\b(memoir|personal essay|narrative nonfiction)\b/i, weight: 0.85, domain: "personal", styleHint: "memoir" },
+  { pattern: /\b(reflective|reflection|reflective journal)\b/i, weight: 0.7, domain: "personal" },
+  { pattern: /\b(speech|toast|eulogy|wedding vows)\b/i, weight: 0.8, domain: "personal" },
+  { pattern: /\b(UCAS|application essay|common app)\b/i, weight: 0.9, domain: "personal", styleHint: "personal_statement" },
+  { pattern: /\b(journal entry|diary entry)\b/i, weight: 0.9, domain: "personal", styleHint: "journal" },
+  { pattern: /\b(cover letter)\b/i, weight: 0.7, domain: "personal" },
+
+  // Poetry
+  { pattern: /\b(poem|poetry|verse|stanza|line break|enjambment)\b/i, weight: 0.85, domain: "poetry" },
+  { pattern: /\b(sonnet|villanelle|ghazal|haiku|ode|elegy|free verse)\b/i, weight: 0.95, domain: "poetry", styleHint: "formal" },
+  { pattern: /\b(rhyme|meter|rhythm|alliteration|assonance|iambic)\b/i, weight: 0.7, domain: "poetry" },
+  { pattern: /\b(free verse)\b/i, weight: 0.9, domain: "poetry", styleHint: "free_verse" },
+  { pattern: /\b(lyric essay)\b/i, weight: 0.9, domain: "poetry", styleHint: "lyric_essay" },
+  { pattern: /\b(prose poem)\b/i, weight: 0.9, domain: "poetry", styleHint: "prose_poetry" },
+  { pattern: /\b(terza rima|blank verse|villanelle|sonnet)\b/i, weight: 0.95, domain: "poetry", styleHint: "formal" },
+];
+
+// Lightweight string-based signals kept for backward compatibility and performance
 const DOMAIN_SIGNALS: RouterSignal[] = [
-  // Academic — strong signals
-  { keyword: "essay", weight: 0.7, domain: "academic" },
   { keyword: "dissertation", weight: 0.9, domain: "academic" },
-  { keyword: "thesis", weight: 0.85, domain: "academic" },
-  { keyword: "literature review", weight: 0.95, domain: "academic" },
-  { keyword: "systematic review", weight: 0.95, domain: "academic" },
-  { keyword: "research paper", weight: 0.9, domain: "academic" },
-  { keyword: "academic essay", weight: 0.95, domain: "academic" },
-  { keyword: "coursework", weight: 0.85, domain: "academic" },
-  { keyword: "assignment", weight: 0.7, domain: "academic" },
-  { keyword: "references", weight: 0.5, domain: "academic" },
-  { keyword: "citation", weight: 0.6, domain: "academic" },
-  { keyword: "apa", weight: 0.8, domain: "academic", styleHint: "apa" },
-  { keyword: "harvard referencing", weight: 0.8, domain: "academic", styleHint: "harvard" },
-  { keyword: "chicago", weight: 0.7, domain: "academic", styleHint: "chicago" },
-  { keyword: "mla format", weight: 0.8, domain: "academic", styleHint: "mla" },
-  { keyword: "ieee", weight: 0.8, domain: "academic", styleHint: "ieee" },
-  { keyword: "vancouver", weight: 0.75, domain: "academic", styleHint: "vancouver" },
-  { keyword: "case study", weight: 0.7, domain: "academic" },
-  { keyword: "chapter", weight: 0.5, domain: "academic" },
-  { keyword: "abstract", weight: 0.7, domain: "academic" },
-  { keyword: "methodology", weight: 0.8, domain: "academic" },
-  { keyword: "empirical", weight: 0.8, domain: "academic" },
-  { keyword: "hypothesis", weight: 0.75, domain: "academic" },
-  { keyword: "critically analyse", weight: 0.9, domain: "academic" },
-  { keyword: "compare and contrast", weight: 0.85, domain: "academic" },
-  { keyword: "evaluate the extent", weight: 0.9, domain: "academic" },
-  { keyword: "discuss the argument", weight: 0.8, domain: "academic" },
   { keyword: "research gap", weight: 0.85, domain: "academic" },
-
-  // Fiction — strong signals
-  { keyword: "short story", weight: 0.9, domain: "fiction" },
-  { keyword: "novel", weight: 0.75, domain: "fiction" },
-  { keyword: "opening chapter", weight: 0.85, domain: "fiction" },
-  { keyword: "scene", weight: 0.5, domain: "fiction" },
-  { keyword: "character", weight: 0.4, domain: "fiction" },
-  { keyword: "dialogue", weight: 0.55, domain: "fiction" },
   { keyword: "flash fiction", weight: 0.9, domain: "fiction" },
-  { keyword: "narrative", weight: 0.45, domain: "fiction" },
-  { keyword: "protagonist", weight: 0.75, domain: "fiction" },
-  { keyword: "plot", weight: 0.55, domain: "fiction" },
-  { keyword: "creative writing", weight: 0.8, domain: "fiction" },
-  { keyword: "minimalist", weight: 0.6, domain: "fiction", styleHint: "literary_minimalist" },
-  { keyword: "stream of consciousness", weight: 0.85, domain: "fiction", styleHint: "stream_of_consciousness" },
-  { keyword: "first person", weight: 0.4, domain: "fiction" },
-  { keyword: "third person", weight: 0.35, domain: "fiction" },
-
-  // Professional — strong signals
-  { keyword: "business report", weight: 0.9, domain: "professional" },
-  { keyword: "executive summary", weight: 0.85, domain: "professional", styleHint: "executive" },
-  { keyword: "white paper", weight: 0.85, domain: "professional" },
   { keyword: "business proposal", weight: 0.9, domain: "professional" },
-  { keyword: "strategy document", weight: 0.85, domain: "professional" },
-  { keyword: "management report", weight: 0.85, domain: "professional" },
-  { keyword: "stakeholder", weight: 0.65, domain: "professional" },
-  { keyword: "recommendation", weight: 0.4, domain: "professional" },
-  { keyword: "mckinsey", weight: 0.9, domain: "professional", styleHint: "executive" },
-  { keyword: "consulting", weight: 0.7, domain: "professional", styleHint: "consulting" },
-  { keyword: "technical documentation", weight: 0.9, domain: "professional", styleHint: "technical" },
-  { keyword: "api documentation", weight: 0.9, domain: "professional", styleHint: "technical" },
-  { keyword: "memo", weight: 0.7, domain: "professional" },
-  { keyword: "board paper", weight: 0.9, domain: "professional", styleHint: "executive" },
-  { keyword: "market analysis", weight: 0.8, domain: "professional" },
-  { keyword: "cover letter", weight: 0.6, domain: "professional" },
-
-  // Journalistic — strong signals
-  { keyword: "news article", weight: 0.9, domain: "journalistic", styleHint: "inverted_pyramid" },
-  { keyword: "press release", weight: 0.85, domain: "journalistic" },
   { keyword: "investigative", weight: 0.85, domain: "journalistic", styleHint: "investigative" },
-  { keyword: "feature article", weight: 0.85, domain: "journalistic", styleHint: "feature" },
-  { keyword: "op-ed", weight: 0.85, domain: "journalistic", styleHint: "editorial" },
-  { keyword: "editorial", weight: 0.8, domain: "journalistic", styleHint: "editorial" },
-  { keyword: "blog post", weight: 0.6, domain: "journalistic" },
-  { keyword: "newsletter", weight: 0.65, domain: "journalistic" },
-  { keyword: "explainer", weight: 0.7, domain: "journalistic" },
-  { keyword: "article", weight: 0.35, domain: "journalistic" },
-  { keyword: "interview", weight: 0.4, domain: "journalistic" },
-  { keyword: "breaking news", weight: 0.9, domain: "journalistic", styleHint: "inverted_pyramid" },
-
-  // Personal — strong signals
   { keyword: "personal statement", weight: 0.9, domain: "personal", styleHint: "personal_statement" },
   { keyword: "memoir", weight: 0.9, domain: "personal", styleHint: "memoir" },
-  { keyword: "personal essay", weight: 0.85, domain: "personal" },
-  { keyword: "diary", weight: 0.85, domain: "personal", styleHint: "journal" },
-  { keyword: "journal entry", weight: 0.9, domain: "personal", styleHint: "journal" },
-  { keyword: "letter to", weight: 0.7, domain: "personal", styleHint: "personal_letter" },
-  { keyword: "reflective", weight: 0.6, domain: "personal" },
-  { keyword: "my experience", weight: 0.5, domain: "personal" },
-  { keyword: "my story", weight: 0.65, domain: "personal" },
   { keyword: "ucas", weight: 0.9, domain: "personal", styleHint: "personal_statement" },
-  { keyword: "application statement", weight: 0.85, domain: "personal", styleHint: "personal_statement" },
-
-  // Poetry — strong signals
   { keyword: "poem", weight: 0.95, domain: "poetry" },
-  { keyword: "poetry", weight: 0.9, domain: "poetry" },
   { keyword: "sonnet", weight: 0.95, domain: "poetry", styleHint: "formal" },
   { keyword: "villanelle", weight: 0.95, domain: "poetry", styleHint: "formal" },
   { keyword: "haiku", weight: 0.95, domain: "poetry", styleHint: "formal" },
   { keyword: "free verse", weight: 0.9, domain: "poetry", styleHint: "free_verse" },
   { keyword: "lyric essay", weight: 0.9, domain: "poetry", styleHint: "lyric_essay" },
   { keyword: "prose poem", weight: 0.9, domain: "poetry", styleHint: "prose_poetry" },
-  { keyword: "terza rima", weight: 0.95, domain: "poetry", styleHint: "formal" },
-  { keyword: "stanza", weight: 0.7, domain: "poetry" },
-  { keyword: "rhyme", weight: 0.5, domain: "poetry" },
-  { keyword: "meter", weight: 0.55, domain: "poetry" },
-  { keyword: "iambic", weight: 0.85, domain: "poetry", styleHint: "formal" },
 ];
 
 // ---------------------------------------------------------------------------
@@ -182,7 +159,7 @@ export function detectDomainAndStyle(
     }
   }
 
-  // 3. Signal scoring
+  // 3. Signal scoring — regex first (precise), then string fallback
   const scores: Record<DomainType, number> = {
     academic:     0,
     fiction:      0,
@@ -196,8 +173,21 @@ export function detectDomainAndStyle(
   const detectedSignals: string[] = [];
   const styleHints: Partial<Record<DomainType, StyleOverlay>> = {};
 
+  // Regex signals (higher precision — word-boundary aware)
+  for (const signal of REGEX_SIGNALS) {
+    const match = signal.pattern.exec(lower);
+    if (match) {
+      scores[signal.domain] = Math.min(1.0, scores[signal.domain] + signal.weight);
+      detectedSignals.push(match[0]);
+      if (signal.styleHint && !styleHints[signal.domain]) {
+        styleHints[signal.domain] = signal.styleHint as StyleOverlay;
+      }
+    }
+  }
+
+  // String signals (lightweight, for high-confidence keywords not covered above)
   for (const signal of DOMAIN_SIGNALS) {
-    if (lower.includes(signal.keyword)) {
+    if (lower.includes(signal.keyword) && scores[signal.domain] < 0.5) {
       scores[signal.domain] = Math.min(1.0, scores[signal.domain] + signal.weight);
       detectedSignals.push(signal.keyword);
       if (signal.styleHint && !styleHints[signal.domain]) {
