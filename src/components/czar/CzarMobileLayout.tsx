@@ -3,7 +3,6 @@ import { useNavigate } from "react-router-dom";
 import {
   Moon, Sun, Settings, Plus, X, Mic, Loader2, Check, Copy, ChevronRight,
 } from "lucide-react";
-import { CzarIcon } from "@/components/icons/CzarIcon";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { PsAvatar } from "@/components/ps/PsAvatar";
@@ -641,6 +640,28 @@ function SettingsPickerRow({
   );
 }
 
+function AgentStatus({ mode, active }: { mode?: string; active: boolean }) {
+  return (
+    <div className="text-[13px] text-muted-foreground mb-2.5">
+      <div className="flex items-center gap-1.5 font-medium mb-1">
+        <span className="text-[11px] text-muted-foreground">v</span>
+        <span>Preparing…</span>
+        <span className="w-2 h-2 rounded-full bg-green-500 inline-block" />
+      </div>
+      <div className="flex items-center gap-1.5 pl-4 border-l border-border text-[12px] text-muted-foreground">
+        <span className="w-2 h-2 rounded-full bg-border inline-block flex-shrink-0" />
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="flex-shrink-0">
+          <path d="M11 4H4a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+          <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+        </svg>
+        <span>CZAR Writer</span>
+        <span className="text-muted-foreground/40">·</span>
+        <span>{mode ?? "chat"} mode</span>
+      </div>
+    </div>
+  );
+}
+
 function MobileMessage({ msg, userInitials, streaming }: { msg: MobileMsg; userInitials: string; streaming: boolean }) {
   const [copied, setCopied] = useState(false);
 
@@ -657,20 +678,16 @@ function MobileMessage({ msg, userInitials, streaming }: { msg: MobileMsg; userI
     );
   }
 
-  const isCurrentlyStreaming = msg.streaming && streaming;
-
   return (
     <div className="flex items-start gap-2.5 mb-6">
-      <div className="w-8 h-8 rounded-full bg-background border border-border flex items-center justify-center flex-shrink-0 mt-0.5 text-foreground/80">
-        <CzarIcon size={18} streaming={isCurrentlyStreaming} />
+      {/* Amber circular icon — matches the prototype exactly */}
+      <div className="w-8 h-8 rounded-full bg-amber-100 dark:bg-amber-900/40 border border-amber-200 dark:border-amber-700 flex items-center justify-center flex-shrink-0 mt-0.5 text-base select-none">
+        🤖
       </div>
       <div className="flex-1 min-w-0">
-        <div className="text-[11px] font-semibold text-muted-foreground mb-1.5 tracking-wide">/ CZAR</div>
+        {/* Preparing state — agent status block */}
         {msg.streaming && !msg.content && (
-          <div className="flex items-center gap-1.5 text-[13px] text-muted-foreground">
-            <Loader2 size={12} className="animate-spin" />
-            <span>Thinking…</span>
-          </div>
+          <AgentStatus mode={msg.mode} active={true} />
         )}
         {msg.content && (
           <div className="text-[15px] leading-[1.7] text-foreground prose prose-sm max-w-none">
@@ -679,8 +696,12 @@ function MobileMessage({ msg, userInitials, streaming }: { msg: MobileMsg; userI
             </ReactMarkdown>
           </div>
         )}
-        {msg.streaming && msg.content && (
-          <span className="inline-block w-[2px] h-4 bg-foreground align-middle ml-0.5 animate-pulse" />
+        {/* Blinking cursor while streaming */}
+        {msg.streaming && (
+          <span
+            className="inline-block w-[2px] bg-foreground align-middle ml-0.5"
+            style={{ height: 16, animation: "blink 1s step-end infinite" }}
+          />
         )}
         {!msg.streaming && !msg.error && msg.content && (
           <button
