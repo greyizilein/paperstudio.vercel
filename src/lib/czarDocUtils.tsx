@@ -753,6 +753,38 @@ function ImageViewer({ src, alt }: { src: string; alt?: string }) {
   );
 }
 
+// ── Inline SVG renderer — shows the drawing immediately in chat ───────────────
+
+function InlineSvgPreview({ content }: { content: string }) {
+  const [open, setOpen] = useState(false);
+  // Strip script tags before rendering inline
+  const safe = content.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "");
+  const srcDoc = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{margin:0;display:flex;align-items:center;justify-content:center;height:100vh;background:transparent}svg{max-width:100%;max-height:100%;}</style></head><body>${safe}</body></html>`;
+  return (
+    <>
+      <div className="mb-4 border border-border rounded-xl overflow-hidden">
+        <iframe
+          srcDoc={srcDoc}
+          sandbox="allow-scripts"
+          className="w-full border-0 block"
+          style={{ height: "320px", background: "transparent" }}
+          title="SVG drawing"
+        />
+        <div className="flex items-center gap-2 px-3 py-2 bg-secondary/40 border-t border-border">
+          <span className="text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 flex-shrink-0">SVG</span>
+          <button
+            onClick={() => setOpen(true)}
+            className="ml-auto text-[11px] text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1"
+          >
+            <ExternalLink size={10} /> View / download
+          </button>
+        </div>
+      </div>
+      {open && <ArtifactModal language="svg" content={content} onClose={() => setOpen(false)} />}
+    </>
+  );
+}
+
 // ── Chat markdown components (for chat bubbles — with artifacts + code copy) ──
 
 const ARTIFACT_LANGUAGES = new Set(["html", "svg", "mermaid", "jsx", "tsx"]);
@@ -767,9 +799,16 @@ export const chatMarkdownComponents = {
     const child = (Array.isArray(children) ? children[0] : children) as React.ReactElement<any>;
     const className = child?.props?.className || "";
     const match = className.match(/language-(\w+)/);
-    const language = (match?.[1] || "").toLowerCase();
+    const rawLang = (match?.[1] || "").toLowerCase();
     const content = String(child?.props?.children || "").replace(/\n$/, "");
 
+    // Normalize xml → svg when the content is actually an SVG document
+    const language = (rawLang === "xml" && content.trimStart().startsWith("<svg")) ? "svg" : rawLang;
+
+    // SVG renders inline immediately so the user sees the drawing
+    if (language === "svg") {
+      return <InlineSvgPreview content={content} />;
+    }
     if (ARTIFACT_LANGUAGES.has(language)) {
       return <ArtifactCard language={language} content={content} />;
     }
