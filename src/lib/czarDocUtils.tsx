@@ -4,7 +4,8 @@ import {
   Table, TableRow, TableCell, WidthType,
   Footer, PageNumber,
 } from "docx";
-import { Copy, Check, X, Download, Code2, ExternalLink, ZoomIn } from "lucide-react";
+import { Copy, Check, X, Download, Code2, ExternalLink, ZoomIn, Play, Square, AlertCircle } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 
 export function stripMarkdown(text: string): string {
   return text
@@ -366,8 +367,17 @@ export function buildDocx(markdown: string): Document {
 
 // ── Code block with copy button ───────────────────────────────────────────────
 
+const RUNNABLE_LANGUAGES = new Set(["python", "python3", "javascript", "typescript", "r", "julia", "bash", "shell"]);
+
+interface RunResult { stdout: string; stderr: string; exitCode: number; version?: string }
+
 function CodeBlock({ language, content }: { language?: string; content: string }) {
   const [copied, setCopied] = useState(false);
+  const [runResult, setRunResult] = useState<RunResult | null>(null);
+  const [isRunning, setIsRunning] = useState(false);
+
+  const lang = (language ?? "").toLowerCase();
+  const canRun = RUNNABLE_LANGUAGES.has(lang);
 
   const handleCopy = () => {
     navigator.clipboard.writeText(content).catch(() => {});
@@ -377,16 +387,51 @@ function CodeBlock({ language, content }: { language?: string; content: string }
 
   const handleDownload = () => {
     const ext: Record<string, string> = {
-      python: "py", javascript: "js", typescript: "ts", jsx: "jsx", tsx: "tsx",
+      python: "py", python3: "py", javascript: "js", typescript: "ts", jsx: "jsx", tsx: "tsx",
       css: "css", html: "html", json: "json", yaml: "yaml", yml: "yml",
-      bash: "sh", shell: "sh", sql: "sql", markdown: "md", md: "md",
+      bash: "sh", shell: "sh", sql: "sql", markdown: "md", md: "md", r: "r", julia: "jl",
     };
-    const filename = `code.${ext[language || ""] || language || "txt"}`;
+    const filename = `code.${ext[lang] || lang || "txt"}`;
     const blob = new Blob([content], { type: "text/plain" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url; a.download = filename; a.click();
     URL.revokeObjectURL(url);
+  };
+
+  const handleRun = async () => {
+    if (isRunning) return;
+    setIsRunning(true);
+    setRunResult(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const resp = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/run-code`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session?.access_token ?? ""}`,
+          },
+          body: JSON.stringify({ code: content, language: lang }),
+        },
+      );
+      if (!resp.ok) {
+        setRunResult({ stdout: "", stderr: `Request failed: HTTP ${resp.status}`, exitCode: 1 });
+        return;
+      }
+      const result = await resp.json();
+      setRunResult({
+        stdout: result.stdout ?? "",
+        stderr: result.stderr ?? "",
+        exitCode: result.exitCode ?? (result.error ? 1 : 0),
+        version: result.version,
+      });
+    } catch (err: any) {
+      setRunResult({ stdout: "", stderr: err?.message ?? "Run failed", exitCode: 1 });
+    } finally {
+      setIsRunning(false);
+    }
   };
 
   return (
@@ -396,6 +441,17 @@ function CodeBlock({ language, content }: { language?: string; content: string }
           {language || "code"}
         </span>
         <div className="flex items-center gap-1.5">
+          {canRun && (
+            <button
+              onClick={handleRun}
+              disabled={isRunning}
+              className="text-[10px] text-muted-foreground hover:text-emerald-500 flex items-center gap-1 px-2 py-0.5 rounded hover:bg-secondary transition-colors disabled:opacity-40"
+              title="Run code"
+            >
+              {isRunning ? <Square size={10} className="text-orange-400 animate-pulse" /> : <Play size={10} />}
+              <span>{isRunning ? "Running…" : "Run"}</span>
+            </button>
+          )}
           <button
             onClick={handleDownload}
             className="text-[10px] text-muted-foreground hover:text-foreground flex items-center gap-1 px-2 py-0.5 rounded hover:bg-secondary transition-colors"
@@ -415,6 +471,29 @@ function CodeBlock({ language, content }: { language?: string; content: string }
       <pre className="bg-[#1e1e2e] text-[#cdd6f4] p-4 overflow-x-auto text-xs font-mono leading-relaxed m-0 whitespace-pre">
         <code>{content}</code>
       </pre>
+      {runResult !== null && (
+        <div className="border-t border-border bg-[#12121a]">
+          <div className="flex items-center gap-1.5 px-3.5 py-1.5 border-b border-border/50">
+            {runResult.exitCode === 0
+              ? <Check size={10} className="text-emerald-400" />
+              : <AlertCircle size={10} className="text-red-400" />}
+            <span className="text-[10px] font-mono text-muted-foreground">
+              {runResult.exitCode === 0 ? "OK" : `Exit ${runResult.exitCode}`}
+              {runResult.version ? ` · ${lang} ${runResult.version}` : ""}
+            </span>
+          </div>
+          {runResult.stdout && (
+            <pre className="text-[#a6e3a1] text-xs font-mono p-3.5 overflow-x-auto whitespace-pre m-0 leading-relaxed">
+              {runResult.stdout}
+            </pre>
+          )}
+          {runResult.stderr && (
+            <pre className="text-[#f38ba8] text-xs font-mono px-3.5 pb-3.5 overflow-x-auto whitespace-pre m-0 leading-relaxed">
+              {runResult.stderr}
+            </pre>
+          )}
+        </div>
+      )}
     </div>
   );
 }

@@ -331,6 +331,126 @@ Rules: sections must be numbered; words per section must be specific integers; e
 // Gemini Imagen — photorealistic image generation
 // ---------------------------------------------------------------------------
 
+// ── General web search ────────────────────────────────────────────────────────
+
+function shouldSearchWeb(message: string, settings: Record<string, unknown>): boolean {
+  // Explicit opt-in/opt-out via settings
+  if (settings?.webSearch === true) return true;
+  if (settings?.webSearch === false) return false;
+
+  const lower = message.toLowerCase();
+
+  // Writing/generation tasks do NOT need web search
+  if (/\b(write|draft|essay|poem|story|report|letter|document|chapter|outline|summarise|rewrite|edit|proofread|paraphrase)\b/.test(lower)) return false;
+
+  // Explicit search triggers
+  if (/\b(search for|look up|find out|google|what happened|did .+ happen|is .+ true|fact.?check)\b/.test(lower)) return true;
+
+  // Current events / time-sensitive
+  if (/\b(today|yesterday|this week|this month|this year|2025|2026|recently|latest|current|right now|breaking|just|now)\b/.test(lower)) return true;
+
+  // Questions about entities (companies, people, products)
+  if (/^(who is|what is|where is|when did|how much|how many|what are the|is it true)\b/i.test(lower)) return true;
+
+  // News / events / announcements
+  if (/\b(news|announcement|release|launched|update|version|winner|score|result|election|war|conflict|crisis)\b/.test(lower)) return true;
+
+  return false;
+}
+
+async function searchGeneralWeb(
+  query: string,
+  signal: AbortSignal,
+): Promise<string> {
+  const tavilyKey = Deno.env.get("TAVILY_API_KEY");
+  const serperKey = Deno.env.get("SERPER_API_KEY");
+
+  if (!tavilyKey && !serperKey) return "";
+
+  interface WebResult { title: string; url: string; snippet: string; date?: string }
+  const results: WebResult[] = [];
+  let directAnswer = "";
+
+  // Tavily (preferred — returns a direct AI answer + sources)
+  if (tavilyKey) {
+    try {
+      const resp = await fetch("https://api.tavily.com/search", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          api_key: tavilyKey,
+          query: query.slice(0, 300),
+          search_depth: "basic",
+          max_results: 5,
+          include_answer: true,
+        }),
+        signal,
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        if (data.answer) directAnswer = data.answer;
+        for (const r of (data.results ?? []).slice(0, 5)) {
+          results.push({
+            title: r.title ?? "",
+            url: r.url ?? "",
+            snippet: (r.content ?? r.snippet ?? "").slice(0, 350),
+            date: r.published_date,
+          });
+        }
+      }
+    } catch { /* non-fatal */ }
+  }
+
+  // Serper general search fallback
+  if (results.length === 0 && serperKey) {
+    try {
+      const resp = await fetch("https://google.serper.dev/search", {
+        method: "POST",
+        headers: { "X-API-KEY": serperKey, "Content-Type": "application/json" },
+        body: JSON.stringify({ q: query.slice(0, 300), num: 5 }),
+        signal,
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        // Answer box
+        if (data.answerBox?.answer) directAnswer = data.answerBox.answer;
+        else if (data.answerBox?.snippet) directAnswer = data.answerBox.snippet;
+        for (const r of (data.organic ?? []).slice(0, 5)) {
+          results.push({
+            title: r.title ?? "",
+            url: r.link ?? "",
+            snippet: (r.snippet ?? "").slice(0, 350),
+            date: r.date,
+          });
+        }
+      }
+    } catch { /* non-fatal */ }
+  }
+
+  if (!directAnswer && results.length === 0) return "";
+
+  const lines: string[] = [
+    `\n\n[WEB SEARCH — query: "${query.slice(0, 100)}"]`,
+  ];
+
+  if (directAnswer) {
+    lines.push(`Direct answer: ${directAnswer}`);
+  }
+
+  for (let i = 0; i < results.length; i++) {
+    const r = results[i];
+    const date = r.date ? ` (${r.date})` : "";
+    lines.push(`\n[${i + 1}] ${r.title}${date}\nURL: ${r.url}\n${r.snippet}`);
+  }
+
+  lines.push(
+    "\n[END WEB RESULTS]",
+    "\nUse the above search results to answer accurately. Cite sources by URL when making factual claims. Do not fabricate information beyond what is provided.",
+  );
+
+  return lines.join("\n");
+}
+
 function isPhotoRequest(message: string): boolean {
   const lower = message.toLowerCase();
   const actionWord = /\b(generate|create|make|draw|produce|show me|give me|render)\b/.test(lower);
@@ -483,7 +603,14 @@ async function ingestFiles(
       const isAudio = att.mime.startsWith("audio/") ||
         /\.(mp3|wav|m4a|ogg|webm|flac|aac)$/i.test(att.filename);
 
-      if (isText) {
+      const isSvg = att.mime === "image/svg+xml" || att.filename.toLowerCase().endsWith(".svg");
+
+      const isImage = !isSvg && (
+        att.mime.startsWith("image/") ||
+        /\.(jpg|jpeg|png|gif|webp|bmp|tiff|ico|avif|heic)$/i.test(att.filename)
+      );
+
+      if (isText || isSvg) {
         text = await data.text();
       } else if (isPdf || isAudio) {
         // Use Gemini multimodal for PDFs and audio
@@ -497,6 +624,22 @@ async function ingestFiles(
           text = isPdf
             ? `[PDF: ${att.filename} — extraction returned limited content. Please paste key sections directly.]`
             : `[Audio: ${att.filename} — transcription failed or returned empty.]`;
+        }
+      } else if (isImage) {
+        // Vision: describe the image in full detail via Gemini multimodal
+        const buf = await data.arrayBuffer();
+        const b64 = btoa(String.fromCharCode(...new Uint8Array(buf)));
+        const instruction =
+          "Describe every element of this image with full precision. Transcribe all visible text exactly. " +
+          "For charts/graphs: describe type, axes, labels, data values, trends. " +
+          "For tables: reproduce all rows and columns in markdown table format. " +
+          "For diagrams: describe structure, labels, and relationships. " +
+          "For screenshots: describe UI elements and all visible content. " +
+          "For photographs: describe subjects, setting, composition, and any text. " +
+          "Be exhaustive — the description must let someone fully understand the image without seeing it.";
+        text = await extractWithGemini(b64, att.mime, instruction, signal);
+        if (!text || text.length < 10) {
+          text = `[Image: ${att.filename} — visual content could not be analysed. Try a clearer image.]`;
         }
       } else {
         text = `[File: ${att.filename} (${att.mime}) — binary format, not extractable as text.]`;
@@ -1370,6 +1513,18 @@ Rules:
       return;
     }
 
+    // ── Web search pre-flight (chat mode only — orchestrated modes have their own search) ──
+    let webContext = "";
+    if (mode === "chat" && !signal.aborted && shouldSearchWeb(req.user_message, req.settings ?? {})) {
+      write("agent", { id: "searcher", name: "Web Search", status: "working", action: "Searching the web…" });
+      try {
+        webContext = await searchGeneralWeb(req.user_message, signal);
+      } catch { /* non-fatal */ }
+      if (webContext) {
+        write("agent", { id: "searcher", name: "Web Search", status: "done", action: "Results injected" });
+      }
+    }
+
     const isOrchestratedMode = mode === "write" || mode === "research" || mode === "literature_review" || mode === "legal";
 
     if (isOrchestratedMode && !signal.aborted) {
@@ -1454,7 +1609,7 @@ Rules:
         action: `${mode} mode`,
       });
 
-      const userContent = req.user_message + (fileContext ? "\n\n" + fileContext : "");
+      const userContent = req.user_message + (fileContext ? "\n\n" + fileContext : "") + webContext;
       const messages = [
         ...history.slice(-20),
         { role: "user", content: userContent },
