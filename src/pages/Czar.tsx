@@ -30,7 +30,7 @@ import { MobileDashboardSheet } from "@/components/dashboard/MobileDashboardShee
 import { CorrectionModal } from "@/components/czar/CorrectionModal";
 
 import { lazy, Suspense } from "react";
-import { AgentActivityDock, WritingGlow, WelcomeAurora, CzarObjectScene } from "@/components/czar/CzarVisuals";
+import { WritingGlow, WelcomeAurora, CzarObjectScene } from "@/components/czar/CzarVisuals";
 const CommandInput = lazy(() => import("@/components/czar/CommandInput").then(m => ({ default: m.CommandInput })));
 
 // ── Types ──────────────────────────────────────────────────────────
@@ -586,7 +586,6 @@ export default function CzarPage() {
 
       </div>{/* end right container */}
 
-      <AgentActivityDock agents={agents} visible={streaming} />
 
       <UpgradeModal open={showUpgrade} onClose={() => setShowUpgrade(false)} reason={upgradeReason} />
 
