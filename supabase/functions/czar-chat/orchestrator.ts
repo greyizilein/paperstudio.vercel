@@ -723,6 +723,9 @@ async function generateImageGemini(
 ): Promise<{ b64: string; mime: string } | null> {
   try {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_IMAGE}:generateContent?key=${apiKey}`;
+    const enhancedPrompt = `Generate a professional academic diagram/figure: ${prompt}. 
+Clean white background. Scientific illustration style. No decorative elements. High contrast. Suitable for an academic paper.
+IMPORTANT: This must be an actual image/visualisation, NOT code. Do not generate Python, JavaScript, R, or any programming code.`;
     const resp = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -730,7 +733,7 @@ async function generateImageGemini(
         contents: [{
           role: "user",
           parts: [{
-            text: `Generate a professional academic diagram: ${prompt}. Clean white background. Scientific illustration style. No decorative elements. High contrast. Suitable for an academic paper.`,
+            text: enhancedPrompt,
           }],
         }],
         generationConfig: {
@@ -758,12 +761,21 @@ async function identifyFigureOpportunities(
   discipline: string,
   signal: AbortSignal,
 ): Promise<string[]> {
-  const system = `Identify up to 2 places in this academic document where a diagram or structural figure would materially strengthen understanding.
-For each, write ONE concise sentence describing exactly what the diagram should show.
+  const system = `Identify up to 3 places in this academic document where a diagram or figure would materially strengthen understanding.
+For each, write ONE concise sentence describing exactly what the figure should show.
 Return ONLY a JSON array of strings: ["description 1", "description 2"]
 If no figure would add value, return [].
-Only suggest: conceptual frameworks, process flows, hierarchical models, comparative structures.
-Do NOT suggest bar charts, pie charts, or data visualisations.`;
+
+Suggest figures for:
+- Conceptual frameworks and theoretical models
+- Process flows and workflows
+- Hierarchical models and taxonomies
+- Comparative structures and matrices
+- Data visualisations (bar charts, line graphs, scatter plots) when data is presented
+- Timelines showing chronological development
+- Mind maps showing relationships between concepts
+
+Be specific about what type of figure is needed and what it should display.`;
 
   try {
     // Use Flash-Lite for this simple classification task — fast and cheap

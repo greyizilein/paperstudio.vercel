@@ -451,6 +451,30 @@ async function searchGeneralWeb(
   return lines.join("\n");
 }
 
+function isImageRequest(message: string): boolean {
+  const lower = message.toLowerCase();
+  
+  // Check for explicit image generation commands
+  const actionWord = /\b(generate|create|make|draw|produce|show me|give me|render|plot|visualize|visualise)\b/.test(lower);
+  
+  // Photorealistic requests
+  const photoWord = /\b(photo|photograph|photorealistic|realistic image|picture|portrait|landscape|painting|artwork|illustration)\b/.test(lower);
+  
+  // Academic/scientific visualization requests (these should generate actual images, NOT Python code)
+  const diagramWord = /\b(diagram|chart|flowchart|graph|table|timeline|mindmap|svg|figure|visualization|visualisation|plot|bar chart|pie chart|line graph|scatter plot|histogram|infographic)\b/.test(lower);
+  
+  // Explicit anti-code signals
+  const noCodeSignals = /\b(no code|no python|no script|don't write code|actual image|generate image|as an? (image|figure|diagram|chart))\b/.test(lower);
+  
+  // Return true if:
+  // 1. Action word + any image/diagram term, OR
+  // 2. Explicit no-code request with visualization intent
+  if (actionWord && (photoWord || diagramWord)) return true;
+  if (noCodeSignals && diagramWord) return true;
+  
+  return false;
+}
+
 function isPhotoRequest(message: string): boolean {
   const lower = message.toLowerCase();
   const actionWord = /\b(generate|create|make|draw|produce|show me|give me|render)\b/.test(lower);
@@ -466,6 +490,20 @@ async function generateImage(
   const apiKey = Deno.env.get("GOOGLE_AI_API_KEY");
   if (!apiKey) return null;
 
+  // Enhance the prompt for academic/scientific visualisations
+  const enhancedPrompt = `${prompt}
+  
+IMPORTANT: Generate an ACTUAL IMAGE/visualisation. Do NOT write Python code, JavaScript code, R code, or any programming code.
+This must be a rendered image file (PNG/JPEG), not code instructions.
+
+Style requirements for academic figures:
+- Clean white background
+- Scientific illustration style
+- High contrast for readability
+- No decorative elements
+- Professional typography
+- Clear labels and legends if applicable`;
+
   // Try Imagen 3 first (highest quality)
   try {
     const resp = await fetch(
@@ -474,7 +512,7 @@ async function generateImage(
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          instances: [{ prompt }],
+          instances: [{ prompt: enhancedPrompt }],
           parameters: { sampleCount: 1, aspectRatio: "4:3" },
         }),
         signal,
@@ -496,7 +534,7 @@ async function generateImage(
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          contents: [{ role: "user", parts: [{ text: prompt }] }],
+          contents: [{ role: "user", parts: [{ text: enhancedPrompt }] }],
           generationConfig: { responseModalities: ["IMAGE"] },
         }),
         signal,
@@ -1555,8 +1593,9 @@ Rules:
         }
       }
     } else {
-      // ── Image generation (chat mode — explicit /image command or natural photo request) ──
-      if (mode === "chat" && (req.settings?.generateImage === true || isPhotoRequest(req.user_message)) && !signal.aborted) {
+      // ── Image generation (chat mode — explicit /image command or ANY image/diagram/figure request) ──
+      // This now handles BOTH photorealistic images AND academic diagrams/charts/graphs
+      if (mode === "chat" && (req.settings?.generateImage === true || isImageRequest(req.user_message)) && !signal.aborted) {
         write("agent", {
           id: "illustrator",
           name: "Illustrator",
@@ -1597,7 +1636,7 @@ Rules:
           id: "illustrator",
           name: "Illustrator",
           status: "error",
-          action: "Image generation unavailable — responding with SVG",
+          action: "Image generation unavailable",
         });
       }
 
