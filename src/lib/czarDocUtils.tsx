@@ -122,7 +122,7 @@ function buildMarkdownTable(rows: string[]): Table {
 // Priority: first H1 → first H2 → first non-empty sentence (≤8 words).
 
 export function docxFilename(markdown: string): string {
-  const lines = markdown.split("\n");
+  const lines = stripYAMLFrontmatter(markdown).split("\n");
 
   // Try H1 then H2
   for (const prefix of ["# ", "## "]) {
@@ -159,9 +159,18 @@ function sanitiseFilename(title: string): string {
 // Produces Calibri 11pt body · 1-inch margins · styled headings · page footer.
 // Base64 images are stripped and replaced with a figure placeholder.
 
+function stripYAMLFrontmatter(markdown: string): string {
+  if (!markdown.startsWith("---")) return markdown;
+  const end = markdown.indexOf("\n---", 3);
+  if (end === -1) return markdown;
+  return markdown.slice(end + 4).trimStart();
+}
+
 export function buildDocx(markdown: string): Document {
+  // Strip YAML frontmatter if present (Pandoc-style --- blocks)
+  const withoutYAML = stripYAMLFrontmatter(markdown);
   // Strip base64-embedded images — replace with italic figure caption
-  const cleaned = markdown.replace(
+  const cleaned = withoutYAML.replace(
     /!\[([^\]]*)\]\(data:[^)]+\)/g,
     (_, alt) => `\n*[Figure${alt ? `: ${alt}` : ""}]*\n`
   );
