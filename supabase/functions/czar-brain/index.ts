@@ -7,6 +7,7 @@
 // Returns: SSE stream
 
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { runDeterministicAudit } from "./auditor.ts";
 
 // ---------------------------------------------------------------------------
 // Inline types (Deno edge cannot import from src/)
@@ -571,6 +572,12 @@ async function generateWithSelfCorrection(
 
   if (signal.aborted || draft.length < 100) return draft;
 
+  // Deterministic audit on draft — findings fed into Pass 2 critique
+  const deterministicResult = runDeterministicAudit(draft, domain);
+  const deterministicBlock = deterministicResult.issues.length > 0
+    ? `\nDeterministic audit failures (must fix):\n${deterministicResult.issues.map((i) => `- ${i}`).join("\n")}\n`
+    : "";
+
   // Pass 2: Critique
   write("agent", { id: "corrector", name: "Self-Correction", status: "working", action: "Pass 2: Critiquing draft…" });
 
@@ -588,7 +595,7 @@ Universal checks:
 - Banned phrases present: "It is important to note", "Delving into", "In the realm of", "Furthermore" (as opener), "In conclusion" (as opener), "This essay will explore", "Feel free to", "I hope this"
 - Three or more consecutive sentences with same structure/length
 - Preamble before real content / postscript after real content
-
+${deterministicBlock}
 DRAFT TO REVIEW:
 ${draft.slice(0, 6000)}
 
@@ -976,6 +983,19 @@ async function runMain(
     }
 
     write("agent", { id: "brain", name: "CZAR Brain", status: "done", action: `${wordCount(fullResponse)} words` });
+
+    // Post-generation deterministic audit (monitoring + UI feedback for non-self-correction path)
+    if (!useSelfCorrection && fullResponse.length > 100) {
+      const audit = runDeterministicAudit(fullResponse, domain, req.settings ?? {});
+      if (!audit.passed) {
+        write("agent", {
+          id: "auditor",
+          name: "Quality Audit",
+          status: "warning",
+          action: `${audit.issues.length} issue(s): ${audit.issues.slice(0, 2).join("; ")}${audit.issues.length > 2 ? "…" : ""}`,
+        });
+      }
+    }
 
     // 11. Build checkpoint (fast heuristic + async deep extraction)
     let checkpoint = createCheckpointFromContent(domain, style, fullResponse, req.user_message, priorCheckpoint, turnCount);
