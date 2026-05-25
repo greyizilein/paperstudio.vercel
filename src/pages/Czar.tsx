@@ -130,7 +130,9 @@ export default function CzarPage() {
 
   const threadEndRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    threadEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    requestAnimationFrame(() => {
+      threadEndRef.current?.scrollIntoView({ behavior: "instant" as ScrollBehavior });
+    });
   }, [messages]);
 
   const [showUpgrade, setShowUpgrade] = useState(false);
@@ -461,122 +463,128 @@ export default function CzarPage() {
         userEmail={user.email} avatarUrl={avatarUrl}
       />
 
-      {/* Conversation history sidebar — desktop */}
-      <aside className={`flex-shrink-0 border-r border-border overflow-hidden transition-all duration-200 ${sidebarOpen ? "w-[220px]" : "w-0"} hidden lg:block`}>
-        {sidebarOpen && <ConvSidebar currentId={convId} onSelect={selectConv} onNew={newConv} />}
-      </aside>
+      {/* Right container — relative so conv sidebar can overlay without shifting layout */}
+      <div className="flex-1 relative overflow-hidden flex flex-col min-w-0">
 
-      {/* Mobile history drawer */}
-      {mobileHistoryOpen && (
-        <div className="lg:hidden fixed inset-0 z-[300] flex">
-          <div className="absolute inset-0 bg-foreground/40 backdrop-blur-sm" onClick={() => setMobileHistoryOpen(false)} />
-          <div className="relative w-[280px] max-w-[85vw] h-full bg-sidebar shadow-2xl flex flex-col animate-in slide-in-from-left duration-200">
-            <div className="flex items-center justify-between px-3 pt-3 pb-2 border-b border-border flex-shrink-0">
-              <span className="text-[12px] font-bold uppercase tracking-widest text-muted-foreground">History</span>
-              <button onClick={() => setMobileHistoryOpen(false)} className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary">
-                <X size={15} />
-              </button>
-            </div>
-            <div className="flex-1 min-h-0">
-              <ConvSidebar currentId={convId} onSelect={selectConv} onNew={() => { newConv(); setMobileHistoryOpen(false); }} />
+        {/* Conversation history sidebar — desktop overlay (slides in, no layout shift) */}
+        <aside className={`hidden lg:flex flex-col absolute top-0 left-0 bottom-0 z-40 w-[220px] bg-sidebar border-r border-border overflow-hidden transition-transform duration-200 ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}`}>
+          <ConvSidebar currentId={convId} onSelect={selectConv} onNew={newConv} />
+        </aside>
+        {/* Click-away backdrop when sidebar is open on desktop */}
+        {sidebarOpen && (
+          <div className="hidden lg:block absolute inset-0 z-30" onClick={() => setSidebarOpen(false)} />
+        )}
+
+        {/* Mobile history drawer */}
+        {mobileHistoryOpen && (
+          <div className="lg:hidden fixed inset-0 z-[300] flex">
+            <div className="absolute inset-0 bg-foreground/40 backdrop-blur-sm" onClick={() => setMobileHistoryOpen(false)} />
+            <div className="relative w-[280px] max-w-[85vw] h-full bg-sidebar shadow-2xl flex flex-col animate-in slide-in-from-left duration-200">
+              <div className="flex items-center justify-between px-3 pt-3 pb-2 border-b border-border flex-shrink-0">
+                <span className="text-[12px] font-bold uppercase tracking-widest text-muted-foreground">History</span>
+                <button onClick={() => setMobileHistoryOpen(false)} className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary">
+                  <X size={15} />
+                </button>
+              </div>
+              <div className="flex-1 min-h-0">
+                <ConvSidebar currentId={convId} onSelect={selectConv} onNew={() => { newConv(); setMobileHistoryOpen(false); }} />
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Main */}
-      <div className="flex-1 flex flex-col min-w-0 min-h-0">
-        {messages.length === 0 && <WelcomeAurora />}
+        {/* Main content — full width, never pushed by sidebar */}
+        <div className="flex flex-col h-full relative min-w-0 min-h-0">
+          {messages.length === 0 && <WelcomeAurora />}
 
-        {/* Top bar */}
-        <header className="flex items-center gap-2 px-3 h-11 border-b border-border flex-shrink-0 bg-background/95 backdrop-blur-sm">
-          {/* Desktop: sidebar toggle */}
-          <button onClick={() => setSidebarOpen(o => !o)}
-            className="hidden lg:flex p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
-            title={sidebarOpen ? "Hide sidebar" : "Show sidebar"}>
+          {/* Desktop: floating sidebar toggle (top-left) */}
+          <button
+            onClick={() => setSidebarOpen(o => !o)}
+            className="hidden lg:flex absolute top-2 left-3 z-[60] p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+            title={sidebarOpen ? "Hide history" : "Show history"}
+          >
             {sidebarOpen ? <PanelLeftClose size={16} /> : <PanelLeftOpen size={16} />}
           </button>
 
-          {/* Mobile: history button */}
-          <button onClick={() => setMobileHistoryOpen(true)}
-            className="lg:hidden p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
-            title="Conversation history">
-            <Clock size={16} />
-          </button>
-
-          {/* Mobile: dashboard button */}
-          <button onClick={() => setMobileDashboardOpen(true)}
-            className="lg:hidden p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
-            title="Dashboard">
-            <LayoutGrid size={16} />
-          </button>
-
-          <div className="ml-auto flex items-center gap-1">
-            {streaming && (
-              <button onClick={stopStream}
-                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[12px] font-medium bg-destructive/10 text-destructive hover:bg-destructive/20 transition-colors">
-                <Square size={11} className="fill-current" />
-                <span>Stop</span>
-              </button>
-            )}
-            {streaming && (
-              <span className="hidden sm:flex items-center gap-1 text-[11px] text-muted-foreground px-1">
-                <Loader2 size={11} className="animate-spin" />
-                Writing…
-              </span>
-            )}
+          {/* Desktop: floating theme toggle (top-right) */}
+          <div className="hidden lg:flex absolute top-2 right-3 z-[60] items-center gap-1">
             <PsThemeToggle size={15} />
           </div>
-        </header>
 
-        {/* Thread */}
-        <div className={`flex-1 relative min-h-0 ${messages.length > 0 ? "overflow-y-auto" : "overflow-hidden"}`}>
-          <WritingGlow visible={streaming || messages.length > 0} />
-          {messages.length === 0 ? (
-            <WelcomeScreen
-              userName={userName}
-              userInitials={userInitials}
-              avatarUrl={avatarUrl}
-            />
-          ) : (
-            <div className="relative max-w-3xl mx-auto px-4 py-6 pb-10 space-y-8">
-              {messages.map(msg => (
-                <CzarMessage
-                  key={msg.id}
-                  msg={msg}
-                  currentAgents={agents}
-                  userInitials={userInitials}
-                  onContentChange={handleMessageContentChange}
-                  onSelectionAction={handleSelectionAction}
-                  onDismissDiff={handleDismissDiff}
-                  onClarificationAnswer={(answer) => sendMessage(answer, [])}
-                  onDeleteMessage={handleDeleteMessage}
-                />
-              ))}
-              <div ref={threadEndRef} />
+          {/* Mobile top bar — hidden on desktop */}
+          <header className="flex lg:hidden items-center gap-2 px-3 h-11 border-b border-border flex-shrink-0 bg-background/95 backdrop-blur-sm">
+            <button onClick={() => setMobileHistoryOpen(true)}
+              className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+              title="Conversation history">
+              <Clock size={16} />
+            </button>
+            <button onClick={() => setMobileDashboardOpen(true)}
+              className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+              title="Dashboard">
+              <LayoutGrid size={16} />
+            </button>
+            <div className="ml-auto flex items-center gap-1">
+              {streaming && (
+                <button onClick={stopStream}
+                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[12px] font-medium bg-destructive/10 text-destructive hover:bg-destructive/20 transition-colors">
+                  <Square size={11} className="fill-current" />
+                  <span>Stop</span>
+                </button>
+              )}
+              <PsThemeToggle size={15} />
             </div>
-          )}
-        </div>
+          </header>
 
-        {/* Input */}
-        <div className="flex-shrink-0 bg-background sticky bottom-0 z-[100]">
-          <div className="max-w-3xl mx-auto px-4 py-3">
-            <Suspense fallback={<InputFallback />}>
-              <CommandInput
-                onSend={handleCommandSend}
-                onStop={stopStream}
-                streaming={streaming}
-                onCorrect={() => setCorrectionModalOpen(true)}
-                onNewConversation={newConv}
-                onDownload={handleDownloadLast}
+          {/* Thread */}
+          <div className={`flex-1 relative min-h-0 ${messages.length > 0 ? "overflow-y-auto" : "overflow-hidden"}`}>
+            <WritingGlow visible={streaming || messages.length > 0} />
+            {messages.length === 0 ? (
+              <WelcomeScreen
+                userName={userName}
+                userInitials={userInitials}
+                avatarUrl={avatarUrl}
               />
-            </Suspense>
-            <p className="text-center text-[10px] text-muted-foreground/40 mt-1.5 px-2">
-              CZAR can make mistakes — verify important information.
-            </p>
+            ) : (
+              <div className="relative max-w-3xl mx-auto px-4 py-6 pb-10 space-y-8">
+                {messages.map(msg => (
+                  <CzarMessage
+                    key={msg.id}
+                    msg={msg}
+                    currentAgents={agents}
+                    userInitials={userInitials}
+                    onContentChange={handleMessageContentChange}
+                    onSelectionAction={handleSelectionAction}
+                    onDismissDiff={handleDismissDiff}
+                    onClarificationAnswer={(answer) => sendMessage(answer, [])}
+                    onDeleteMessage={handleDeleteMessage}
+                  />
+                ))}
+                <div ref={threadEndRef} />
+              </div>
+            )}
+          </div>
+
+          {/* Input */}
+          <div className="flex-shrink-0 bg-background z-[100]">
+            <div className="max-w-3xl mx-auto px-4 py-3">
+              <Suspense fallback={<InputFallback />}>
+                <CommandInput
+                  onSend={handleCommandSend}
+                  onStop={stopStream}
+                  streaming={streaming}
+                  onCorrect={() => setCorrectionModalOpen(true)}
+                  onNewConversation={newConv}
+                  onDownload={handleDownloadLast}
+                />
+              </Suspense>
+              <p className="text-center text-[10px] text-muted-foreground/40 mt-1.5 px-2">
+                CZAR can make mistakes — verify important information.
+              </p>
+            </div>
           </div>
         </div>
-      </div>
+
+      </div>{/* end right container */}
 
       <AgentActivityDock agents={agents} visible={streaming} />
 
