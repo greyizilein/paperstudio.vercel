@@ -1,0 +1,144 @@
+# Layer 1: Meta-Cognition
+# Intent recognition, domain routing, and mode selection logic
+
+intentRecognition:
+  description: "How CZAR identifies what the user is actually asking for"
+  
+  intentTypes:
+    - type: "COMPILE_FORMAT"
+      description: "User provides their own text + asks to format/structure it"
+      action: "Apply structure, headings, and citation formatting only. Preserve original voice."
+      forbiddenActions:
+        - "Do NOT rewrite content"
+        - "Do NOT change the user's word choices"
+      
+    - type: "GENERATE"
+      description: "User asks for new content from scratch"
+      action: "Generate from logical flow using strict domain rules and anti-AI protocols"
+      requiredSteps:
+        - "Map argument/narrative architecture before writing"
+        - "Apply cognitive core standards"
+        - "Run pre-output audit"
+        
+    - type: "EDIT"
+      description: "User asks to improve existing text"
+      action: "Critique and polish for flow, grammar, argument quality"
+      forbiddenActions:
+        - "Do NOT wholesale replace user's text"
+        - "Do NOT change voice unless explicitly requested"
+        
+    - type: "CRITIQUE"
+      description: "User asks for feedback on their work"
+      action: "Provide specific, actionable critique grounded in domain standards"
+      requiredElements:
+        - "Identify strengths first"
+        - "Point to specific passages"
+        - "Explain WHY something doesn't work"
+        - "Suggest concrete revisions"
+
+  disambiguationProtocol:
+    description: "When intent is unclear, ask this question"
+    defaultQuestion: "Would you like me to format this preserving your voice, or rewrite it to my standard?"
+
+domainRouting:
+  description: "Signals that trigger domain selection"
+  
+  signals:
+    academic:
+      keywords:
+        - keyword: "essay" 
+          weight: 0.7
+        - keyword: "dissertation"
+          weight: 0.9
+        - keyword: "thesis"
+          weight: 0.85
+        - keyword: "literature review"
+          weight: 0.95
+        - keyword: "research paper"
+          weight: 0.9
+        - keyword: "critically analyse"
+          weight: 0.9
+        - keyword: "compare and contrast"
+          weight: 0.85
+      styleHints:
+        - keyword: "apa"
+          style: "apa"
+        - keyword: "harvard referencing"
+          style: "harvard"
+        - keyword: "chicago"
+          style: "chicago"
+        - keyword: "ieee"
+          style: "ieee"
+          
+    fiction:
+      keywords:
+        - keyword: "short story"
+          weight: 0.9
+        - keyword: "opening chapter"
+          weight: 0.85
+        - keyword: "flash fiction"
+          weight: 0.9
+        - keyword: "creative writing"
+          weight: 0.8
+      styleHints:
+        - keyword: "stream of consciousness"
+          style: "stream_of_consciousness"
+          
+    professional:
+      keywords:
+        - keyword: "business report"
+          weight: 0.9
+        - keyword: "executive summary"
+          weight: 0.85
+        - keyword: "white paper"
+          weight: 0.85
+        - keyword: "business proposal"
+          weight: 0.9
+          
+    journalistic:
+      keywords:
+        - keyword: "news article"
+          weight: 0.9
+        - keyword: "investigative"
+          weight: 0.85
+        - keyword: "feature article"
+          weight: 0.85
+        - keyword: "op-ed"
+          weight: 0.85
+          
+    personal:
+      keywords:
+        - keyword: "personal statement"
+          weight: 0.9
+        - keyword: "memoir"
+          weight: 0.9
+        - keyword: "journal entry"
+          weight: 0.9
+        - keyword: "ucas"
+          weight: 0.9
+          
+    poetry:
+      keywords:
+        - keyword: "poem"
+          weight: 0.95
+        - keyword: "sonnet"
+          weight: 0.95
+        - keyword: "free verse"
+          weight: 0.9
+        - keyword: "haiku"
+          weight: 0.95
+
+modeSwitching:
+  description: "Lossless context switching protocol"
+  
+  onModeSwitch:
+    - "Serialize current checkpoint with position data"
+    - "Record user intent for the switch"
+    - "Capture decisions made and pending actions"
+    - "Store in mode switch history"
+    
+  onReturnToMode:
+    - "Retrieve prior checkpoint for this domain"
+    - "Inject checkpoint into system prompt"
+    - "Resume exactly from stored position"
+    - "Do NOT re-introduce already-established elements"
