@@ -513,7 +513,7 @@ Style requirements for academic figures:
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           instances: [{ prompt: enhancedPrompt }],
-          parameters: { sampleCount: 1, aspectRatio: "4:3" },
+          parameters: { sampleCount: 1, aspectRatio: "4:3", outputMimeType: "image/png" },
         }),
         signal,
       },

@@ -1,8 +1,7 @@
-// Bibliographic engine — prioritises local BibTeX sources over web-search results.
+// Bibliographic engine — validates against user-provided BibTeX/Zotero data.
 
 export interface BibEntry {
   id: string;
-  type: string;
   author: string;
   year: string;
   title: string;
@@ -10,35 +9,36 @@ export interface BibEntry {
   volume?: string;
   pages?: string;
   doi?: string;
-  source: string;
 }
 
 export function parseBibTex(content: string): BibEntry[] {
   const entries: BibEntry[] = [];
-  const entryRegex = /@(\w+)\{([^,]+),([\s\S]*?)\n\}/g;
+  const entryRegex = /@\w+\{([^,]+),([\s\S]*?)\n\}/g;
   let match;
 
   while ((match = entryRegex.exec(content)) !== null) {
-    const type = match[1].toLowerCase();
-    const id = match[2].trim();
-    const fields = match[3];
+    const id = match[1].trim();
+    const fields = match[2];
 
     const field = (name: string): string => {
       const m = new RegExp(`${name}\\s*=\\s*\\{([^}]+)\\}`, "i").exec(fields);
       return m ? m[1].trim() : "";
     };
 
+    const author = field("author");
+    const year = field("year");
+    const title = field("title");
+    if (!author || !year || !title) continue;
+
     entries.push({
       id,
-      type,
-      author: field("author"),
-      year: field("year"),
-      title: field("title"),
+      author,
+      year,
+      title,
       journal: field("journal") || field("booktitle"),
       volume: field("volume"),
       pages: field("pages"),
       doi: field("doi"),
-      source: "Local Library",
     });
   }
 
@@ -47,18 +47,22 @@ export function parseBibTex(content: string): BibEntry[] {
 
 export function buildBibliographyContext(entries: BibEntry[]): string {
   if (entries.length === 0) return "";
-  const lines = entries.map((e) => `[${e.id}] ${e.author} (${e.year}) — ${e.title}`);
-  return `\n\nUSE ONLY THESE VERIFIED SOURCES:\n${lines.join("\n")}`;
+  return (
+    "\n\n=== VERIFIED ACADEMIC SOURCES (PRIORITISE THESE) ===\n" +
+    entries.map((e) => `[${e.id}] ${e.author} (${e.year}) — "${e.title}"`).join("\n") +
+    "\n=== END VERIFIED SOURCES ===\n"
+  );
 }
 
 export function formatBibEntryHarvard(entry: BibEntry): string {
-  const author = entry.author.includes(",")
-    ? entry.author.split(" and ").map((a) => {
-        const parts = a.split(",");
-        return parts[0].trim() + (parts[1] ? `, ${parts[1].trim().charAt(0)}.` : "");
-      }).join(", ")
-    : entry.author;
-  let ref = `${author} (${entry.year}) '${entry.title}'`;
+  const surnames = entry.author
+    .split(" and ")
+    .map((a) => {
+      const parts = a.split(",");
+      return parts[0].trim() + (parts[1] ? `, ${parts[1].trim().charAt(0)}.` : "");
+    })
+    .join(", ");
+  let ref = `${surnames} (${entry.year}) '${entry.title}'`;
   if (entry.journal) ref += `, *${entry.journal}*`;
   if (entry.volume) ref += `, ${entry.volume}`;
   if (entry.pages) ref += `, pp. ${entry.pages}`;
