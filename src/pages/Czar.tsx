@@ -183,6 +183,8 @@ export default function CzarPage() {
   useEffect(() => { agentsRef.current = agents; }, [agents]);
 
   const [mode, setMode] = useState<CzarMode>("chat");
+  const modeRef = useRef<CzarMode>("chat");
+  useEffect(() => { modeRef.current = mode; }, [mode]);
 
   const threadEndRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -401,7 +403,7 @@ export default function CzarPage() {
       await streamCzar({
         conversation_id: convId,
         user_message: text,
-        mode,
+        mode: modeRef.current,
         attachments,
         settings: extraSettings,
       }, handlers, ctrl.signal);
@@ -545,10 +547,6 @@ export default function CzarPage() {
         <aside className={`hidden lg:flex flex-col absolute top-0 left-0 bottom-0 z-40 w-[220px] bg-sidebar border-r border-border overflow-hidden transition-transform duration-200 ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}`}>
           <ConvSidebar currentId={convId} onSelect={selectConv} onNew={newConv} />
         </aside>
-        {/* Click-away backdrop when sidebar is open on desktop */}
-        {sidebarOpen && (
-          <div className="hidden lg:block absolute inset-0 z-30" onClick={() => setSidebarOpen(false)} />
-        )}
 
         {/* Mobile history drawer */}
         {mobileHistoryOpen && (
@@ -570,94 +568,131 @@ export default function CzarPage() {
 
         {/* ── DESKTOP main — hidden on mobile ── */}
         <div
-          className="hidden lg:flex flex-col flex-1 relative min-w-0 min-h-0"
+          className="hidden lg:flex flex-col flex-1 min-w-0 min-h-0"
           style={{
             background: isDark
               ? "radial-gradient(ellipse at 30% 40%, rgba(21,128,61,.18) 0%, transparent 60%), radial-gradient(ellipse at 75% 70%, rgba(20,83,45,.12) 0%, transparent 55%), hsl(var(--background))"
               : "radial-gradient(ellipse at 30% 40%, rgba(134,239,172,.35) 0%, transparent 60%), radial-gradient(ellipse at 75% 70%, rgba(187,247,208,.25) 0%, transparent 55%), #f8fdf9",
           }}
         >
-          {messages.length === 0 && <WelcomeAurora />}
-
-          {/* Floating sidebar toggle + mode selector (top-left) */}
-          <div className="absolute top-2 left-3 z-[60] flex items-center gap-1">
-            <button
-              onClick={() => setSidebarOpen(o => !o)}
-              className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary/60 transition-colors"
-              title={sidebarOpen ? "Hide history" : "Show history"}
-            >
-              {sidebarOpen ? <PanelLeftClose size={16} /> : <PanelLeftOpen size={16} />}
-            </button>
-            <button
-              onClick={() => setPcModeOpen(true)}
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-border text-[12px] font-medium text-foreground bg-background/60 hover:bg-secondary/60 transition-colors backdrop-blur-sm"
-            >
-              <span
-                className="flex items-center justify-center rounded-full bg-primary text-primary-foreground text-[10px] font-bold flex-shrink-0"
-                style={{ width: 18, height: 18 }}
+          {/* Header bar */}
+          <div className="flex-shrink-0 flex items-center justify-between h-11 px-2 border-b border-border/40 bg-background/50 backdrop-blur-sm">
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setSidebarOpen(o => !o)}
+                className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary/70 transition-colors"
+                title={sidebarOpen ? "Hide history" : "Show history"}
               >
-                {PC_MODE_OPTIONS.find(o => o.mode === mode)?.num ?? 1}
-              </span>
-              {modeLabel(mode)}
-              <ChevronDown size={11} className="text-muted-foreground/60" />
-            </button>
-          </div>
-
-          {/* Theme + Settings (top-right) */}
-          <div className="absolute top-2 right-3 z-[60] flex items-center gap-0.5">
-            <PsThemeToggle size={15} />
-            <button
-              onClick={() => setPcSettingsOpen(true)}
-              className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary/60 transition-colors"
-              title="Settings"
-            >
-              <Settings size={15} />
-            </button>
-          </div>
-
-          {/* PC Mode picker — bottom sheet */}
-          {pcModeOpen && (
-            <>
-              <div className="fixed inset-0 bg-foreground/30 z-[80]" onClick={() => setPcModeOpen(false)} />
-              <div
-                className="fixed inset-x-0 bottom-0 bg-background rounded-t-[20px] z-[90]"
-                style={{ paddingBottom: "calc(16px + env(safe-area-inset-bottom, 0px))" }}
-              >
-                <div className="w-9 h-1 bg-border rounded-full mx-auto mt-3" />
-                <div className="text-[13px] font-semibold uppercase tracking-widest text-muted-foreground px-5 py-3.5 border-b border-border">
-                  Writing mode
-                </div>
-                {PC_MODE_OPTIONS.map(opt => (
-                  <button
-                    key={opt.mode}
-                    onClick={() => {
-                      setMode(opt.mode);
-                      setPcModeOpen(false);
-                      if (opt.mode === "correct") setTimeout(() => setCorrectionModalOpen(true), 280);
-                    }}
-                    className={`w-full flex items-center gap-3.5 px-5 py-3.5 border-b border-border text-left transition-colors ${mode === opt.mode ? "bg-primary/5" : "hover:bg-secondary/50"}`}
+                {sidebarOpen ? <PanelLeftClose size={16} /> : <PanelLeftOpen size={16} />}
+              </button>
+              {/* Mode picker — dropdown */}
+              <div className="relative">
+                <button
+                  onClick={() => setPcModeOpen(o => !o)}
+                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-border text-[12px] font-medium text-foreground hover:bg-secondary/70 transition-colors"
+                >
+                  <span
+                    className="flex items-center justify-center rounded-full bg-primary text-primary-foreground text-[10px] font-bold flex-shrink-0"
+                    style={{ width: 18, height: 18 }}
                   >
-                    <span
-                      className="w-7 h-7 rounded-full flex items-center justify-center text-[13px] font-bold flex-shrink-0 border transition-colors"
-                      style={mode === opt.mode
-                        ? { background: "hsl(var(--primary))", borderColor: "hsl(var(--primary))", color: "hsl(var(--primary-foreground))" }
-                        : { background: "hsl(var(--secondary))", borderColor: "hsl(var(--border))", color: "hsl(var(--muted-foreground))" }
-                      }
-                    >
-                      {opt.num}
-                    </span>
-                    <div>
-                      <div className="text-[15px] font-semibold text-foreground">{opt.name}</div>
-                      <div className="text-[12px] text-muted-foreground">{opt.desc}</div>
+                    {PC_MODE_OPTIONS.find(o => o.mode === mode)?.num ?? 1}
+                  </span>
+                  {modeLabel(mode)}
+                  <ChevronDown size={11} className="text-muted-foreground/60" />
+                </button>
+                {pcModeOpen && (
+                  <>
+                    <div className="fixed inset-0 z-[80]" onClick={() => setPcModeOpen(false)} />
+                    <div className="absolute top-full left-0 mt-1.5 z-[90] w-[280px] bg-background border border-border rounded-xl shadow-2xl overflow-hidden">
+                      {PC_MODE_OPTIONS.map(opt => (
+                        <button
+                          key={opt.mode}
+                          onClick={() => {
+                            setMode(opt.mode);
+                            setPcModeOpen(false);
+                            if (opt.mode === "correct") setTimeout(() => setCorrectionModalOpen(true), 200);
+                          }}
+                          className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${mode === opt.mode ? "bg-primary/5" : "hover:bg-secondary/50"}`}
+                        >
+                          <span
+                            className="w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold flex-shrink-0 border transition-colors"
+                            style={mode === opt.mode
+                              ? { background: "hsl(var(--primary))", borderColor: "hsl(var(--primary))", color: "hsl(var(--primary-foreground))" }
+                              : { background: "hsl(var(--secondary))", borderColor: "hsl(var(--border))", color: "hsl(var(--muted-foreground))" }
+                            }
+                          >
+                            {opt.num}
+                          </span>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-[13px] font-semibold text-foreground">{opt.name}</div>
+                            <div className="text-[11px] text-muted-foreground truncate">{opt.desc}</div>
+                          </div>
+                          {mode === opt.mode && <Check size={13} className="text-primary flex-shrink-0" />}
+                        </button>
+                      ))}
                     </div>
-                    {mode === opt.mode && <Check size={14} className="ml-auto text-primary" />}
-                  </button>
-                ))}
+                  </>
+                )}
               </div>
-            </>
-          )}
+            </div>
+            <div className="flex items-center gap-0.5">
+              <PsThemeToggle size={15} />
+              <button
+                onClick={() => setPcSettingsOpen(true)}
+                className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary/70 transition-colors"
+                title="Settings"
+              >
+                <Settings size={15} />
+              </button>
+            </div>
+          </div>
 
-          {/* PC Settings panel — slides in from right */}
+          {/* Thread */}
+          <div className="flex-1 relative min-h-0 overflow-y-auto">
+            {messages.length === 0 && <WelcomeAurora />}
+            <WritingGlow visible={streaming || messages.length > 0} />
+            {messages.length === 0 ? (
+              <WelcomeScreen userName={userName} userInitials={userInitials} avatarUrl={avatarUrl} />
+            ) : (
+              <div className="relative max-w-3xl mx-auto px-4 py-6 pb-10 space-y-8">
+                {messages.map(msg => (
+                  <CzarMessage
+                    key={msg.id}
+                    msg={msg}
+                    currentAgents={agents}
+                    userInitials={userInitials}
+                    onContentChange={handleMessageContentChange}
+                    onSelectionAction={handleSelectionAction}
+                    onDismissDiff={handleDismissDiff}
+                    onClarificationAnswer={(answer) => sendMessage(answer, [])}
+                    onDeleteMessage={handleDeleteMessage}
+                  />
+                ))}
+                <div ref={threadEndRef} />
+              </div>
+            )}
+          </div>
+
+          {/* Input */}
+          <div className="flex-shrink-0 bg-background/80 backdrop-blur-sm border-t border-border/40">
+            <div className="max-w-3xl mx-auto px-4 py-3">
+              <Suspense fallback={<InputFallback />}>
+                <CommandInput
+                  onSend={handleCommandSend}
+                  onStop={stopStream}
+                  streaming={streaming}
+                  onCorrect={() => setCorrectionModalOpen(true)}
+                  onNewConversation={newConv}
+                  onDownload={handleDownloadLast}
+                />
+              </Suspense>
+              <p className="text-center text-[10px] text-muted-foreground/40 mt-1.5 px-2">
+                CZAR can make mistakes — verify important information.
+              </p>
+            </div>
+          </div>
+
+          {/* Settings panel — slides in from right */}
           {pcSettingsOpen && (
             <>
               <div className="fixed inset-0 bg-foreground/30 z-[80]" onClick={() => setPcSettingsOpen(false)} />
@@ -671,7 +706,6 @@ export default function CzarPage() {
                     <X size={16} />
                   </button>
                 </div>
-
                 <CzarSettingsPickerRow label="Citation style" value={settings.citationStyle} options={CITE_STYLES}
                   onChange={v => updateSettings({ citationStyle: v })} />
                 <CzarSettingsPickerRow label="Writing level" value={settings.writingLevel} options={WRITING_LEVELS}
@@ -707,50 +741,6 @@ export default function CzarPage() {
               </div>
             </>
           )}
-
-          {/* Thread */}
-          <div className={`flex-1 relative min-h-0 ${messages.length > 0 ? "overflow-y-auto" : "overflow-hidden"}`}>
-            <WritingGlow visible={streaming || messages.length > 0} />
-            {messages.length === 0 ? (
-              <WelcomeScreen userName={userName} userInitials={userInitials} avatarUrl={avatarUrl} />
-            ) : (
-              <div className="relative max-w-3xl mx-auto px-4 py-6 pb-10 space-y-8">
-                {messages.map(msg => (
-                  <CzarMessage
-                    key={msg.id}
-                    msg={msg}
-                    currentAgents={agents}
-                    userInitials={userInitials}
-                    onContentChange={handleMessageContentChange}
-                    onSelectionAction={handleSelectionAction}
-                    onDismissDiff={handleDismissDiff}
-                    onClarificationAnswer={(answer) => sendMessage(answer, [])}
-                    onDeleteMessage={handleDeleteMessage}
-                  />
-                ))}
-                <div ref={threadEndRef} />
-              </div>
-            )}
-          </div>
-
-          {/* Input */}
-          <div className="flex-shrink-0 bg-background z-[100]">
-            <div className="max-w-3xl mx-auto px-4 py-3">
-              <Suspense fallback={<InputFallback />}>
-                <CommandInput
-                  onSend={handleCommandSend}
-                  onStop={stopStream}
-                  streaming={streaming}
-                  onCorrect={() => setCorrectionModalOpen(true)}
-                  onNewConversation={newConv}
-                  onDownload={handleDownloadLast}
-                />
-              </Suspense>
-              <p className="text-center text-[10px] text-muted-foreground/40 mt-1.5 px-2">
-                CZAR can make mistakes — verify important information.
-              </p>
-            </div>
-          </div>
         </div>
 
         {/* ── MOBILE main — hidden on desktop ── */}
