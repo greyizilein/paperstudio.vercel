@@ -5,22 +5,20 @@ export async function buildDocument(content: string, profile: StyleProfile): Pro
   const doc = new Document({
     sections: [
       {
-        properties: { page: { margin: profile.margins } },
+        properties: {},
         children: [
           new Paragraph({
             alignment:
-              profile.paragraphAlignment === "justify"
+              profile.alignment === "justify"
                 ? AlignmentType.JUSTIFIED
-                : profile.paragraphAlignment === "center"
+                : profile.alignment === "center"
                 ? AlignmentType.CENTER
-                : profile.paragraphAlignment === "right"
-                ? AlignmentType.RIGHT
                 : AlignmentType.LEFT,
             spacing: { line: Math.round(profile.lineSpacing * 240) },
             children: [
               new TextRun({
                 text: content,
-                font: profile.fontName,
+                font: profile.font,
                 size: profile.fontSize * 2,
               }),
             ],
