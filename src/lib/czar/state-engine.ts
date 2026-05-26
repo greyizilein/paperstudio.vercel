@@ -1,5 +1,10 @@
 // CZAR State Engine — Checkpoint creation, serialisation, and context restoration.
 // Runs on the frontend for optimistic state and in the edge function for persistence.
+// 
+// ARCHITECTURAL PRINCIPLE: Stateless Reasoning, Persistent State
+// The LLM never serves as memory. All mode state, document metadata, checkpoints,
+// and user preferences live in this structured ProjectState object persisted in storage.
+// The LLM only receives the exact slice of context needed for the current turn.
 
 import type {
   DomainType,
@@ -15,6 +20,110 @@ import type {
   PoetryPosition,
   UserPreferences,
 } from "@/types/czar";
+
+// ---------------------------------------------------------------------------
+// Mode Switch Checkpoint — captures state when switching domains mid-session
+// ---------------------------------------------------------------------------
+
+export interface ModeSwitchCheckpoint {
+  id: string;
+  timestamp: string;
+  fromDomain: DomainType;
+  toDomain: DomainType;
+  serializedIntent: string;      // What the user was trying to accomplish
+  positionSnapshot: Record<string, unknown>;  // Domain-specific position data
+  decisionsMade: string[];       // Key decisions in this session
+  pendingActions: string[];      // Actions that were started but not completed
+}
+
+// ---------------------------------------------------------------------------
+// Context Slice — the exact portion of state injected into LLM prompts
+// ---------------------------------------------------------------------------
+
+export interface ContextSlice {
+  checkpointSummary: string;     // 2-3 sentence summary of where we left off
+  domainCore: string;            // The active cognitive core
+  styleOverlay: string;          // The active style overlay
+  positionData: string | null;   // Domain-specific position (thesis, scene state, etc.)
+  recentDecisions: string[];     // Last 5 decisions made
+  constraints: string[];         // Active constraints (word count, deadline, etc.)
+}
+
+export function createContextSlice(
+  checkpoint: Checkpoint | null,
+  domain: DomainType,
+  domainCore: string,
+  styleOverlay: string,
+  userPreferences: UserPreferences,
+): ContextSlice {
+  const checkpointSummary = checkpoint
+    ? `Previous session: ${checkpoint.lastOutputSummary}. User intent: ${checkpoint.lastUserIntent}.`
+    : "New session — no prior context.";
+
+  let positionData: string | null = null;
+  
+  if (checkpoint) {
+    switch (domain) {
+      case "academic":
+        if (checkpoint.argumentPosition) {
+          const p = checkpoint.argumentPosition;
+          positionData = [
+            p.thesisStatement ? `Thesis: ${p.thesisStatement}` : null,
+            p.currentSection ? `Current section: ${p.currentSection}` : null,
+            p.sectionOrder.length > 0 ? `Sections: ${p.sectionOrder.join(" → ")}` : null,
+            p.conceptsDefined.length > 0 ? `Defined concepts (do not re-define): ${p.conceptsDefined.join(", ")}` : null,
+          ].filter(Boolean).join("\n");
+        }
+        break;
+      case "fiction":
+        if (checkpoint.narrativePosition) {
+          const p = checkpoint.narrativePosition;
+          positionData = [
+            p.chapter ? `Chapter: ${p.chapter}` : null,
+            `Scene: ${p.sceneSummary}`,
+            p.activeCharacters.length > 0 ? `Characters present: ${p.activeCharacters.join(", ")}` : null,
+            p.povCharacter ? `POV: ${p.povCharacter} (${p.povMode})` : null,
+            p.tense ? `Tense: ${p.tense}` : null,
+            p.currentConflict ? `Conflict: ${p.currentConflict}` : null,
+          ].filter(Boolean).join("\n");
+        }
+        break;
+      case "professional":
+        if (checkpoint.professionalPosition) {
+          const p = checkpoint.professionalPosition;
+          positionData = [
+            p.documentType ? `Document type: ${p.documentType}` : null,
+            p.primaryAudience ? `Audience: ${p.primaryAudience}` : null,
+            `Executive summary: ${p.execSummaryDone ? "complete" : "pending"}`,
+            `Recommendations: ${p.recommendationsStated ? "stated" : "pending"}`,
+          ].filter(Boolean).join("\n");
+        }
+        break;
+      default:
+        positionData = null;
+    }
+  }
+
+  const constraints: string[] = [];
+  if (userPreferences.targetWordCount) {
+    constraints.push(`Target word count: ${userPreferences.targetWordCount}`);
+  }
+  if (userPreferences.language) {
+    constraints.push(`Language variant: ${userPreferences.language} English`);
+  }
+  if (userPreferences.verbosity) {
+    constraints.push(`Verbosity: ${userPreferences.verbosity}`);
+  }
+
+  return {
+    checkpointSummary,
+    domainCore,
+    styleOverlay,
+    positionData: positionData && positionData.length > 0 ? positionData : null,
+    recentDecisions: [],  // Would be populated from mode switch history
+    constraints,
+  };
+}
 
 // ---------------------------------------------------------------------------
 // Metrics
@@ -512,4 +621,121 @@ export function advanceState(
         state.metadata.totalWordsGenerated + newCheckpoint.metrics.sessionWords,
     },
   };
+}
+
+// ---------------------------------------------------------------------------
+// Mode Switch Serialization — Lossless Context Switching (Principle 5)
+// ---------------------------------------------------------------------------
+
+export function createModeSwitchCheckpoint(
+  fromDomain: DomainType,
+  toDomain: DomainType,
+  currentCheckpoint: Checkpoint | null,
+  userIntent: string,
+  decisionsMade: string[],
+  pendingActions: string[],
+): ModeSwitchCheckpoint {
+  const positionSnapshot: Record<string, unknown> = {};
+  
+  if (currentCheckpoint) {
+    // Capture domain-specific position data for restoration
+    switch (fromDomain) {
+      case "academic":
+        if (currentCheckpoint.argumentPosition) {
+          positionSnapshot.argumentPosition = currentCheckpoint.argumentPosition;
+        }
+        break;
+      case "fiction":
+        if (currentCheckpoint.narrativePosition) {
+          positionSnapshot.narrativePosition = currentCheckpoint.narrativePosition;
+        }
+        break;
+      case "professional":
+        if (currentCheckpoint.professionalPosition) {
+          positionSnapshot.professionalPosition = currentCheckpoint.professionalPosition;
+        }
+        break;
+      case "journalistic":
+        if (currentCheckpoint.journalisticPosition) {
+          positionSnapshot.journalisticPosition = currentCheckpoint.journalisticPosition;
+        }
+        break;
+      case "personal":
+        if (currentCheckpoint.personalPosition) {
+          positionSnapshot.personalPosition = currentCheckpoint.personalPosition;
+        }
+        break;
+      case "poetry":
+        if (currentCheckpoint.poetryPosition) {
+          positionSnapshot.poetryPosition = currentCheckpoint.poetryPosition;
+        }
+        break;
+    }
+  }
+
+  return {
+    id: `mode_switch_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+    timestamp: new Date().toISOString(),
+    fromDomain,
+    toDomain,
+    serializedIntent: userIntent.slice(0, 500),
+    positionSnapshot,
+    decisionsMade: decisionsMade.slice(-10),  // Keep last 10 decisions
+    pendingActions: pendingActions.slice(-10),
+  };
+}
+
+export function buildModeSwitchInjection(
+  modeSwitch: ModeSwitchCheckpoint | null,
+  priorCheckpoint: Checkpoint | null,
+): string {
+  if (!modeSwitch && !priorCheckpoint) return "";
+
+  const lines: string[] = ["", "===== MODE SWITCH CONTEXT ====="];
+
+  if (modeSwitch) {
+    lines.push(`Switched from: ${modeSwitch.fromDomain} → ${modeSwitch.toDomain}`);
+    lines.push(`Switch reason: "${modeSwitch.serializedIntent}"`);
+    
+    if (modeSwitch.decisionsMade.length > 0) {
+      lines.push(`Decisions carried over: ${modeSwitch.decisionsMade.join("; ")}`);
+    }
+    
+    if (modeSwitch.pendingActions.length > 0) {
+      lines.push(`Pending actions (resume when returning to ${modeSwitch.fromDomain}):`);
+      modeSwitch.pendingActions.forEach(action => lines.push(`  • ${action}`));
+    }
+  }
+
+  if (priorCheckpoint && modeSwitch?.fromDomain !== modeSwitch?.toDomain) {
+    // We're entering a new domain — check if there's prior state for this domain
+    lines.push("");
+    lines.push(`Entering ${modeSwitch?.toDomain} mode.`);
+    if (priorCheckpoint.domain === modeSwitch?.toDomain) {
+      lines.push("Prior checkpoint found for this domain — restoring context.");
+    } else {
+      lines.push("No prior checkpoint for this domain — starting fresh.");
+    }
+  }
+
+  lines.push("===== END MODE SWITCH CONTEXT =====", "");
+
+  return lines.join("\n");
+}
+
+export function serializeModeSwitchHistory(switches: ModeSwitchCheckpoint[]): string {
+  return JSON.stringify(switches);
+}
+
+export function deserializeModeSwitchHistory(raw: string | null): ModeSwitchCheckpoint[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) {
+      return parsed.filter((s) => s.id && s.fromDomain && s.toDomain) as ModeSwitchCheckpoint[];
+    }
+    return [];
+  } catch {
+    return [];
+  }
 }

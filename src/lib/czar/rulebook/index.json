@@ -1,0 +1,54 @@
+{
+  "version": "1.0.0",
+  "schema": "6-layer-cognitive-architecture",
+  "description": "CZAR Modular Rulebook — Domain-sovereign cognitive cores with injectable style overlays",
+  "layers": {
+    "layer1_metaCognition": {
+      "description": "Intent recognition and routing logic",
+      "file": "meta-cognition.yaml"
+    },
+    "layer2_domainCores": {
+      "description": "Seven sovereign domain intelligence cores",
+      "files": [
+        "academic-core.yaml",
+        "fiction-core.yaml",
+        "professional-core.yaml",
+        "journalistic-core.yaml",
+        "personal-core.yaml",
+        "poetry-core.yaml",
+        "chat-core.yaml"
+      ]
+    },
+    "layer3_universalMechanics": {
+      "description": "Cross-domain prose quality standards",
+      "file": "universal-mechanics.yaml"
+    },
+    "layer4_documentArchitecture": {
+      "description": "Structural rules for all document types",
+      "file": "document-architecture.yaml"
+    },
+    "layer5_styleOverlays": {
+      "description": "Injectable style variants per domain",
+      "files": [
+        "academic-styles.yaml",
+        "fiction-styles.yaml",
+        "professional-styles.yaml",
+        "journalistic-styles.yaml",
+        "personal-styles.yaml",
+        "poetry-styles.yaml",
+        "chat-styles.yaml"
+      ]
+    },
+    "layer6_verification": {
+      "description": "Pre-output audit protocol and regeneration triggers",
+      "file": "verification-protocol.yaml"
+    }
+  },
+  "principles": {
+    "principle1_statelessReasoning": "The LLM never serves as memory. All state lives in ProjectState persisted in storage.",
+    "principle2_sovereignDomains": "Academic, Fiction, Technical, Journalistic, and Personal writing are parallel epistemic systems.",
+    "principle3_semanticMarkup": "All output must be Pandoc-flavored Markdown with YAML metadata and semantic annotation tags.",
+    "principle4_mandatoryVerification": "Every generation must validate before producing user-visible output. Failure triggers regeneration.",
+    "principle5_losslessSwitching": "Mode switches serialize structured checkpoints. Returning to a mode injects this checkpoint."
+  }
+}

@@ -1,0 +1,255 @@
+# Layer 6: Verification Protocol
+# Mandatory pre-output audit and regeneration triggers
+
+preOutputAudit:
+  description: |
+    Every generation must validate structure, citations, narrative consistency,
+    word count, and prose mechanics BEFORE producing user-visible output.
+    Failure triggers regeneration, not warnings.
+    
+  executionOrder:
+    - "LLM performs internal self-audit using injected audit block"
+    - "Deterministic code-level audit runs on generated output"
+    - "If critical failures detected → regenerate"
+    - "If only minor issues → proceed with warning logged"
+
+universalChecks:
+  description: "Applied to ALL domains before output is released"
+  
+  checks:
+    - id: "no_preamble"
+      description: "Output begins with real content — no preamble, no meta-commentary"
+      failureAction: "REGENERATE"
+      
+    - id: "no_signoff"
+      description: "Output ends cleanly — no 'I hope this helps', no 'let me know'"
+      failureAction: "REGENERATE"
+      
+    - id: "banned_phrases"
+      description: "Eliminated phrases:"
+      phrases:
+        - "It is important to note"
+        - "Delving into"
+        - "In the realm of"
+        - "Tapestry"
+        - "Seamlessly"
+        - "Furthermore" (as sentence opener)
+        - "In conclusion" (as sentence opener)
+        - "This essay will explore"
+        - "Feel free to"
+        - "Let me know if"
+      failureAction: "REGENERATE"
+      
+    - id: "sentence_variety"
+      description: "No 3+ consecutive sentences of same length/structure"
+      failureAction: "REGENERATE"
+      
+    - id: "em_dash_limit"
+      description: "Max 1 em-dash per 200 words"
+      failureAction: "REGENERATE if >2x limit, WARN otherwise"
+      
+    - id: "heading_hierarchy"
+      description: "Logical heading structure — no H3 without H2 parent"
+      failureAction: "REGENERATE"
+      
+    - id: "semantic_markup"
+      description: "Output is Pandoc-flavored Markdown — no raw formatting"
+      failureAction: "WARN (enforced at export time)"
+
+domainSpecificChecks:
+  academic:
+    - id: "citation_integrity"
+      description: "Every evidence-based claim has an in-text citation"
+      failureAction: "REGENERATE"
+      
+    - id: "no_bullets"
+      description: "No bullet points in academic body prose"
+      failureAction: "REGENERATE"
+      
+    - id: "register_formal"
+      description: "Register is formal, third-person, no contractions"
+      failureAction: "REGENERATE"
+      
+    - id: "references_complete"
+      description: "References section is complete and alphabetized"
+      failureAction: "REGENERATE if citations present without references"
+      
+    - id: "thesis_contestable"
+      description: "Thesis appears as contestable claim, not announcement"
+      failureAction: "WARN"
+      
+  fiction:
+    - id: "sensory_grounding"
+      description: "Scene grounded in 2+ sensory registers within first 100 words"
+      failureAction: "REGENERATE"
+      
+    - id: "show_dont_tell"
+      description: "No emotion named directly — shown through action/sensation"
+      failureAction: "REGENERATE"
+      
+    - id: "no_ai_fingerprints"
+      description: "No AI-fingerprint phrases ('she found herself', 'a surge of')"
+      failureAction: "REGENERATE"
+      
+    - id: "pov_consistent"
+      description: "POV consistent within scene"
+      failureAction: "REGENERATE"
+      
+    - id: "dialogue_subtext"
+      description: "Dialogue contains subtext — characters don't say what they mean"
+      failureAction: "WARN"
+      
+    - id: "sentence_rhythm"
+      description: "Sentence length varies — no uniform rhythm"
+      failureAction: "REGENERATE"
+      
+  professional:
+    - id: "pyramid_principle"
+      description: "Main conclusion in first paragraph"
+      failureAction: "REGENERATE"
+      
+    - id: "recommendations_specific"
+      description: "Recommendations are specific, actionable, time-bound"
+      failureAction: "REGENERATE"
+      
+    - id: "statistics_attributed"
+      description: "Statistics attributed to named sources"
+      failureAction: "REGENERATE"
+      
+    - id: "active_voice"
+      description: "Active voice throughout — no passive hiding agency"
+      failureAction: "REGENERATE"
+      
+    - id: "exec_summary"
+      description: "Executive summary present if document >1500 words"
+      failureAction: "WARN"
+      
+    - id: "no_jargon"
+      description: "No business jargon ('synergies', 'paradigm shift', 'bandwidth')"
+      failureAction: "REGENERATE"
+      
+  journalistic:
+    - id: "lede_strong"
+      description: "Lede states most important fact in ≤25 words"
+      failureAction: "REGENERATE"
+      
+    - id: "attribution"
+      description: "Every contested claim attributed to named source"
+      failureAction: "REGENERATE"
+      
+    - id: "active_voice"
+      description: "Active voice — no passive that hides agency"
+      failureAction: "REGENERATE"
+      
+    - id: "counterargument_fair"
+      description: "Strongest counterargument represented fairly"
+      failureAction: "WARN"
+      
+    - id: "quotes_meaningful"
+      description: "Quotes used only when phrasing matters"
+      failureAction: "WARN"
+      
+  personal:
+    - id: "specific_detail"
+      description: "Grounded in specific concrete detail, not generalities"
+      failureAction: "REGENERATE"
+      
+    - id: "voice_consistent"
+      description: "Voice consistent throughout"
+      failureAction: "REGENERATE"
+      
+    - id: "no_self_pity"
+      description: "No self-pity — observation without wallowing"
+      failureAction: "REGENERATE"
+      
+    - id: "temporal_marked"
+      description: "Temporal transitions marked clearly"
+      failureAction: "WARN"
+      
+  poetry:
+    - id: "line_breaks_deliberate"
+      description: "Every line break is deliberate (emphasis/suspension/juxtaposition)"
+      failureAction: "REGENERATE"
+      
+    - id: "image_carries_emotion"
+      description: "No emotion named directly — carried by image"
+      failureAction: "REGENERATE"
+      
+    - id: "sound_pattern"
+      description: "Sound pattern is intentional (assonance/consonance/rhythm)"
+      failureAction: "WARN"
+      
+    - id: "form_constraints"
+      description: "Form constraints followed exactly (if formal verse)"
+      failureAction: "REGENERATE"
+      
+  chat:
+    - id: "answer_first"
+      description: "Answer stated first — context follows"
+      failureAction: "REGENERATE"
+      
+    - id: "length_calibrated"
+      description: "Response exactly as long as needed — no padding"
+      failureAction: "REGENERATE"
+      
+    - id: "opinion_owned"
+      description: "Opinion stated as opinion, not fact"
+      failureAction: "WARN"
+      
+    - id: "no_hollow_affirmations"
+      description: "No hollow affirmations ('great question!')"
+      failureAction: "REGENERATE"
+      
+    - id: "no_help_offers"
+      description: "No offers to help further"
+      failureAction: "REGENERATE"
+
+continuityCheck:
+  description: "Verify consistency with prior checkpoint state"
+  
+  checks:
+    - id: "no_contradiction"
+      description: "No contradiction with prior checkpoint state"
+      failureAction: "REGENERATE"
+      
+    - id: "no_reintroduction"
+      description: "No re-introduction of already-established elements"
+      failureAction: "REGENERATE"
+      
+    - id: "resume_position"
+      description: "Resume exactly from where previous output ended"
+      failureAction: "REGENERATE"
+
+regenerationProtocol:
+  description: "What happens when audit fails"
+  
+  criticalFailures:
+    - "Banned phrases in high-stakes domains (academic, professional)"
+    - "Missing references section when citations present (academic)"
+    - "Heading hierarchy violations in long-form content"
+    - "Semantic markup violations when explicitly required"
+    - "Continuity contradictions"
+    
+  procedure:
+    - "Log failure reason with specific issue"
+    - "Inject failure reason into system prompt for next attempt"
+    - "Regenerate with explicit instruction to fix identified issue"
+    - "Maximum 3 regeneration attempts before falling back to best-effort"
+    
+  maxAttempts: 3
+  fallbackBehavior: "Return best-effort output with warning flag for UI"
+
+deterministicAudit:
+  description: "Code-level checks that cannot be hallucinated"
+  
+  implementation: "/workspace/supabase/functions/czar-brain/auditor.ts"
+  
+  checks:
+    - "Banned phrase detection (regex-based)"
+    - "Em-dash counting"
+    - "Heading hierarchy validation"
+    - "Citation/reference matching"
+    - "Sentence opener monotony detection"
+    - "Passive voice density (heuristic)"
+    - "YAML frontmatter presence (when required)"
+    - "Heading level limits"
