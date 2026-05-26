@@ -65,9 +65,10 @@ const TOGGLE_RULES: Record<string, string> = {
 
 const PICKER_RULES: Record<string, (val: string) => string> = {
   language: (v) => `Language variant: ${v === "US" ? "US English" : "UK English"}.`,
-  citation_style: (v) => v === "none"
-    ? "Citations: omit unless explicitly requested."
-    : `Citation style: ${v}. Use ${v} formatting for every in-text citation and the References section.`,
+  citation_style: (v) =>
+    v === "none"
+      ? "Citations: omit unless explicitly requested."
+      : `Citation style: ${v}. Use ${v} formatting for every in-text citation and the References section.`,
   tone: (v) => `Tone & register: ${v.replace(/-/g, " ")}.`,
 };
 
@@ -169,13 +170,21 @@ function detectMode(message: string, hasFiles: boolean, requestedMode?: CzarMode
 
   // Specialist modes are ALWAYS auto-detected from content — they override any frontend selection.
   // Users no longer see these in the dropdown; CZAR senses them from the brief automatically.
-  if (/\b(literature review|systematic review|scoping review|integrative review|narrative review|prisma)\b/.test(lower)) {
+  if (
+    /\b(literature review|systematic review|scoping review|integrative review|narrative review|prisma)\b/.test(lower)
+  ) {
     return "literature_review";
   }
-  if (/\b(screenplay|script|scene heading|fade in|ext\.|int\.|feature film|short film|pilot|teleplay)\b/.test(lower)) {
+  if (
+    /\b(screenplay|script|scene heading|fade in|ext\.|int\.|feature film|short film|pilot|teleplay)\b/.test(lower)
+  ) {
     return "screenplay";
   }
-  if (/\b(legal brief|legal memo|legal analysis|irac|case law|statute|tort|contract law|judicial|appellant|respondent|claimant|defendant brief)\b/.test(lower)) {
+  if (
+    /\b(legal brief|legal memo|legal analysis|irac|case law|statute|tort|contract law|judicial|appellant|respondent|claimant|defendant brief)\b/.test(
+      lower,
+    )
+  ) {
     return "legal";
   }
 
@@ -226,13 +235,13 @@ const G_FAST = "gemini-2.5-flash";
 // Gemini 2.0 Flash Lite — cheap classification, memory extraction, tagging
 const G_LITE = "gemini-2.0-flash-lite";
 // Gemini 2.5 Pro — advanced PhD-level reasoning, writing
-const G_PRO  = "gemini-2.5-pro";
+const G_PRO = "gemini-2.5-pro";
 // Claude models
-const C_SONNET = "claude-sonnet-4-6";   // precision editing, correction
-const C_OPUS   = "claude-opus-4-7";     // hardest PhD tasks, deep thinking
+const C_SONNET = "claude-sonnet-4-6"; // precision editing, correction
+const C_OPUS = "claude-opus-4-7"; // hardest PhD tasks, deep thinking
 // Qwen — legal/structured reasoning (QwQ), general writing (Max)
-const Q_REASON = "qwq-32b";             // dedicated reasoning model
-const Q_MAX    = "qwen-max";            // general Qwen writer
+const Q_REASON = "qwq-32b"; // dedicated reasoning model
+const Q_MAX = "qwen-max"; // general Qwen writer
 
 const ADMIN_EMAIL = "grey.izilein@gmail.com";
 
@@ -288,7 +297,7 @@ function pickModel(
 // Mode directives
 // ---------------------------------------------------------------------------
 
-function modeDirective(mode: CzarMode, hasFiles: boolean): string {
+function modeDirective(mode: CzarMode, _hasFiles: boolean): string {
   switch (mode) {
     case "correct":
       return `You are reviewing uploaded content. Read all files carefully. Identify: grammar errors, argument weaknesses, citation gaps, structural issues, register problems. Then produce the corrected version with changes marked as ~~old~~ → **new**. Explain significant changes.`;
@@ -296,7 +305,6 @@ function modeDirective(mode: CzarMode, hasFiles: boolean): string {
       return `You are a research agent writing a standalone research document. Your task is fully specified in the EXECUTION PLAN and SOURCES sections of the user's message — write exactly what the plan specifies. Do not infer a different topic from earlier conversation messages. Always end with a full ## References section using the verified sources provided.`;
     case "plan":
       return `You are a document planning assistant. Output ONLY a single JSON block in this exact format — no prose, no commentary before or after:
-
 \`\`\`czar-plan
 {
   "title": "Document title here",
@@ -341,19 +349,39 @@ function shouldSearchWeb(message: string, settings: Record<string, unknown>): bo
   const lower = message.toLowerCase();
 
   // Writing/generation tasks do NOT need web search
-  if (/\b(write|draft|essay|poem|story|report|letter|document|chapter|outline|summarise|rewrite|edit|proofread|paraphrase)\b/.test(lower)) return false;
+  if (
+    /\b(write|draft|essay|poem|story|report|letter|document|chapter|outline|summarise|rewrite|edit|proofread|paraphrase)\b/.test(
+      lower,
+    )
+  ) {
+    return false;
+  }
 
   // Explicit search triggers
-  if (/\b(search for|look up|find out|google|what happened|did .+ happen|is .+ true|fact.?check)\b/.test(lower)) return true;
+  if (/\b(search for|look up|find out|google|what happened|did .+ happen|is .+ true|fact.?check)\b/.test(lower)) {
+    return true;
+  }
 
   // Current events / time-sensitive
-  if (/\b(today|yesterday|this week|this month|this year|2025|2026|recently|latest|current|right now|breaking|just|now)\b/.test(lower)) return true;
+  if (
+    /\b(today|yesterday|this week|this month|this year|2025|2026|recently|latest|current|right now|breaking|just|now)\b/.test(
+      lower,
+    )
+  ) {
+    return true;
+  }
 
   // Questions about entities (companies, people, products)
   if (/^(who is|what is|where is|when did|how much|how many|what are the|is it true)\b/i.test(lower)) return true;
 
   // News / events / announcements
-  if (/\b(news|announcement|release|launched|update|version|winner|score|result|election|war|conflict|crisis)\b/.test(lower)) return true;
+  if (
+    /\b(news|announcement|release|launched|update|version|winner|score|result|election|war|conflict|crisis)\b/.test(
+      lower,
+    )
+  ) {
+    return true;
+  }
 
   return false;
 }
@@ -367,7 +395,12 @@ async function searchGeneralWeb(
 
   if (!tavilyKey && !serperKey) return "";
 
-  interface WebResult { title: string; url: string; snippet: string; date?: string }
+  interface WebResult {
+    title: string;
+    url: string;
+    snippet: string;
+    date?: string;
+  }
   const results: WebResult[] = [];
   let directAnswer = "";
 
@@ -453,32 +486,45 @@ async function searchGeneralWeb(
 
 function isImageRequest(message: string): boolean {
   const lower = message.toLowerCase();
-  
+
   // Check for explicit image generation commands
-  const actionWord = /\b(generate|create|make|draw|produce|show me|give me|render|plot|visualize|visualise)\b/.test(lower);
-  
+  const actionWord =
+    /\b(generate|create|make|draw|produce|show me|give me|render|plot|visualize|visualise)\b/.test(lower);
+
   // Photorealistic requests
-  const photoWord = /\b(photo|photograph|photorealistic|realistic image|picture|portrait|landscape|painting|artwork|illustration)\b/.test(lower);
-  
+  const photoWord =
+    /\b(photo|photograph|photorealistic|realistic image|picture|portrait|landscape|painting|artwork|illustration)\b/.test(
+      lower,
+    );
+
   // Academic/scientific visualization requests (these should generate actual images, NOT Python code)
-  const diagramWord = /\b(diagram|chart|flowchart|graph|table|timeline|mindmap|svg|figure|visualization|visualisation|plot|bar chart|pie chart|line graph|scatter plot|histogram|infographic)\b/.test(lower);
-  
+  const diagramWord =
+    /\b(diagram|chart|flowchart|graph|table|timeline|mindmap|svg|figure|visualization|visualisation|plot|bar chart|pie chart|line graph|scatter plot|histogram|infographic)\b/.test(
+      lower,
+    );
+
   // Explicit anti-code signals
-  const noCodeSignals = /\b(no code|no python|no script|don't write code|actual image|generate image|as an? (image|figure|diagram|chart))\b/.test(lower);
-  
+  const noCodeSignals =
+    /\b(no code|no python|no script|don't write code|actual image|generate image|as an? (image|figure|diagram|chart))\b/.test(
+      lower,
+    );
+
   // Return true if:
   // 1. Action word + any image/diagram term, OR
   // 2. Explicit no-code request with visualization intent
   if (actionWord && (photoWord || diagramWord)) return true;
   if (noCodeSignals && diagramWord) return true;
-  
+
   return false;
 }
 
 function isPhotoRequest(message: string): boolean {
   const lower = message.toLowerCase();
   const actionWord = /\b(generate|create|make|draw|produce|show me|give me|render)\b/.test(lower);
-  const imageWord = /\b(photo|photograph|photorealistic|realistic image|picture|portrait|landscape|painting|artwork|illustration)\b/.test(lower);
+  const imageWord =
+    /\b(photo|photograph|photorealistic|realistic image|picture|portrait|landscape|painting|artwork|illustration)\b/.test(
+      lower,
+    );
   const notDiagram = !/\b(diagram|chart|flowchart|graph|table|timeline|mindmap|svg)\b/.test(lower);
   return actionWord && imageWord && notDiagram;
 }
@@ -490,16 +536,7 @@ async function generateImage(
   const apiKey = Deno.env.get("GOOGLE_AI_API_KEY");
   if (!apiKey) return null;
 
-  // Extract the core visual description from the user message for image models
-  // Image generation models need a concise visual prompt, not instructional text
-  const cleanPrompt = prompt
-    .replace(/\b(generate|create|make|draw|produce|show me|give me|render|please|can you|could you)\b/gi, "")
-    .replace(/\b(as an? (image|figure|diagram|chart|picture|photo))\b/gi, "")
-    .trim()
-    .slice(0, 400) || prompt.slice(0, 400);
-  const enhancedPrompt = cleanPrompt;
-
-  // Try Imagen 3 first (highest quality)
+  // Try Imagen 3 first (highest quality) — use the prompt cleanly, no injected instructions
   try {
     const resp = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-001:predict?key=${apiKey}`,
@@ -507,7 +544,7 @@ async function generateImage(
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          instances: [{ prompt: enhancedPrompt }],
+          instances: [{ prompt }],
           parameters: { sampleCount: 1, aspectRatio: "4:3", outputMimeType: "image/png" },
         }),
         signal,
@@ -529,7 +566,7 @@ async function generateImage(
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          contents: [{ role: "user", parts: [{ text: enhancedPrompt }] }],
+          contents: [{ role: "user", parts: [{ text: prompt }] }],
           generationConfig: { responseModalities: ["IMAGE"] },
         }),
         signal,
@@ -1117,9 +1154,11 @@ async function extractAndSaveMemory(
   svc: SupabaseClient,
 ): Promise<void> {
   const lower = userMessage.toLowerCase();
-  if (!lower.includes("remember") && !lower.includes("my name is") &&
-      !lower.includes("i am a") && !lower.includes("i'm a") &&
-      !lower.includes("i study") && !lower.includes("my supervisor")) {
+  if (
+    !lower.includes("remember") && !lower.includes("my name is") &&
+    !lower.includes("i am a") && !lower.includes("i'm a") &&
+    !lower.includes("i study") && !lower.includes("my supervisor")
+  ) {
     return;
   }
 
@@ -1308,13 +1347,13 @@ async function runMain(
       }
     }
 
-    // ── 3. Parse request ─────────────────────────────────────────────────
+    // ── 3. Detect mode + complexity + model ──────────────────────────────
     const hasFiles = (req.attachments?.length ?? 0) > 0;
     const mode = detectMode(req.user_message, hasFiles, req.mode);
     const complexity = detectComplexity(req.user_message, req.attachments?.length ?? 0, mode);
     const modelChoice = pickModel(tier, mode, complexity, email);
 
-    // ── 4. Conversation ──────────────────────────────────────────────────
+    // ── 4. Ensure conversation ───────────────────────────────────────────
     const conversationTitle = req.user_message.slice(0, 60) || "New chat";
     let conversationId: string;
     try {
@@ -1385,9 +1424,9 @@ async function runMain(
       }
     }
 
-    // ── 9. Load conversation history ─────────────────────────────────────
-    // IMPORTANT: history must be loaded before system prompt assembly (mode-switch
-    // checkpoint serialization needs it).
+    // ── 9. Load conversation history ──────────────────────────────────────
+    // MUST come before system prompt assembly and mode-switch detection,
+    // both of which reference `history`.
     let history: { role: string; content: string }[] = [];
     try {
       history = await loadConversationHistory(conversationId, svc);
@@ -1407,7 +1446,7 @@ async function runMain(
       // non-fatal
     }
 
-    // ── 10. Build system prompt ────────────────────────────────────────────
+    // ── 10. Build system prompt ───────────────────────────────────────────
     const settingsBlock = req.settings ? buildSettingsManifest(req.settings) : "";
     const directive = modeDirective(mode, hasFiles);
 
@@ -1423,7 +1462,8 @@ async function runMain(
 
     const memoryBlock = await loadUserMemory(userId, svc);
 
-    // ── PRINCIPLE 5: Lossless Context Switching ──────────────────────────
+    // ── 11. Mode switch detection (uses loaded history) ───────────────────
+    // PRINCIPLE 5: Lossless Context Switching
     // Detect mode switch and serialize prior mode checkpoint
     const { data: convData } = await svc
       .from("czar_conversations")
@@ -1433,7 +1473,13 @@ async function runMain(
 
     const prevMode = convData?.mode as CzarMode | undefined;
     if (prevMode && prevMode !== mode) {
-      write("agent", { id: "state", name: "State Engine", status: "working", action: `Context-switching: ${prevMode} → ${mode}` });
+      write("agent", {
+        id: "state",
+        name: "State Engine",
+        status: "working",
+        action: `Context-switching: ${prevMode} → ${mode}`,
+      });
+      // Serialize old mode non-blocking so we don't hold up the user
       const recentHistText = history.slice(-6).map((m) => `${m.role.toUpperCase()}: ${m.content}`).join("\n\n");
       saveModeCheckpoint(userId, prevMode, recentHistText, svc).catch(() => {});
     }
@@ -1449,10 +1495,10 @@ async function runMain(
     if (playbookContent) systemParts.push("\n\n" + playbookContent);
     const system = systemParts.join("\n");
 
-    // Extract memory facts async — non-blocking
+    // Extract memory facts async — non-blocking, runs after main logic starts
     extractAndSaveMemory(userId, req.user_message, svc).catch(() => {});
 
-    // ── 11. Generate response (orchestrated or direct) ────────────────────
+    // ── 12. Generate response ─────────────────────────────────────────────
     let fullResponse = "";
 
     // ── Special path: Apply selected corrections (surgical AI edit) ───────
@@ -1498,17 +1544,25 @@ Rules:
 
       // Persist
       if (assistantId && fullResponse) {
-        try { await svc.from("czar_messages").update({
-          content: fullResponse,
-          metadata: { mode, complexity, word_count: countWords(fullResponse) },
-        }).eq("id", assistantId); } catch {}
+        try {
+          await svc.from("czar_messages").update({
+            content: fullResponse,
+            metadata: { mode, complexity, word_count: countWords(fullResponse) },
+          }).eq("id", assistantId);
+        } catch {}
       }
-      try { await svc.from("czar_conversations").update({
-        mode, last_message: req.user_message.slice(0, 200), updated_at: new Date().toISOString(),
-      }).eq("id", conversationId); } catch {}
+      try {
+        await svc.from("czar_conversations").update({
+          mode,
+          last_message: req.user_message.slice(0, 200),
+          updated_at: new Date().toISOString(),
+        }).eq("id", conversationId);
+      } catch {}
 
       if (countWords(fullResponse) > 0 && email !== ADMIN_EMAIL) {
-        try { await svc.rpc("increment_czar_words_used", { _user_id: userId, _amount: countWords(fullResponse) }); } catch {}
+        try {
+          await svc.rpc("increment_czar_words_used", { _user_id: userId, _amount: countWords(fullResponse) });
+        } catch {}
       }
 
       write("done", { conversation_id: conversationId, assistant_id: assistantId ?? "", words: countWords(fullResponse) });
@@ -1563,14 +1617,24 @@ Rules:
 3. Order changes by their position in the document (start → end)
 4. Do not repeat the same original text in two changes
 5. Keep changes granular — one specific issue per change entry
-6. For structural issues, use the problematic sentence or paragraph opener as "original"${correctionNotes ? `\n\nAdditional editor instructions from user: ${correctionNotes}` : ""}`;
+6. For structural issues, use the problematic sentence or paragraph opener as "original"${
+        correctionNotes ? `\n\nAdditional editor instructions from user: ${correctionNotes}` : ""
+      }`;
 
       let rawJson = "";
       try {
-        rawJson = await callAnthropicSync(C_SONNET, correctionSystem, `Document to analyze:\n\n${docText}`, signal);
+        rawJson = await callAnthropicSync(
+          C_SONNET,
+          correctionSystem,
+          `Document to analyze:\n\n${docText}`,
+          signal,
+        );
       } catch (err: any) {
         if (err?.name === "AbortError") return;
-        write("error", { message: `Correction analysis failed: ${err?.message ?? "unknown error"}`, recoverable: false });
+        write("error", {
+          message: `Correction analysis failed: ${err?.message ?? "unknown error"}`,
+          recoverable: false,
+        });
         return;
       }
 
@@ -1626,15 +1690,21 @@ Rules:
       // Persist
       const correctionMeta = `[Correction analysis: ${changes.length} changes]`;
       if (assistantId) {
-        try { await svc.from("czar_messages").update({
-          content: correctionMeta,
-          metadata: { mode, complexity, correction_count: changes.length },
-        }).eq("id", assistantId); } catch {}
+        try {
+          await svc.from("czar_messages").update({
+            content: correctionMeta,
+            metadata: { mode, complexity, correction_count: changes.length },
+          }).eq("id", assistantId);
+        } catch {}
       }
 
-      try { await svc.from("czar_conversations").update({
-        mode, last_message: req.user_message.slice(0, 200), updated_at: new Date().toISOString(),
-      }).eq("id", conversationId); } catch {}
+      try {
+        await svc.from("czar_conversations").update({
+          mode,
+          last_message: req.user_message.slice(0, 200),
+          updated_at: new Date().toISOString(),
+        }).eq("id", conversationId);
+      } catch {}
 
       write("done", { conversation_id: conversationId, assistant_id: assistantId ?? "", words: changes.length });
       return;
@@ -1652,7 +1722,8 @@ Rules:
       }
     }
 
-    const isOrchestratedMode = mode === "write" || mode === "research" || mode === "literature_review" || mode === "legal";
+    const isOrchestratedMode =
+      mode === "write" || mode === "research" || mode === "literature_review" || mode === "legal";
 
     if (isOrchestratedMode && !signal.aborted) {
       // Multi-agent pipeline: Planner → Researcher → Writer → Critic → Illustrator
@@ -1683,7 +1754,10 @@ Rules:
       }
     } else {
       // ── Image generation — explicit /image command works in any mode; natural requests only in chat ──
-      if ((req.settings?.generateImage === true || (mode === "chat" && isImageRequest(req.user_message))) && !signal.aborted) {
+      if (
+        (req.settings?.generateImage === true || (mode === "chat" && isImageRequest(req.user_message))) &&
+        !signal.aborted
+      ) {
         write("agent", {
           id: "illustrator",
           name: "Illustrator",
@@ -1697,7 +1771,7 @@ Rules:
           const captionMatch = req.user_message.match(/\b(?:of|showing|depicting|illustrating|:)\s+(.+)/i);
           const caption = captionMatch ? captionMatch[1].trim().slice(0, 120) : "Generated image";
           fullResponse = `![${caption}](${imageDataUrl})\n\n*Generated with Gemini Imagen · Click to view full size*`;
-          // Use replace (not delta) so the entire image markdown is sent in one go
+          // Use "replace" so the client renders the full image markdown immediately
           write("replace", { content: fullResponse });
           write("agent", {
             id: "illustrator",
@@ -1706,45 +1780,41 @@ Rules:
             action: "Image generated",
           });
 
-          // Persist and exit
-          if (assistantId) {
-            try { await svc.from("czar_messages").update({
-              content: "[Image generated]",
-              metadata: { mode, complexity },
-            }).eq("id", assistantId); } catch {}
+          // Persist and exit — do NOT fall through to text generation
+          if (assistantId && fullResponse) {
+            try {
+              await svc.from("czar_messages").update({
+                content: "[Image generated]",
+                metadata: { mode, complexity },
+              }).eq("id", assistantId);
+            } catch {}
           }
-          try { await svc.from("czar_conversations").update({
-            mode, last_message: req.user_message.slice(0, 200), updated_at: new Date().toISOString(),
-          }).eq("id", conversationId); } catch {}
+          try {
+            await svc.from("czar_conversations").update({
+              mode,
+              last_message: req.user_message.slice(0, 200),
+              updated_at: new Date().toISOString(),
+            }).eq("id", conversationId);
+          } catch {}
           write("done", { conversation_id: conversationId, assistant_id: assistantId ?? "", words: 5 });
           return;
         }
 
-        // Image generation failed — inform the user rather than silently falling through
+        // Image generation failed — emit error and exit, do NOT fall through to text
         write("agent", {
           id: "illustrator",
           name: "Illustrator",
           status: "error",
           action: "Image generation unavailable",
         });
-        write("delta", { text: "Image generation is currently unavailable. Please describe what you need in text and I'll help you with that instead." });
-        fullResponse = "Image generation is currently unavailable. Please describe what you need in text and I'll help you with that instead.";
-
-        // Persist and exit
-        if (assistantId) {
-          try { await svc.from("czar_messages").update({
-            content: fullResponse,
-            metadata: { mode, complexity },
-          }).eq("id", assistantId); } catch {}
-        }
-        try { await svc.from("czar_conversations").update({
-          mode, last_message: req.user_message.slice(0, 200), updated_at: new Date().toISOString(),
-        }).eq("id", conversationId); } catch {}
-        write("done", { conversation_id: conversationId, assistant_id: assistantId ?? "", words: countWords(fullResponse) });
+        write("error", {
+          message: "Image generation is unavailable. Please try again or describe what you want in text.",
+          recoverable: false,
+        });
         return;
       }
 
-      // Direct model call for chat, plan, correct
+      // Direct model call for chat, plan, screenplay
       write("agent", {
         id: "writer",
         name: "CZAR Writer",
