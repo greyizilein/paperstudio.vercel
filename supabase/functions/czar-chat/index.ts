@@ -490,19 +490,14 @@ async function generateImage(
   const apiKey = Deno.env.get("GOOGLE_AI_API_KEY");
   if (!apiKey) return null;
 
-  // Enhance the prompt for academic/scientific visualisations
-  const enhancedPrompt = `${prompt}
-  
-IMPORTANT: Generate an ACTUAL IMAGE/visualisation. Do NOT write Python code, JavaScript code, R code, or any programming code.
-This must be a rendered image file (PNG/JPEG), not code instructions.
-
-Style requirements for academic figures:
-- Clean white background
-- Scientific illustration style
-- High contrast for readability
-- No decorative elements
-- Professional typography
-- Clear labels and legends if applicable`;
+  // Extract the core visual description from the user message for image models
+  // Image generation models need a concise visual prompt, not instructional text
+  const cleanPrompt = prompt
+    .replace(/\b(generate|create|make|draw|produce|show me|give me|render|please|can you|could you)\b/gi, "")
+    .replace(/\b(as an? (image|figure|diagram|chart|picture|photo))\b/gi, "")
+    .trim()
+    .slice(0, 400) || prompt.slice(0, 400);
+  const enhancedPrompt = cleanPrompt;
 
   // Try Imagen 3 first (highest quality)
   try {
@@ -1390,7 +1385,29 @@ async function runMain(
       }
     }
 
-    // ── 9. Build system prompt ────────────────────────────────────────────
+    // ── 9. Load conversation history ─────────────────────────────────────
+    // IMPORTANT: history must be loaded before system prompt assembly (mode-switch
+    // checkpoint serialization needs it).
+    let history: { role: string; content: string }[] = [];
+    try {
+      history = await loadConversationHistory(conversationId, svc);
+      // Strip empty assistant placeholder (just inserted above)
+      while (
+        history.length > 0 &&
+        history[history.length - 1].role === "assistant" &&
+        history[history.length - 1].content.trim() === ""
+      ) {
+        history.pop();
+      }
+      // Strip current user message — we re-add it below (with augmented content for write/research)
+      if (history.length > 0 && history[history.length - 1].role === "user") {
+        history.pop();
+      }
+    } catch {
+      // non-fatal
+    }
+
+    // ── 10. Build system prompt ────────────────────────────────────────────
     const settingsBlock = req.settings ? buildSettingsManifest(req.settings) : "";
     const directive = modeDirective(mode, hasFiles);
 
@@ -1417,7 +1434,6 @@ async function runMain(
     const prevMode = convData?.mode as CzarMode | undefined;
     if (prevMode && prevMode !== mode) {
       write("agent", { id: "state", name: "State Engine", status: "working", action: `Context-switching: ${prevMode} → ${mode}` });
-      // Serialize old mode non-blocking so we don't hold up the user
       const recentHistText = history.slice(-6).map((m) => `${m.role.toUpperCase()}: ${m.content}`).join("\n\n");
       saveModeCheckpoint(userId, prevMode, recentHistText, svc).catch(() => {});
     }
@@ -1433,28 +1449,8 @@ async function runMain(
     if (playbookContent) systemParts.push("\n\n" + playbookContent);
     const system = systemParts.join("\n");
 
-    // Extract memory facts async — non-blocking, runs after main logic starts
+    // Extract memory facts async — non-blocking
     extractAndSaveMemory(userId, req.user_message, svc).catch(() => {});
-
-    // ── 10. Load conversation history ─────────────────────────────────────
-    let history: { role: string; content: string }[] = [];
-    try {
-      history = await loadConversationHistory(conversationId, svc);
-      // Strip empty assistant placeholder (just inserted above)
-      while (
-        history.length > 0 &&
-        history[history.length - 1].role === "assistant" &&
-        history[history.length - 1].content.trim() === ""
-      ) {
-        history.pop();
-      }
-      // Strip current user message — we re-add it below (with augmented content for write/research)
-      if (history.length > 0 && history[history.length - 1].role === "user") {
-        history.pop();
-      }
-    } catch {
-      // non-fatal
-    }
 
     // ── 11. Generate response (orchestrated or direct) ────────────────────
     let fullResponse = "";
@@ -1701,7 +1697,8 @@ Rules:
           const captionMatch = req.user_message.match(/\b(?:of|showing|depicting|illustrating|:)\s+(.+)/i);
           const caption = captionMatch ? captionMatch[1].trim().slice(0, 120) : "Generated image";
           fullResponse = `![${caption}](${imageDataUrl})\n\n*Generated with Gemini Imagen · Click to view full size*`;
-          write("delta", { text: fullResponse });
+          // Use replace (not delta) so the entire image markdown is sent in one go
+          write("replace", { content: fullResponse });
           write("agent", {
             id: "illustrator",
             name: "Illustrator",
@@ -1710,7 +1707,7 @@ Rules:
           });
 
           // Persist and exit
-          if (assistantId && fullResponse) {
+          if (assistantId) {
             try { await svc.from("czar_messages").update({
               content: "[Image generated]",
               metadata: { mode, complexity },
@@ -1723,13 +1720,28 @@ Rules:
           return;
         }
 
-        // Image generation failed — fall through to text response
+        // Image generation failed — inform the user rather than silently falling through
         write("agent", {
           id: "illustrator",
           name: "Illustrator",
           status: "error",
           action: "Image generation unavailable",
         });
+        write("delta", { text: "Image generation is currently unavailable. Please describe what you need in text and I'll help you with that instead." });
+        fullResponse = "Image generation is currently unavailable. Please describe what you need in text and I'll help you with that instead.";
+
+        // Persist and exit
+        if (assistantId) {
+          try { await svc.from("czar_messages").update({
+            content: fullResponse,
+            metadata: { mode, complexity },
+          }).eq("id", assistantId); } catch {}
+        }
+        try { await svc.from("czar_conversations").update({
+          mode, last_message: req.user_message.slice(0, 200), updated_at: new Date().toISOString(),
+        }).eq("id", conversationId); } catch {}
+        write("done", { conversation_id: conversationId, assistant_id: assistantId ?? "", words: countWords(fullResponse) });
+        return;
       }
 
       // Direct model call for chat, plan, correct
