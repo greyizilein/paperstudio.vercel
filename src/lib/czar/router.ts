@@ -47,11 +47,16 @@ const REGEX_SIGNALS: RegexSignal[] = [
 
   // Professional
   { pattern: /\b(report|proposal|brief|memo|executive summary|business plan)\b/i, weight: 0.8, domain: "professional" },
-  { pattern: /\b(technical documentation|API docs|SOP|procedure|guide)\b/i, weight: 0.85, domain: "professional", styleHint: "technical" },
   { pattern: /\b(pitch deck|investor memo|white paper|board paper|policy brief)\b/i, weight: 0.85, domain: "professional", styleHint: "executive" },
   { pattern: /\b(strategy document|management report|stakeholder|market analysis)\b/i, weight: 0.8, domain: "professional" },
   { pattern: /\b(executive summary)\b/i, weight: 0.85, domain: "professional", styleHint: "executive" },
   { pattern: /\b(consulting report|McKinsey|pyramid principle|BLUF)\b/i, weight: 0.9, domain: "professional", styleHint: "consulting" },
+
+  // Technical (Sovereign Domain)
+  { pattern: /\b(technical documentation|API docs|system architecture|swagger)\b/i, weight: 0.9, domain: "technical", styleHint: "api_documentation" },
+  { pattern: /\b(SOP|standard operating procedure|procedure|workflow doc)\b/i, weight: 0.85, domain: "technical", styleHint: "sop" },
+  { pattern: /\b(user guide|instruction manual|step-by-step guide)\b/i, weight: 0.85, domain: "technical", styleHint: "manual" },
+  { pattern: /\b(tech spec|RFC|architecture diagram|engineering doc)\b/i, weight: 0.9, domain: "technical", styleHint: "architecture_spec" },
 
   // Journalistic
   { pattern: /\b(article|news story|feature|investigative|reporting)\b/i, weight: 0.7, domain: "journalistic" },
@@ -87,6 +92,7 @@ const DOMAIN_SIGNALS: RouterSignal[] = [
   { keyword: "research gap", weight: 0.85, domain: "academic" },
   { keyword: "flash fiction", weight: 0.9, domain: "fiction" },
   { keyword: "business proposal", weight: 0.9, domain: "professional" },
+  { keyword: "api endpoint", weight: 0.9, domain: "technical", styleHint: "api_documentation" },
   { keyword: "investigative", weight: 0.85, domain: "journalistic", styleHint: "investigative" },
   { keyword: "personal statement", weight: 0.9, domain: "personal", styleHint: "personal_statement" },
   { keyword: "memoir", weight: 0.9, domain: "personal", styleHint: "memoir" },
@@ -114,6 +120,9 @@ const OVERRIDE_MAP: Record<string, { domain: DomainType; style?: StyleOverlay }>
   "as a sonnet":                { domain: "poetry", style: "formal" },
   "in a professional tone":     { domain: "professional", style: "executive" },
   "as a business report":       { domain: "professional", style: "executive" },
+  "as technical documentation": { domain: "technical", style: "api_documentation" },
+  "as an sop":                  { domain: "technical", style: "sop" },
+  "as a user manual":           { domain: "technical", style: "manual" },
   "as a personal statement":    { domain: "personal", style: "personal_statement" },
   "as a memoir":                { domain: "personal", style: "memoir" },
 };
@@ -164,6 +173,7 @@ export function detectDomainAndStyle(
     academic:     0,
     fiction:      0,
     professional: 0,
+    technical:    0,
     journalistic: 0,
     personal:     0,
     poetry:       0,

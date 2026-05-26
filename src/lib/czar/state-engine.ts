@@ -15,6 +15,7 @@ import type {
   NarrativePosition,
   ArgumentPosition,
   ProfessionalPosition,
+  TechnicalPosition,
   JournalisticPosition,
   PersonalPosition,
   PoetryPosition,
@@ -323,6 +324,23 @@ export function extractPersonalPosition(
   };
 }
 
+export function extractTechnicalPosition(
+  content: string,
+  prior?: TechnicalPosition,
+): TechnicalPosition {
+  const hasCode = /```[\s\S]*?```/.test(content);
+  const hasPrereqs = /prerequisite|requirement|before you begin|you will need/i.test(content);
+  const hasTroubleshooting = /troubleshoot|error|issue|problem|if .+ fails/i.test(content);
+  const headings = Array.from(content.matchAll(/^#{1,3}\s+(.+)/gm)).map((m) => m[1]);
+  return {
+    audienceLevel: prior?.audienceLevel,
+    componentsDocumented: headings.length > 0 ? headings : (prior?.componentsDocumented ?? []),
+    codeSnippetsIncluded: hasCode || (prior?.codeSnippetsIncluded ?? false),
+    prerequisitesStated: hasPrereqs || (prior?.prerequisitesStated ?? false),
+    troubleshootingDefined: hasTroubleshooting || (prior?.troubleshootingDefined ?? false),
+  };
+}
+
 export function extractPoetryPosition(
   content: string,
   prior?: PoetryPosition,
@@ -393,6 +411,12 @@ export function createCheckpoint(params: {
       checkpoint.professionalPosition = extractProfessionalPosition(
         content,
         priorCheckpoint?.professionalPosition,
+      );
+      break;
+    case "technical":
+      checkpoint.technicalPosition = extractTechnicalPosition(
+        content,
+        priorCheckpoint?.technicalPosition,
       );
       break;
     case "journalistic":
@@ -509,6 +533,16 @@ export function buildCheckpointInjection(checkpoint: Checkpoint | null, domain: 
     lines.push(`  Executive summary: ${p.execSummaryDone ? "done" : "not yet written"}`);
     lines.push(`  Recommendations: ${p.recommendationsStated ? "stated" : "pending"}`);
     if (p.keyDecisions.length > 0) lines.push(`  Key decisions: ${p.keyDecisions.join("; ")}`);
+  }
+
+  if (domain === "technical" && checkpoint.technicalPosition) {
+    const p = checkpoint.technicalPosition;
+    lines.push(`\nTECHNICAL STATE:`);
+    if (p.audienceLevel) lines.push(`  Audience: ${p.audienceLevel}`);
+    if (p.componentsDocumented.length > 0) lines.push(`  Components documented: ${p.componentsDocumented.join(", ")}`);
+    lines.push(`  Prerequisites stated: ${p.prerequisitesStated ? "yes" : "no"}`);
+    lines.push(`  Code snippets included: ${p.codeSnippetsIncluded ? "yes" : "no"}`);
+    lines.push(`  Troubleshooting defined: ${p.troubleshootingDefined ? "yes" : "no"}`);
   }
 
   if (domain === "journalistic" && checkpoint.journalisticPosition) {

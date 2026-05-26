@@ -9,6 +9,7 @@ export type DomainType =
   | "academic"
   | "fiction"
   | "professional"
+  | "technical"
   | "journalistic"
   | "personal"
   | "poetry"
@@ -33,12 +34,18 @@ export type FictionStyle =
   | "genre_literary"
   | "voice_first";
 
-// Professional document styles
+// Professional document styles (technical extracted to sovereign domain)
 export type ProfessionalStyle =
   | "executive"
   | "consulting"
-  | "technical"
   | "legal_adjacent";
+
+// Technical document styles (sovereign domain)
+export type TechnicalStyle =
+  | "api_documentation"
+  | "sop"
+  | "manual"
+  | "architecture_spec";
 
 // Journalistic styles
 export type JournalisticStyle =
@@ -75,6 +82,7 @@ export type StyleOverlay =
   | AcademicStyle
   | FictionStyle
   | ProfessionalStyle
+  | TechnicalStyle
   | JournalisticStyle
   | PersonalStyle
   | PoetryStyle
@@ -116,6 +124,14 @@ export interface ProfessionalPosition {
   actionItems: string[];
   recommendationsStated: boolean;
   execSummaryDone: boolean;
+}
+
+export interface TechnicalPosition {
+  audienceLevel?: "developer" | "sysadmin" | "end_user";
+  componentsDocumented: string[];
+  codeSnippetsIncluded: boolean;
+  prerequisitesStated: boolean;
+  troubleshootingDefined: boolean;
 }
 
 export interface JournalisticPosition {
@@ -170,6 +186,7 @@ export interface Checkpoint {
   narrativePosition?: NarrativePosition;
   argumentPosition?: ArgumentPosition;
   professionalPosition?: ProfessionalPosition;
+  technicalPosition?: TechnicalPosition;
   journalisticPosition?: JournalisticPosition;
   personalPosition?: PersonalPosition;
   poetryPosition?: PoetryPosition;
@@ -299,6 +316,7 @@ export const DOMAIN_LABELS: Record<DomainType, string> = {
   academic:      "Academic",
   fiction:       "Fiction",
   professional:  "Professional",
+  technical:     "Technical",
   journalistic:  "Journalism",
   personal:      "Personal",
   poetry:        "Poetry",
@@ -321,8 +339,11 @@ export const STYLE_LABELS: Record<string, string> = {
   voice_first:            "Voice-First",
   executive:              "Executive",
   consulting:             "Consulting",
-  technical:              "Technical",
   legal_adjacent:         "Legal-Adjacent",
+  api_documentation:      "API Documentation",
+  sop:                    "SOP / Procedure",
+  manual:                 "User Manual",
+  architecture_spec:      "Architecture Spec",
   inverted_pyramid:       "Inverted Pyramid",
   feature:                "Feature",
   investigative:          "Investigative",
@@ -348,6 +369,7 @@ export const DEFAULT_DOMAIN_STYLES: Record<DomainType, StyleOverlay> = {
   academic:      "harvard",
   fiction:       "literary_minimalist",
   professional:  "executive",
+  technical:     "manual",
   journalistic:  "inverted_pyramid",
   personal:      "memoir",
   poetry:        "free_verse",
