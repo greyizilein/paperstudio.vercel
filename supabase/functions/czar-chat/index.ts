@@ -536,53 +536,33 @@ async function generateImage(
   const apiKey = Deno.env.get("GOOGLE_AI_API_KEY");
   if (!apiKey) return null;
 
-  // Try Imagen 3 first (highest quality) — use the prompt cleanly, no injected instructions
-  try {
-    const resp = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-001:predict?key=${apiKey}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          instances: [{ prompt }],
-          parameters: { sampleCount: 1, aspectRatio: "4:3", outputMimeType: "image/png" },
-        }),
-        signal,
-      },
-    );
-    if (resp.ok) {
-      const data = await resp.json();
-      const b64 = data?.predictions?.[0]?.bytesBase64Encoded;
-      const mime = data?.predictions?.[0]?.mimeType || "image/png";
-      if (b64) return `data:${mime};base64,${b64}`;
-    }
-  } catch { /* fall through to next model */ }
-
-  // Fallback: Gemini 2.0 Flash with image output modality
-  try {
-    const resp = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-preview-image-generation:generateContent?key=${apiKey}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ role: "user", parts: [{ text: prompt }] }],
-          generationConfig: { responseModalities: ["IMAGE"] },
-        }),
-        signal,
-      },
-    );
-    if (resp.ok) {
-      const data = await resp.json();
-      const parts: any[] = data?.candidates?.[0]?.content?.parts ?? [];
-      for (const part of parts) {
-        if (part?.inlineData?.data) {
-          const mime = part.inlineData.mimeType || "image/png";
-          return `data:${mime};base64,${part.inlineData.data}`;
-        }
+  // GA Imagen chain: 4 Ultra → 4 Standard → 3 (all use the :predict endpoint)
+  for (const model of [
+    "imagen-4.0-ultra-generate-001",
+    "imagen-4.0-generate-001",
+    "imagen-3.0-generate-001",
+  ]) {
+    try {
+      const resp = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:predict?key=${apiKey}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            instances: [{ prompt }],
+            parameters: { sampleCount: 1, aspectRatio: "4:3", outputMimeType: "image/png" },
+          }),
+          signal,
+        },
+      );
+      if (resp.ok) {
+        const data = await resp.json();
+        const b64 = data?.predictions?.[0]?.bytesBase64Encoded;
+        const mime = data?.predictions?.[0]?.mimeType || "image/png";
+        if (b64) return `data:${mime};base64,${b64}`;
       }
-    }
-  } catch { /* both models failed */ }
+    } catch { /* try next model */ }
+  }
 
   return null;
 }
@@ -1571,7 +1551,11 @@ Rules:
 
     // ── Special path: Correction mode — structured JSON analysis ──────────
     if (mode === "correct" && !signal.aborted) {
-      const docText: string = (req.settings?.correction_paste as string | undefined) || fileContext;
+      // Accept text from: settings.correction_paste, file upload, or the user message itself
+      const docText: string =
+        (req.settings?.correction_paste as string | undefined) ||
+        fileContext ||
+        req.user_message;
       const correctionNotes: string = (req.settings?.correction_notes as string | undefined) || "";
 
       if (!docText.trim()) {

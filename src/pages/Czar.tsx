@@ -676,6 +676,7 @@ export default function CzarPage() {
             onStop={stopStream}
             onNewConv={newConv}
             onSelectConv={selectConv}
+            onCorrect={() => setCorrectionModalOpen(true)}
           />
         </div>
 
