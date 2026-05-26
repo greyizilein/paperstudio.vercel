@@ -536,52 +536,30 @@ async function generateImage(
   const apiKey = Deno.env.get("GOOGLE_AI_API_KEY");
   if (!apiKey) return null;
 
-  // Try Imagen 3 first (highest quality) — use the prompt cleanly, no injected instructions
-  try {
-    const resp = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-001:predict?key=${apiKey}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          instances: [{ prompt }],
-          parameters: { sampleCount: 1, aspectRatio: "4:3", outputMimeType: "image/png" },
-        }),
-        signal,
-      },
-    );
-    if (resp.ok) {
-      const data = await resp.json();
-      const b64 = data?.predictions?.[0]?.bytesBase64Encoded;
-      const mime = data?.predictions?.[0]?.mimeType || "image/png";
-      if (b64) return `data:${mime};base64,${b64}`;
-    }
-  } catch { /* fall through to next model */ }
-
-  // Fallback: Gemini 2.0 Flash Exp — supports native image output modality
-  for (const fallbackModel of ["gemini-2.0-flash-exp", "gemini-2.0-flash"]) {
+  // GA Imagen chain: 4 Ultra → 4 Standard → 3 (all use the :predict endpoint)
+  for (const model of [
+    "imagen-4.0-ultra-generate-001",
+    "imagen-4.0-generate-001",
+    "imagen-3.0-generate-001",
+  ]) {
     try {
       const resp = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${fallbackModel}:generateContent?key=${apiKey}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:predict?key=${apiKey}`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            contents: [{ role: "user", parts: [{ text: prompt }] }],
-            generationConfig: { responseModalities: ["TEXT", "IMAGE"] },
+            instances: [{ prompt }],
+            parameters: { sampleCount: 1, aspectRatio: "4:3", outputMimeType: "image/png" },
           }),
           signal,
         },
       );
       if (resp.ok) {
         const data = await resp.json();
-        const parts: any[] = data?.candidates?.[0]?.content?.parts ?? [];
-        for (const part of parts) {
-          if (part?.inlineData?.data) {
-            const mime = part.inlineData.mimeType || "image/png";
-            return `data:${mime};base64,${part.inlineData.data}`;
-          }
-        }
+        const b64 = data?.predictions?.[0]?.bytesBase64Encoded;
+        const mime = data?.predictions?.[0]?.mimeType || "image/png";
+        if (b64) return `data:${mime};base64,${b64}`;
       }
     } catch { /* try next model */ }
   }
