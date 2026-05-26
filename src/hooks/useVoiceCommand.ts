@@ -7,7 +7,10 @@ export function useVoiceCommand(onCommand: (intent: string, payload?: string) =>
   const startListening = () => {
     const w = window as any;
     const SpeechRecognition = w.SpeechRecognition ?? w.webkitSpeechRecognition;
-    if (!SpeechRecognition) return;
+    if (!SpeechRecognition) {
+      console.error("[useVoiceCommand] Speech recognition not supported in this browser.");
+      return;
+    }
 
     recognitionRef.current = new SpeechRecognition();
     recognitionRef.current.continuous = false;
@@ -15,9 +18,9 @@ export function useVoiceCommand(onCommand: (intent: string, payload?: string) =>
 
     recognitionRef.current.onresult = (event: any) => {
       const transcript = event.results[0][0].transcript.toLowerCase();
-      if (transcript.includes("fix this") || transcript.includes("correct this")) {
+      if (transcript.includes("fix") || transcript.includes("correct")) {
         onCommand("correct");
-      } else if (transcript.includes("write more") || transcript.includes("continue writing")) {
+      } else if (transcript.includes("write more") || transcript.includes("continue writing") || transcript.includes("write")) {
         onCommand("write");
       } else {
         onCommand("chat", transcript);
