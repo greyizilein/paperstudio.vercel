@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import {
   PanelLeftClose, PanelLeftOpen, Loader2, Square,
   Bot, AlertCircle, Search, PenLine, Cpu,
-  ChevronDown, ChevronRight, LayoutPanelLeft, FileSearch, Clock, X,
+  ChevronDown, ChevronRight, LayoutPanelLeft, FileSearch, Clock, X, Plus,
   BookOpen, Film, Scale, Download, Volume2, VolumeX, Edit3, Eye, FileText, Sparkles,
   Compass, FlaskConical, Pen, Library, Gavel, RefreshCw, ImageIcon,
   Copy, Trash2, MoreHorizontal, Check, FileDown, LayoutGrid, Settings,
@@ -21,6 +21,7 @@ import {
   type CzarMetaEvent, type CzarAgentEvent, type CzarToolEvent,
   type CzarClarificationEvent,
   type CorrectionSummaryEvent, type CorrectionChangeEvent,
+  type CzarConversation,
 } from "@/lib/czarStream";
 import { buildDocx, docxFilename, stripMarkdown, markdownComponents, chatMarkdownComponents } from "@/lib/czarDocUtils.tsx";
 import { computeParaDiff, type DiffParagraph } from "@/lib/diffUtils";
@@ -172,6 +173,10 @@ export default function CzarPage() {
   const [settings, setSettings] = useState<CzarSettings>(loadCzarSettings);
   const [wordBalance, setWordBalance] = useState<number | null>(null);
 
+  // Tab management
+  const [convsList, setConvsList]   = useState<CzarConversation[]>([]);
+  const [openTabs, setOpenTabs]     = useState<(string | null)[]>([null]);
+
   const [convId, setConvId] = useState<string | null>(null);
   const [messages, setMessages] = useState<UIMessage[]>([]);
   const [streaming, setStreaming] = useState(false);
@@ -239,17 +244,50 @@ export default function CzarPage() {
     setMessages([]);
     setAgents([]);
     setStreaming(false);
+    setOpenTabs(prev => prev.includes(null) ? prev : [...prev, null]);
   }, []);
 
   const selectConv = useCallback((id: string) => {
     if (id === convId) return;
     abortRef.current?.abort();
     if (agentClearRef.current) clearTimeout(agentClearRef.current);
+    setOpenTabs(prev => prev.includes(id) ? prev : [...prev, id]);
     setConvId(id);
     setStreaming(false);
     setAgents([]);
     loadConv(id);
     setMobileHistoryOpen(false);
+  }, [convId, loadConv]);
+
+  const getTabTitle = useCallback((id: string | null): string => {
+    if (!id) return "New conversation";
+    const c = convsList.find(c => c.id === id);
+    return c?.title || c?.last_message?.slice(0, 32) || "Untitled";
+  }, [convsList]);
+
+  const closeTab = useCallback((id: string | null, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setOpenTabs(prev => {
+      const idx = prev.indexOf(id);
+      if (idx === -1) return prev;
+      const next = [...prev.slice(0, idx), ...prev.slice(idx + 1)];
+      const remaining = next.length > 0 ? next : [null];
+      const isActive = id === convId || (id === null && convId === null);
+      if (isActive) {
+        const adj = remaining[Math.min(idx, remaining.length - 1)];
+        setTimeout(() => {
+          abortRef.current?.abort();
+          if (agentClearRef.current) clearTimeout(agentClearRef.current);
+          if (adj === null) {
+            setConvId(null); setMessages([]); setAgents([]); setStreaming(false);
+          } else {
+            setConvId(adj); setMessages([]); setAgents([]); setStreaming(false);
+            loadConv(adj);
+          }
+        }, 0);
+      }
+      return remaining;
+    });
   }, [convId, loadConv]);
 
   const uploadFiles = useCallback(async (files: File[]): Promise<CzarRequest["attachments"]> => {
@@ -295,6 +333,11 @@ export default function CzarPage() {
       const handlers: CzarHandlers = {
         onMeta: (e: CzarMetaEvent) => {
           setConvId(e.conversation_id);
+          // Promote the unsaved null tab to the real conversation id
+          setOpenTabs(prev =>
+            prev.map(t => t === null ? e.conversation_id : t)
+              .filter((t, i, arr) => arr.indexOf(t) === i)
+          );
           if (e.mode) {
             setMessages(prev => prev.map(m =>
               m.id === assistantMsgId ? { ...m, mode: e.mode as string } : m
@@ -540,15 +583,10 @@ export default function CzarPage() {
         userEmail={user.email} avatarUrl={avatarUrl}
       />
 
-      {/* Right container — relative so conv sidebar can overlay without shifting layout */}
-      <div className="flex-1 relative overflow-hidden flex flex-col min-w-0">
+      {/* Right container */}
+      <div className="flex-1 overflow-hidden flex flex-col min-w-0">
 
-        {/* Conversation history sidebar — desktop overlay (slides in, no layout shift) */}
-        <aside className={`hidden lg:flex flex-col absolute top-0 left-0 bottom-0 z-40 w-[220px] bg-sidebar border-r border-border overflow-hidden transition-transform duration-200 ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}`}>
-          <ConvSidebar currentId={convId} onSelect={selectConv} onNew={newConv} />
-        </aside>
-
-        {/* Mobile history drawer */}
+        {/* Mobile history drawer — fixed overlay */}
         {mobileHistoryOpen && (
           <div className="lg:hidden fixed inset-0 z-[300] flex">
             <div className="absolute inset-0 bg-foreground/40 backdrop-blur-sm" onClick={() => setMobileHistoryOpen(false)} />
@@ -566,185 +604,250 @@ export default function CzarPage() {
           </div>
         )}
 
-        {/* ── DESKTOP main — hidden on mobile ── */}
-        <div
-          className="hidden lg:flex flex-col flex-1 min-w-0 min-h-0"
-          style={{
-            background: isDark
-              ? "radial-gradient(ellipse at 30% 40%, rgba(21,128,61,.18) 0%, transparent 60%), radial-gradient(ellipse at 75% 70%, rgba(20,83,45,.12) 0%, transparent 55%), hsl(var(--background))"
-              : "radial-gradient(ellipse at 30% 40%, rgba(134,239,172,.35) 0%, transparent 60%), radial-gradient(ellipse at 75% 70%, rgba(187,247,208,.25) 0%, transparent 55%), #f8fdf9",
-          }}
-        >
-          {/* Header bar */}
-          <div className="flex-shrink-0 flex items-center justify-between h-11 px-2 border-b border-border/40 bg-background/50 backdrop-blur-sm">
-            <div className="flex items-center gap-1">
-              <button
-                onClick={() => setSidebarOpen(o => !o)}
-                className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary/70 transition-colors"
-                title={sidebarOpen ? "Hide history" : "Show history"}
-              >
-                {sidebarOpen ? <PanelLeftClose size={16} /> : <PanelLeftOpen size={16} />}
-              </button>
-              {/* Mode picker — dropdown */}
-              <div className="relative">
-                <button
-                  onClick={() => setPcModeOpen(o => !o)}
-                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-border text-[12px] font-medium text-foreground hover:bg-secondary/70 transition-colors"
-                >
-                  <span
-                    className="flex items-center justify-center rounded-full bg-primary text-primary-foreground text-[10px] font-bold flex-shrink-0"
-                    style={{ width: 18, height: 18 }}
+        {/* ── DESKTOP layout — sidebar push + main ── */}
+        <div className="hidden lg:flex flex-1 min-h-0 overflow-hidden">
+
+          {/* Conversation sidebar — push layout, no overlay */}
+          <aside
+            className="flex flex-col bg-sidebar border-r border-border overflow-hidden flex-shrink-0 transition-all duration-200"
+            style={{ width: sidebarOpen ? 220 : 0 }}
+          >
+            <ConvSidebar
+              currentId={convId}
+              onSelect={selectConv}
+              onNew={newConv}
+              onConvsChange={setConvsList}
+            />
+          </aside>
+
+          {/* ── DESKTOP main ── */}
+          <div
+            className="flex flex-col flex-1 min-w-0 min-h-0"
+            style={{
+              background: isDark
+                ? "radial-gradient(ellipse at 30% 40%, rgba(21,128,61,.18) 0%, transparent 60%), radial-gradient(ellipse at 75% 70%, rgba(20,83,45,.12) 0%, transparent 55%), hsl(var(--background))"
+                : "radial-gradient(ellipse at 30% 40%, rgba(134,239,172,.35) 0%, transparent 60%), radial-gradient(ellipse at 75% 70%, rgba(187,247,208,.25) 0%, transparent 55%), #f8fdf9",
+            }}
+          >
+            {/* ── Tab bar — Obsidian style ── */}
+            <div className="flex-shrink-0 flex items-stretch border-b border-border/60 bg-background/30 overflow-x-auto no-scrollbar" style={{ height: 35 }}>
+              {openTabs.map(id => {
+                const isActive = id === convId || (id === null && convId === null);
+                const title    = getTabTitle(id);
+                return (
+                  <div
+                    key={id ?? "__new__"}
+                    onClick={() => {
+                      if (isActive) return;
+                      if (id === null) {
+                        abortRef.current?.abort();
+                        if (agentClearRef.current) clearTimeout(agentClearRef.current);
+                        setConvId(null); setMessages([]); setAgents([]); setStreaming(false);
+                      } else {
+                        selectConv(id);
+                      }
+                    }}
+                    className={`group/tab flex items-center gap-1.5 px-3 cursor-pointer flex-shrink-0 max-w-[180px] min-w-0 border-r border-border/40 relative select-none transition-colors ${
+                      isActive
+                        ? "bg-background/60 text-foreground"
+                        : "text-muted-foreground/60 hover:text-muted-foreground hover:bg-secondary/40"
+                    }`}
                   >
-                    {PC_MODE_OPTIONS.find(o => o.mode === mode)?.num ?? 1}
-                  </span>
-                  {modeLabel(mode)}
-                  <ChevronDown size={11} className="text-muted-foreground/60" />
-                </button>
-                {pcModeOpen && (
-                  <>
-                    <div className="fixed inset-0 z-[80]" onClick={() => setPcModeOpen(false)} />
-                    <div className="absolute top-full left-0 mt-1.5 z-[90] w-[280px] bg-background border border-border rounded-xl shadow-2xl overflow-hidden">
-                      {PC_MODE_OPTIONS.map(opt => (
-                        <button
-                          key={opt.mode}
-                          onClick={() => {
-                            setMode(opt.mode);
-                            setPcModeOpen(false);
-                            if (opt.mode === "correct") setTimeout(() => setCorrectionModalOpen(true), 200);
-                          }}
-                          className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${mode === opt.mode ? "bg-primary/5" : "hover:bg-secondary/50"}`}
-                        >
-                          <span
-                            className="w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold flex-shrink-0 border transition-colors"
-                            style={mode === opt.mode
-                              ? { background: "hsl(var(--primary))", borderColor: "hsl(var(--primary))", color: "hsl(var(--primary-foreground))" }
-                              : { background: "hsl(var(--secondary))", borderColor: "hsl(var(--border))", color: "hsl(var(--muted-foreground))" }
-                            }
-                          >
-                            {opt.num}
-                          </span>
-                          <div className="flex-1 min-w-0">
-                            <div className="text-[13px] font-semibold text-foreground">{opt.name}</div>
-                            <div className="text-[11px] text-muted-foreground truncate">{opt.desc}</div>
-                          </div>
-                          {mode === opt.mode && <Check size={13} className="text-primary flex-shrink-0" />}
-                        </button>
-                      ))}
-                    </div>
-                  </>
-                )}
-              </div>
-            </div>
-            <div className="flex items-center gap-0.5">
-              <PsThemeToggle size={15} />
-              <button
-                onClick={() => setPcSettingsOpen(true)}
-                className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary/70 transition-colors"
-                title="Settings"
-              >
-                <Settings size={15} />
-              </button>
-            </div>
-          </div>
-
-          {/* Thread */}
-          <div className="flex-1 relative min-h-0 overflow-y-auto">
-            {messages.length === 0 && <WelcomeAurora />}
-            <WritingGlow visible={streaming || messages.length > 0} />
-            {messages.length === 0 ? (
-              <WelcomeScreen userName={userName} userInitials={userInitials} avatarUrl={avatarUrl} />
-            ) : (
-              <div className="relative max-w-3xl mx-auto px-4 py-6 pb-10 space-y-8">
-                {messages.map(msg => (
-                  <CzarMessage
-                    key={msg.id}
-                    msg={msg}
-                    currentAgents={agents}
-                    userInitials={userInitials}
-                    onContentChange={handleMessageContentChange}
-                    onSelectionAction={handleSelectionAction}
-                    onDismissDiff={handleDismissDiff}
-                    onClarificationAnswer={(answer) => sendMessage(answer, [])}
-                    onDeleteMessage={handleDeleteMessage}
-                  />
-                ))}
-                <div ref={threadEndRef} />
-              </div>
-            )}
-          </div>
-
-          {/* Input */}
-          <div className="flex-shrink-0 bg-background/80 backdrop-blur-sm border-t border-border/40">
-            <div className="max-w-3xl mx-auto px-4 py-3">
-              <Suspense fallback={<InputFallback />}>
-                <CommandInput
-                  onSend={handleCommandSend}
-                  onStop={stopStream}
-                  streaming={streaming}
-                  onCorrect={() => setCorrectionModalOpen(true)}
-                  onNewConversation={newConv}
-                  onDownload={handleDownloadLast}
-                />
-              </Suspense>
-              <p className="text-center text-[10px] text-muted-foreground/40 mt-1.5 px-2">
-                CZAR can make mistakes — verify important information.
-              </p>
-            </div>
-          </div>
-
-          {/* Settings panel — slides in from right */}
-          {pcSettingsOpen && (
-            <>
-              <div className="fixed inset-0 bg-foreground/30 z-[80]" onClick={() => setPcSettingsOpen(false)} />
-              <div
-                className="fixed top-0 right-0 bottom-0 w-[320px] bg-background border-l border-border z-[90] flex flex-col overflow-y-auto shadow-2xl"
-                style={{ paddingBottom: "calc(20px + env(safe-area-inset-bottom, 0px))" }}
-              >
-                <div className="flex items-center justify-between px-5 py-4 border-b border-border flex-shrink-0">
-                  <span className="text-[16px] font-bold text-foreground">Settings</span>
-                  <button onClick={() => setPcSettingsOpen(false)} className="w-8 h-8 flex items-center justify-center rounded-lg text-muted-foreground hover:bg-secondary transition-colors">
-                    <X size={16} />
-                  </button>
-                </div>
-                <CzarSettingsPickerRow label="Citation style" value={settings.citationStyle} options={CITE_STYLES}
-                  onChange={v => updateSettings({ citationStyle: v })} />
-                <CzarSettingsPickerRow label="Writing level" value={settings.writingLevel} options={WRITING_LEVELS}
-                  onChange={v => updateSettings({ writingLevel: v })} />
-                <div className="flex items-center justify-between px-5 py-3.5 border-b border-border">
-                  <div>
-                    <div className="text-[14px] text-foreground">Language</div>
-                    <div className="text-[12px] text-muted-foreground mt-0.5">{settings.language}</div>
+                    {isActive && (
+                      <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-primary" />
+                    )}
+                    <FileText size={10} className="flex-shrink-0 opacity-50" />
+                    <span className="text-[11.5px] font-medium truncate">{title}</span>
+                    <button
+                      type="button"
+                      onClick={e => closeTab(id, e)}
+                      className="flex-shrink-0 ml-auto p-0.5 rounded opacity-0 group-hover/tab:opacity-60 hover:!opacity-100 hover:bg-secondary transition-all"
+                    >
+                      <X size={9} />
+                    </button>
                   </div>
-                  <select
-                    value={settings.language}
-                    onChange={e => updateSettings({ language: e.target.value })}
-                    className="text-[12px] text-muted-foreground bg-secondary border border-border rounded-lg px-2 py-1.5 outline-none cursor-pointer"
+                );
+              })}
+              {/* New tab button */}
+              <button
+                type="button"
+                onClick={newConv}
+                className="flex-shrink-0 flex items-center justify-center w-8 text-muted-foreground/50 hover:text-muted-foreground hover:bg-secondary/40 transition-colors"
+                title="New conversation"
+              >
+                <Plus size={12} />
+              </button>
+            </div>
+
+            {/* ── App toolbar ── */}
+            <div className="flex-shrink-0 flex items-center justify-between h-10 px-2 border-b border-border/30 bg-background/40 backdrop-blur-sm">
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setSidebarOpen(o => !o)}
+                  className="p-1.5 rounded text-muted-foreground hover:text-foreground hover:bg-secondary/70 transition-colors"
+                  title={sidebarOpen ? "Hide sidebar" : "Show sidebar"}
+                >
+                  {sidebarOpen ? <PanelLeftClose size={15} /> : <PanelLeftOpen size={15} />}
+                </button>
+
+                {/* Mode picker dropdown */}
+                <div className="relative">
+                  <button
+                    onClick={() => setPcModeOpen(o => !o)}
+                    className="flex items-center gap-1.5 px-2 py-1 rounded text-[12px] text-muted-foreground hover:text-foreground hover:bg-secondary/70 transition-colors"
                   >
-                    {LANGUAGES.map(l => <option key={l}>{l}</option>)}
-                  </select>
+                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${MODE_COLOURS[mode]}`}>
+                      {modeLabel(mode)}
+                    </span>
+                    <ChevronDown size={10} className="text-muted-foreground/40" />
+                  </button>
+                  {pcModeOpen && (
+                    <>
+                      <div className="fixed inset-0 z-[80]" onClick={() => setPcModeOpen(false)} />
+                      <div className="absolute top-full left-0 mt-1 z-[90] w-[280px] bg-background border border-border rounded-xl shadow-2xl overflow-hidden">
+                        {PC_MODE_OPTIONS.map(opt => (
+                          <button
+                            key={opt.mode}
+                            onClick={() => {
+                              setMode(opt.mode);
+                              setPcModeOpen(false);
+                              if (opt.mode === "correct") setTimeout(() => setCorrectionModalOpen(true), 200);
+                            }}
+                            className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${mode === opt.mode ? "bg-primary/5" : "hover:bg-secondary/50"}`}
+                          >
+                            <span
+                              className="w-5 h-5 rounded flex items-center justify-center text-[10px] font-bold flex-shrink-0 border transition-colors"
+                              style={mode === opt.mode
+                                ? { background: "hsl(var(--primary))", borderColor: "hsl(var(--primary))", color: "hsl(var(--primary-foreground))" }
+                                : { background: "hsl(var(--secondary))", borderColor: "hsl(var(--border))", color: "hsl(var(--muted-foreground))" }
+                              }
+                            >
+                              {opt.num}
+                            </span>
+                            <div className="flex-1 min-w-0">
+                              <div className="text-[12.5px] font-semibold text-foreground">{opt.name}</div>
+                              <div className="text-[10.5px] text-muted-foreground truncate">{opt.desc}</div>
+                            </div>
+                            {mode === opt.mode && <Check size={12} className="text-primary flex-shrink-0" />}
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  )}
                 </div>
-                <CzarSettingsToggleRow label="Auto-detect domain" sub="Detects academic, fiction, professional…"
-                  value={settings.autoDetectDomain} onChange={v => updateSettings({ autoDetectDomain: v })} />
-                <CzarSettingsToggleRow label="Formal register" sub="No contractions, third person"
-                  value={settings.formalRegister} onChange={v => updateSettings({ formalRegister: v })} />
-                <CzarSettingsToggleRow label="Save checkpoints" sub="Remember context across sessions"
-                  value={settings.saveCheckpoints} onChange={v => updateSettings({ saveCheckpoints: v })} />
-                {wordBalance !== null && (
+              </div>
+
+              <div className="flex items-center gap-0.5">
+                <PsThemeToggle size={14} />
+                <button
+                  onClick={() => setPcSettingsOpen(true)}
+                  className="p-1.5 rounded text-muted-foreground hover:text-foreground hover:bg-secondary/70 transition-colors"
+                  title="Settings"
+                >
+                  <Settings size={14} />
+                </button>
+              </div>
+            </div>
+
+            {/* ── Thread ── */}
+            <div className="flex-1 relative min-h-0 overflow-y-auto">
+              {messages.length === 0 && <WelcomeAurora />}
+              <WritingGlow visible={streaming || messages.length > 0} />
+              {messages.length === 0 ? (
+                <WelcomeScreen userName={userName} userInitials={userInitials} avatarUrl={avatarUrl} />
+              ) : (
+                <div className="relative max-w-3xl mx-auto px-4 py-6 pb-10 space-y-8">
+                  {messages.map(msg => (
+                    <CzarMessage
+                      key={msg.id}
+                      msg={msg}
+                      currentAgents={agents}
+                      userInitials={userInitials}
+                      onContentChange={handleMessageContentChange}
+                      onSelectionAction={handleSelectionAction}
+                      onDismissDiff={handleDismissDiff}
+                      onClarificationAnswer={(answer) => sendMessage(answer, [])}
+                      onDeleteMessage={handleDeleteMessage}
+                    />
+                  ))}
+                  <div ref={threadEndRef} />
+                </div>
+              )}
+            </div>
+
+            {/* ── Input ── */}
+            <div className="flex-shrink-0 bg-background/80 backdrop-blur-sm border-t border-border/40">
+              <div className="max-w-3xl mx-auto px-4 py-3">
+                <Suspense fallback={<InputFallback />}>
+                  <CommandInput
+                    onSend={handleCommandSend}
+                    onStop={stopStream}
+                    streaming={streaming}
+                    onCorrect={() => setCorrectionModalOpen(true)}
+                    onNewConversation={newConv}
+                    onDownload={handleDownloadLast}
+                  />
+                </Suspense>
+                <p className="text-center text-[10px] text-muted-foreground/40 mt-1.5 px-2">
+                  CZAR can make mistakes — verify important information.
+                </p>
+              </div>
+            </div>
+
+            {/* ── Settings panel ── */}
+            {pcSettingsOpen && (
+              <>
+                <div className="fixed inset-0 bg-foreground/30 z-[80]" onClick={() => setPcSettingsOpen(false)} />
+                <div
+                  className="fixed top-0 right-0 bottom-0 w-[320px] bg-background border-l border-border z-[90] flex flex-col overflow-y-auto shadow-2xl"
+                  style={{ paddingBottom: "calc(20px + env(safe-area-inset-bottom, 0px))" }}
+                >
+                  <div className="flex items-center justify-between px-5 py-4 border-b border-border flex-shrink-0">
+                    <span className="text-[16px] font-bold text-foreground">Settings</span>
+                    <button onClick={() => setPcSettingsOpen(false)} className="w-8 h-8 flex items-center justify-center rounded-lg text-muted-foreground hover:bg-secondary transition-colors">
+                      <X size={16} />
+                    </button>
+                  </div>
+                  <CzarSettingsPickerRow label="Citation style" value={settings.citationStyle} options={CITE_STYLES}
+                    onChange={v => updateSettings({ citationStyle: v })} />
+                  <CzarSettingsPickerRow label="Writing level" value={settings.writingLevel} options={WRITING_LEVELS}
+                    onChange={v => updateSettings({ writingLevel: v })} />
                   <div className="flex items-center justify-between px-5 py-3.5 border-b border-border">
                     <div>
-                      <div className="text-[14px] text-foreground">Word balance</div>
-                      <div className="text-[12px] text-muted-foreground mt-0.5">{wordBalance.toLocaleString()} remaining</div>
+                      <div className="text-[14px] text-foreground">Language</div>
+                      <div className="text-[12px] text-muted-foreground mt-0.5">{settings.language}</div>
                     </div>
-                    <ChevronRight size={16} className="text-muted-foreground" />
+                    <select
+                      value={settings.language}
+                      onChange={e => updateSettings({ language: e.target.value })}
+                      className="text-[12px] text-muted-foreground bg-secondary border border-border rounded-lg px-2 py-1.5 outline-none cursor-pointer"
+                    >
+                      {LANGUAGES.map(l => <option key={l}>{l}</option>)}
+                    </select>
                   </div>
-                )}
-              </div>
-            </>
-          )}
-        </div>
+                  <CzarSettingsToggleRow label="Auto-detect domain" sub="Detects academic, fiction, professional…"
+                    value={settings.autoDetectDomain} onChange={v => updateSettings({ autoDetectDomain: v })} />
+                  <CzarSettingsToggleRow label="Formal register" sub="No contractions, third person"
+                    value={settings.formalRegister} onChange={v => updateSettings({ formalRegister: v })} />
+                  <CzarSettingsToggleRow label="Save checkpoints" sub="Remember context across sessions"
+                    value={settings.saveCheckpoints} onChange={v => updateSettings({ saveCheckpoints: v })} />
+                  {wordBalance !== null && (
+                    <div className="flex items-center justify-between px-5 py-3.5 border-b border-border">
+                      <div>
+                        <div className="text-[14px] text-foreground">Word balance</div>
+                        <div className="text-[12px] text-muted-foreground mt-0.5">{wordBalance.toLocaleString()} remaining</div>
+                      </div>
+                      <ChevronRight size={16} className="text-muted-foreground" />
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
+          </div>{/* end desktop main */}
+        </div>{/* end desktop flex row */}
 
-        {/* ── MOBILE main — hidden on desktop ── */}
-        <div className="flex lg:hidden flex-col flex-1 min-w-0 min-h-0">
+        {/* ── MOBILE layout ── */}
+        <div className="flex lg:hidden flex-1 min-h-0 overflow-hidden">
           <CzarMobileLayout
             messages={messages}
             streaming={streaming}
