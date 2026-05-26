@@ -11,6 +11,32 @@ import { getCore, getStyleOverlay } from "./cores";
 import { buildCheckpointInjection, buildPreferencesBlock } from "./state-engine";
 
 // ---------------------------------------------------------------------------
+// Semantic Markup Enforcement (Principle 3)
+// ---------------------------------------------------------------------------
+
+function buildSemanticMarkupEnforcement(domain: DomainType): string {
+  const semanticTags: Record<DomainType, string> = {
+    academic:      "`<claim>`, `<evidence>`, `<analysis>`, `<counter_argument>`",
+    fiction:       "`<narrative_beat>`, `<sensory_detail>`, `<dialogue_intent>`",
+    professional:  "`<directive>`, `<rationale>`, `<action_item>`",
+    technical:     "`<prerequisite>`, `<code_intent>`, `<warning>`, `<system_state>`",
+    journalistic:  "`<lede>`, `<attribution>`, `<context>`",
+    personal:      "`<reflection>`, `<temporal_shift>`",
+    poetry:        "`<image>`, `<volta>`, `<meter_intent>`",
+    chat:          "`<intent>`, `<clarification>`",
+  };
+
+  return `
+===== SEMANTIC MARKUP & OUTPUT CONTROL (MANDATORY) =====
+1. STRICT PANDOC MARKDOWN: All output must be valid Pandoc-flavored Markdown. Do not use raw HTML.
+2. SEMANTIC TAGGING: Wrap key structural elements in semantic XML tags for the ${domain.toUpperCase()} domain: ${semanticTags[domain] ?? semanticTags.chat}.
+   Example: <claim>The Earth is round.</claim> <evidence>Satellite imagery confirms...</evidence>
+   These tags are parsed by the deterministic backend to verify cognitive process before rendering.
+========================================================
+`;
+}
+
+// ---------------------------------------------------------------------------
 // Pre-Output Audit Protocol
 // The LLM runs this silently before generating any visible output.
 // ---------------------------------------------------------------------------
@@ -35,10 +61,17 @@ function buildAuditProtocol(domain: DomainType, style: StyleOverlay): string {
     ],
     professional: [
       "The main conclusion or recommendation appears in the first paragraph.",
-      "All recommendations are specific, actionable, and time-bound.",
+      "All recommendations are specific, actionable, and time-bound (<action_item>).",
       "Every statistic or market figure is attributed to a source.",
       "Active voice throughout — no passive constructions that obscure agency.",
       "No jargon used for its own sake ('leverage', 'synergies', 'bandwidth').",
+    ],
+    technical: [
+      "All procedures are numbered sequentially and unambiguously.",
+      "Prerequisites and warnings (<warning>) strictly precede the action steps.",
+      "Code snippets include language specifiers for syntax highlighting.",
+      "Assumptions about the user's system state are explicitly stated.",
+      "Tone is entirely objective, instructive, and devoid of marketing language.",
     ],
     journalistic: [
       "The lede states the most important fact in 25 words or fewer.",
@@ -168,43 +201,46 @@ export function assembleSystemPrompt(
     parts.push("\n\n" + styleOverlay);
   }
 
-  // 4. Pre-Output Audit Protocol
+  // 4. Semantic Markup & Document Formatting Mandate (Principle 3)
+  parts.push(buildSemanticMarkupEnforcement(domain));
+
+  // 5. Pre-Output Audit Protocol
   parts.push(buildAuditProtocol(domain, style));
 
-  // 5. User Memory (persistent facts — highest priority over session)
+  // 6. User Memory (persistent facts — highest priority over session)
   if (userMemory) {
     parts.push(userMemory);
   }
 
-  // 6. User Preferences
+  // 7. User Preferences
   const prefsBlock = buildPreferencesBlock(userPreferences);
   if (prefsBlock) {
     parts.push(prefsBlock);
   }
 
-  // 7. Settings Manifest (active toggles from user UI)
+  // 8. Settings Manifest (active toggles from user UI)
   if (settingsManifest) {
     parts.push(settingsManifest);
   }
 
-  // 8. Checkpoint Restoration (stateful continuity)
+  // 9. Checkpoint Restoration (stateful continuity)
   const checkpointBlock = buildCheckpointInjection(checkpoint, domain);
   if (checkpointBlock) {
     parts.push(checkpointBlock);
   }
 
-  // 9. Current project content snapshot (writing context)
+  // 10. Current project content snapshot (writing context)
   const snapshotBlock = buildContentSnapshot(contentSnapshot);
   if (snapshotBlock) {
     parts.push(snapshotBlock);
   }
 
-  // 10. Mode directive (write/research/plan/etc.)
+  // 11. Mode directive (write/research/plan/etc.)
   if (modeDirective) {
     parts.push("\n\n" + modeDirective);
   }
 
-  // 11. Task playbook (orchestrated multi-step instructions)
+  // 12. Task playbook (orchestrated multi-step instructions)
   if (playbookContent) {
     parts.push("\n\n" + playbookContent);
   }
@@ -226,6 +262,7 @@ export function buildCheckpointExtractionPrompt(
     academic: `Extract: thesis statement (if present), current section name, list of sections completed so far, the last argument thread (1–2 sentences summarising the last substantive point made), any citations used (up to 5 most recent), concepts defined in this response.`,
     fiction: `Extract: chapter number (if mentioned), a 2–3 sentence scene summary, active character names, POV character name, POV mode (first_person/close_third/omniscient/second_person), tense (past/present), current conflict (1 sentence), scene location, emotional register.`,
     professional: `Extract: document type, primary audience, whether executive summary was written (yes/no), whether recommendations were stated (yes/no), list of key decisions mentioned, list of action items identified.`,
+    technical: `Extract: audience level (developer/sysadmin/end_user), components documented so far, whether code snippets were included (yes/no), whether prerequisites are stated (yes/no), whether troubleshooting steps are defined (yes/no).`,
     journalistic: `Extract: the story angle (1 sentence), whether a lead was established (yes/no), sources consulted (names or types), key facts stated (up to 5), perspectives represented.`,
     personal: `Extract: the temporal position (what time period the piece is in), the emotional arc (1 sentence), voice markers (3–5 distinctive words/phrases that define the writer's voice), scenes completed, theme threads active.`,
     poetry: `Extract: form established (e.g. "free verse", "sonnet"), meter pattern if formal, image cluster (3–5 key images), current line count, whether the volta has been reached (yes/no), sound scheme (e.g. "ABAB", "slant rhyme throughout").`,

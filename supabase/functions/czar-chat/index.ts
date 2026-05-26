@@ -221,12 +221,12 @@ interface ModelChoice {
 }
 
 // ── Model roster ─────────────────────────────────────────────────────────────
-// Gemini 3.5 Flash — best-in-class fast reasoning, complex agentic tasks
-const G_FAST = "gemini-3.5-flash";
-// Gemini 3.1 Flash-Lite — cheap classification, memory extraction, tagging
-const G_LITE = "gemini-3.1-flash-lite";
-// Gemini 3.1 Pro Preview — advanced PhD-level reasoning, writing
-const G_PRO  = "gemini-3.1-pro-preview";
+// Gemini 2.5 Flash — best-in-class fast reasoning, complex agentic tasks
+const G_FAST = "gemini-2.5-flash";
+// Gemini 2.0 Flash Lite — cheap classification, memory extraction, tagging
+const G_LITE = "gemini-2.0-flash-lite";
+// Gemini 2.5 Pro — advanced PhD-level reasoning, writing
+const G_PRO  = "gemini-2.5-pro";
 // Claude models
 const C_SONNET = "claude-sonnet-4-6";   // precision editing, correction
 const C_OPUS   = "claude-opus-4-7";     // hardest PhD tasks, deep thinking
@@ -1172,6 +1172,79 @@ Return {} if nothing memorable. Max 5 keys.`;
 }
 
 // ---------------------------------------------------------------------------
+// State Engine: Lossless Context Switching (Principle 5)
+// ---------------------------------------------------------------------------
+
+async function loadModeCheckpoint(userId: string, mode: CzarMode, svc: SupabaseClient): Promise<string> {
+  try {
+    const { data } = await svc
+      .from("czar_state")
+      .select("checkpoint")
+      .eq("user_id", userId)
+      .eq("activeDomain", mode)
+      .maybeSingle();
+
+    if (!data?.checkpoint) return "";
+
+    return [
+      "",
+      `===== RESTORED STATE CHECKPOINT (${mode.toUpperCase()}) =====`,
+      `Context from your last session in this mode:`,
+      JSON.stringify(data.checkpoint, null, 2),
+      `INSTRUCTION: Resume exactly from this state. Do not re-establish context already captured here.`,
+      `===== END CHECKPOINT =====`,
+      "",
+    ].join("\n");
+  } catch {
+    return "";
+  }
+}
+
+async function saveModeCheckpoint(
+  userId: string,
+  mode: CzarMode,
+  recentHistoryText: string,
+  svc: SupabaseClient,
+): Promise<void> {
+  if (!recentHistoryText.trim()) return;
+  const apiKey = Deno.env.get("GOOGLE_AI_API_KEY");
+  if (!apiKey) return;
+
+  const system = `You are the CZAR State Engine. The user is switching away from the '${mode}' mode.
+Extract a concise JSON checkpoint from the recent history.
+Schema: { "lastUserIntent": "...", "decisionsMade": ["..."], "positionSnapshot": "..." }
+Keep it highly condensed (under 150 words total). Return ONLY the JSON object.`;
+
+  try {
+    const body = {
+      system_instruction: { parts: [{ text: system }] },
+      contents: [{ role: "user", parts: [{ text: recentHistoryText }] }],
+      generationConfig: { maxOutputTokens: 512, temperature: 0 },
+    };
+    // gemini-2.0-flash-lite — cheap/fast for state extraction
+    const resp = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=${apiKey}`,
+      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) },
+    );
+    if (!resp.ok) return;
+    const data = await resp.json();
+    const raw = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+    const match = raw.match(/\{[\s\S]*\}/);
+    if (!match) return;
+    const checkpointData = JSON.parse(match[0]);
+
+    await svc.from("czar_state").upsert({
+      user_id: userId,
+      activeDomain: mode,
+      checkpoint: checkpointData,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: "user_id, activeDomain" });
+  } catch {
+    // Non-fatal — silently skip if state compression fails
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Main logic
 // ---------------------------------------------------------------------------
 
@@ -1333,9 +1406,29 @@ async function runMain(
 
     const memoryBlock = await loadUserMemory(userId, svc);
 
+    // ── PRINCIPLE 5: Lossless Context Switching ──────────────────────────
+    // Detect mode switch and serialize prior mode checkpoint
+    const { data: convData } = await svc
+      .from("czar_conversations")
+      .select("mode")
+      .eq("id", conversationId)
+      .maybeSingle();
+
+    const prevMode = convData?.mode as CzarMode | undefined;
+    if (prevMode && prevMode !== mode) {
+      write("agent", { id: "state", name: "State Engine", status: "working", action: `Context-switching: ${prevMode} → ${mode}` });
+      // Serialize old mode non-blocking so we don't hold up the user
+      const recentHistText = history.slice(-6).map((m) => `${m.role.toUpperCase()}: ${m.content}`).join("\n\n");
+      saveModeCheckpoint(userId, prevMode, recentHistText, svc).catch(() => {});
+    }
+
+    // Load checkpoint for the active mode and inject into system prompt
+    const modeCheckpointBlock = await loadModeCheckpoint(userId, mode, svc);
+
     const systemParts = [CZAR_BRAIN_SYSTEM_PROMPT];
     if (memoryBlock) systemParts.push(memoryBlock);
     if (settingsBlock) systemParts.push(settingsBlock);
+    if (modeCheckpointBlock) systemParts.push(modeCheckpointBlock);
     if (directive) systemParts.push("\n\n" + directive);
     if (playbookContent) systemParts.push("\n\n" + playbookContent);
     const system = systemParts.join("\n");

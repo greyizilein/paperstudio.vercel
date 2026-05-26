@@ -13,6 +13,95 @@
 // word count, and prose mechanics BEFORE producing user-visible output.
 // Failure triggers regeneration, not warnings.
 
+// ---------------------------------------------------------------------------
+// SemanticAuditor — pre-generation prompt injection (Principle 3 & 4)
+// ---------------------------------------------------------------------------
+
+type WritingDomain = "academic" | "fiction" | "professional" | "technical" | "journalistic" | "personal" | "poetry" | "chat";
+
+interface SemanticAuditResult {
+  passed: boolean;
+  requiresRegeneration: boolean;
+  errors: string[];
+  warnings: string[];
+  correctedContent?: string;
+}
+
+export class SemanticAuditor {
+  private domain: WritingDomain;
+  private strictMode: boolean;
+
+  constructor(domain: WritingDomain, strictMode = true) {
+    this.domain = domain;
+    this.strictMode = strictMode;
+  }
+
+  public async validate(content: string): Promise<SemanticAuditResult> {
+    const errors: string[] = [];
+    const warnings: string[] = [];
+
+    if (!this.hasSemanticHeadings(content)) {
+      errors.push("CRITICAL: Improper heading hierarchy. Use standard Markdown # ## ###.");
+    }
+
+    if (this.domain === "academic") {
+      if (!this.hasCitations(content)) {
+        errors.push("CRITICAL: Academic content requires citations.");
+      }
+    } else if (this.domain === "fiction") {
+      if (this.detectInstructionalTone(content)) {
+        warnings.push("STYLE: Detected instructional tone in fiction — ensure show-don't-tell.");
+      }
+    } else if (this.domain === "technical") {
+      if (!this.hasProcedureStructure(content)) {
+        warnings.push("STYLE: Technical content should use numbered procedures.");
+      }
+    }
+
+    const requiresRegeneration = errors.length > 0 && this.strictMode;
+    return { passed: errors.length === 0, requiresRegeneration, errors, warnings, correctedContent: requiresRegeneration ? undefined : content };
+  }
+
+  public buildPreOutputAuditBlock(): string {
+    const domainCheck = this.domain === "academic"
+      ? "Verify all claims have citations."
+      : this.domain === "technical"
+      ? "Verify prerequisites precede procedures and code snippets have language specifiers."
+      : "Verify narrative consistency and show-don't-tell principle.";
+
+    return `
+<audit_protocol>
+MANDATORY SELF-CHECK BEFORE OUTPUT:
+1. Verify semantic heading structure.
+2. ${domainCheck}
+3. If ANY check fails, REGENERATE immediately. Do not output failed draft.
+</audit_protocol>
+`;
+  }
+
+  private hasSemanticHeadings(text: string): boolean {
+    return /^#{1,6}\s/m.test(text) || text.includes("#");
+  }
+
+  private hasCitations(text: string): boolean {
+    return /@\w+|\[\d+\]/.test(text) || /\([A-Z][a-z]+,\s*\d{4}\)/.test(text);
+  }
+
+  private hasProcedureStructure(text: string): boolean {
+    return /^\d+\./m.test(text) || /^- /m.test(text);
+  }
+
+  private detectInstructionalTone(text: string): boolean {
+    const flags = ["you should", "the reader must", "in conclusion", "therefore"];
+    return flags.some((flag) => text.toLowerCase().includes(flag));
+  }
+}
+
+export function wrapWithSemanticTag(content: string, tag: string): string {
+  if (content.includes(`<${tag}>`)) return content;
+  return `<${tag}>\n${content}\n</${tag}>`;
+}
+
 export interface DeterministicAuditResult {
   passed: boolean;
   requiresRegeneration: boolean;  // true = must regenerate, false = can proceed with warnings
