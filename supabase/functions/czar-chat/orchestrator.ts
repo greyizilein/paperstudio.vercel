@@ -222,6 +222,7 @@ function assignSourcesToSections(
   plan: PlannerOutput,
 ): Record<string, VerifiedSource[]> {
   const result: Record<string, VerifiedSource[]> = {};
+  if (!plan.sections?.length) return result;
   const sectionTokens = plan.sections.map((sec) => ({
     heading: sec.heading,
     tokens: tokenise([sec.heading, ...(sec.keyPoints ?? []), ...(sec.searchQueries ?? [])].join(" ")),
@@ -256,7 +257,7 @@ async function runResearcherAgent(
   const tavilyKey = Deno.env.get("TAVILY_API_KEY") ?? null;
   const serperKey = Deno.env.get("SERPER_API_KEY") ?? null;
   write("agent", { id: "researcher", name: "Researcher", status: "starting", action: "Searching sources" });
-  const queries = [plan.title || plan.mainThesis, ...plan.sections.flatMap((s) => s.searchQueries ?? [])].filter(Boolean);
+  const queries = [plan.title || plan.mainThesis, ...(plan.sections ?? []).flatMap((s) => s.searchQueries ?? [])].filter(Boolean);
   try {
     const sources = await discoverSources(queries, tavilyKey, serperKey, signal);
     workspace.sources = sources;
@@ -452,6 +453,7 @@ export async function runOrchestrator(opts: OrchestratorOptions): Promise<string
         }
 
         workspace.finalDraft = revisedDraft;
+        write("replace", { content: revisedDraft });
         write("agent", { id: "revision", name: "Revision", status: "done", action: "Fixes applied" });
       } else {
         workspace.finalDraft = workspace.draft;

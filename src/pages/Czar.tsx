@@ -214,11 +214,16 @@ export default function CzarPage() {
     setUserName(name);
     setUserInitials(name[0]?.toUpperCase() ?? "U");
     setAvatarUrl(user.user_metadata?.avatar_url);
-    supabase.from("subscriptions" as any).select("tier,words_remaining").eq("user_id", user.id).maybeSingle()
+    supabase.from("czar_subscriptions" as any)
+      .select("tier, word_limit, words_used, bonus_words, bonus_used")
+      .eq("user_id", user.id)
+      .maybeSingle()
       .then(({ data }) => {
         if (data) {
-          setUserTier((data as any).tier);
-          setWordBalance((data as any).words_remaining ?? null);
+          setUserTier((data as any).tier ?? "free");
+          const limit = ((data as any).word_limit ?? 0) + ((data as any).bonus_words ?? 0);
+          const used = ((data as any).words_used ?? 0) + ((data as any).bonus_used ?? 0);
+          setWordBalance(limit > 0 ? Math.max(0, limit - used) : null);
         }
       });
   }, [user]);

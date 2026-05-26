@@ -151,11 +151,15 @@ export function CzarMobileLayout({
       const { data: u } = await supabase.auth.getUser();
       if (!u?.user) return;
       const { data } = await supabase
-        .from("subscriptions" as any)
-        .select("words_remaining")
+        .from("czar_subscriptions" as any)
+        .select("word_limit, words_used, bonus_words, bonus_used")
         .eq("user_id", u.user.id)
         .maybeSingle();
-      if (data) setWordBalance((data as any).words_remaining ?? null);
+      if (data) {
+        const limit = ((data as any).word_limit ?? 0) + ((data as any).bonus_words ?? 0);
+        const used = ((data as any).words_used ?? 0) + ((data as any).bonus_used ?? 0);
+        setWordBalance(limit > 0 ? Math.max(0, limit - used) : null);
+      }
     })();
   }, []);
 
