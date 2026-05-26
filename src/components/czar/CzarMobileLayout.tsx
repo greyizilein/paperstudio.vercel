@@ -203,6 +203,25 @@ export function CzarMobileLayout({
     if (e.target.files) setFiles(prev => [...prev, ...Array.from(e.target.files!)]);
   }, []);
 
+  const removeFile = useCallback((idx: number) => {
+    setFiles(prev => prev.filter((_, i) => i !== idx));
+  }, []);
+
+  function fileEmoji(mime: string): string {
+    if (mime.startsWith("image/")) return "🖼";
+    if (mime.includes("pdf")) return "📄";
+    if (mime.includes("word") || mime.includes("docx")) return "📝";
+    if (mime.includes("spreadsheet") || mime.includes("xlsx")) return "📊";
+    if (mime.startsWith("text/")) return "📃";
+    return "📎";
+  }
+
+  function fmtSize(bytes: number): string {
+    if (bytes < 1024) return `${bytes}B`;
+    if (bytes < 1048576) return `${(bytes / 1024).toFixed(0)}KB`;
+    return `${(bytes / 1048576).toFixed(1)}MB`;
+  }
+
   const hasMessages = messages.length > 0;
   const modeOpt = MODE_OPTIONS.find(o => o.mode === mode) ?? MODE_OPTIONS[0];
 
@@ -300,25 +319,33 @@ export function CzarMobileLayout({
         style={{ paddingTop: 8, paddingBottom: "calc(8px + env(safe-area-inset-bottom, 0px))" }}
       >
         <div className="bg-background/80 backdrop-blur-sm border border-border rounded-[18px] overflow-hidden shadow-sm">
-          {/* Attach hint — clicking opens file picker */}
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            className="w-full flex items-center gap-2 px-3.5 py-2.5 text-[13px] text-muted-foreground border-b border-dashed border-border text-left"
-          >
-            <span className="text-[15px] opacity-60">📎</span>
-            {files.length > 0
-              ? <span className="text-foreground font-medium">{files.length} file{files.length > 1 ? "s" : ""} attached</span>
-              : <span>Drag &amp; drop files, or tap to attach</span>
-            }
+          {/* File attach row */}
+          <div className="border-b border-dashed border-border">
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="w-full flex items-center gap-2 px-3.5 py-2 text-[13px] text-muted-foreground text-left"
+            >
+              <span className="text-[15px] opacity-60">📎</span>
+              <span>{files.length > 0 ? "Add more files" : "Tap to attach files"}</span>
+            </button>
             {files.length > 0 && (
-              <button
-                onClick={e => { e.stopPropagation(); setFiles([]); }}
-                className="ml-auto text-muted-foreground hover:text-foreground"
-              >
-                <X size={13} />
-              </button>
+              <div className="flex flex-wrap gap-1.5 px-3.5 pb-2.5">
+                {files.map((file, i) => (
+                  <div key={i} className="flex items-center gap-1 px-2 py-1 rounded-full bg-secondary border border-border text-[11px] text-foreground max-w-[180px]">
+                    <span>{fileEmoji(file.type)}</span>
+                    <span className="truncate">{file.name}</span>
+                    <span className="text-muted-foreground flex-shrink-0">{fmtSize(file.size)}</span>
+                    <button
+                      onClick={e => { e.stopPropagation(); removeFile(i); }}
+                      className="flex-shrink-0 text-muted-foreground hover:text-foreground ml-0.5"
+                    >
+                      <X size={10} />
+                    </button>
+                  </div>
+                ))}
+              </div>
             )}
-          </button>
+          </div>
           <input ref={fileInputRef} type="file" multiple className="hidden" onChange={handleFileAttach} />
 
           {/* Textarea */}
