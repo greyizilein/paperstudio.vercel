@@ -230,6 +230,18 @@ export function CorrectionModal({ open, onClose, onApplied }: CorrectionModalPro
     setStep("applying")
     setApplyProgress(5)
 
+    const correctionsList = selected
+      .map((s, i) => {
+        let line = `${i + 1}. [${s.type.toUpperCase()}] ${s.explanation}`
+        line += `\n   Original: "${s.original.slice(0, 300)}"`
+        line += `\n   Corrected: "${s.corrected.slice(0, 300)}"`
+        if (s.override.trim()) line += `\n   Override instruction: ${s.override}`
+        if (s.scope === "global")
+          line += `\n   Scope: Apply this correction throughout the entire document`
+        return line
+      })
+      .join("\n\n")
+
     const statusMessages = [
       "Thinking through each correction…",
       "Reading your document carefully…",
@@ -254,18 +266,6 @@ export function CorrectionModal({ open, onClose, onApplied }: CorrectionModalPro
         }),
       400,
     )
-
-    const correctionsList = selected
-      .map((s, i) => {
-        let line = `${i + 1}. [${s.type.toUpperCase()}] ${s.explanation}`
-        line += `\n   Original: "${s.original.slice(0, 300)}"`
-        line += `\n   Corrected: "${s.corrected.slice(0, 300)}"`
-        if (s.override.trim()) line += `\n   Override instruction: ${s.override}`
-        if (s.scope === "global")
-          line += `\n   Scope: Apply this correction throughout the entire document`
-        return line
-      })
-      .join("\n\n")
 
     let accText = ""
     const ctrl = new AbortController()
