@@ -94,6 +94,7 @@ interface Props {
   onStop: () => void;
   onNewConv: () => void;
   onSelectConv: (id: string) => void;
+  onCorrect?: () => void;
 }
 
 // ── Main component ─────────────────────────────────────────────────────────────
@@ -101,7 +102,7 @@ interface Props {
 export function CzarMobileLayout({
   messages, streaming, convId, mode, onModeChange,
   userName, userInitials, avatarUrl,
-  onSend, onStop, onNewConv, onSelectConv,
+  onSend, onStop, onNewConv, onSelectConv, onCorrect,
 }: Props) {
   const navigate = useNavigate();
   const { mode: themeMode, toggleMode } = usePsTheme();
@@ -114,8 +115,6 @@ export function CzarMobileLayout({
   const [histOpen, setHistOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [modeSheetOpen, setModeSheetOpen] = useState(false);
-  const [correctionOpen, setCorrectionOpen] = useState(false);
-  const [correctionText, setCorrectionText] = useState("");
 
   // History list
   const [convs, setConvs] = useState<Conv[]>([]);
@@ -193,16 +192,6 @@ export function CzarMobileLayout({
     onSend(trimmed, files, buildMeta());
   }, [text, files, streaming, onSend, buildMeta]);
 
-  const handleCorrectionSubmit = useCallback(() => {
-    const trimmed = correctionText.trim();
-    if (!trimmed) return;
-    setCorrectionOpen(false);
-    setCorrectionText("");
-    onModeChange("correct");
-    onSend(trimmed, [], { ...buildMeta() });
-    setTimeout(() => onModeChange("chat"), 50);
-  }, [correctionText, onSend, buildMeta, onModeChange]);
-
   const handleFileAttach = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) setFiles(prev => [...prev, ...Array.from(e.target.files!)]);
   }, []);
@@ -236,7 +225,7 @@ export function CzarMobileLayout({
     return acc;
   }, {});
 
-  const anyPanelOpen = histOpen || settingsOpen || modeSheetOpen || correctionOpen;
+  const anyPanelOpen = histOpen || settingsOpen || modeSheetOpen;
 
   return (
     <div
@@ -426,7 +415,7 @@ export function CzarMobileLayout({
       {anyPanelOpen && (
         <div
           className="fixed inset-0 bg-foreground/30 z-[80]"
-          onClick={() => { setHistOpen(false); setSettingsOpen(false); setModeSheetOpen(false); setCorrectionOpen(false); }}
+          onClick={() => { setHistOpen(false); setSettingsOpen(false); setModeSheetOpen(false); }}
         />
       )}
 
@@ -548,9 +537,12 @@ export function CzarMobileLayout({
           <button
             key={opt.mode}
             onClick={() => {
-              onModeChange(opt.mode);
               setModeSheetOpen(false);
-              if (opt.mode === "correct") setTimeout(() => setCorrectionOpen(true), 280);
+              if (opt.mode === "correct") {
+                setTimeout(() => onCorrect?.(), 200);
+              } else {
+                onModeChange(opt.mode);
+              }
             }}
             className={`w-full flex items-center gap-3.5 px-5 py-3.5 border-b border-border text-left transition-colors ${mode === opt.mode ? "bg-primary/5" : "active:bg-secondary/50"}`}
           >
@@ -569,47 +561,6 @@ export function CzarMobileLayout({
             </div>
           </button>
         ))}
-      </div>
-
-      {/* ── CORRECTION MODAL ── slides up, pastes text */}
-      <div
-        className="fixed inset-x-0 bottom-0 bg-background rounded-t-[20px] z-[95] flex flex-col"
-        style={{
-          maxHeight: "88vh",
-          paddingBottom: "calc(20px + env(safe-area-inset-bottom, 0px))",
-          transform: correctionOpen ? "translateY(0)" : "translateY(100%)",
-          transition: "transform .3s cubic-bezier(.4,0,.2,1)",
-        }}
-      >
-        <div className="w-9 h-1 bg-border rounded-full mx-auto mt-3 flex-shrink-0" />
-        <div className="flex items-center justify-between px-5 py-3.5 border-b border-border flex-shrink-0">
-          <span className="text-[16px] font-bold text-foreground">Correct text</span>
-          <button onClick={() => { setCorrectionOpen(false); onModeChange("chat"); }} className="w-8 h-8 flex items-center justify-center rounded-lg text-muted-foreground hover:bg-secondary transition-colors">
-            <X size={18} />
-          </button>
-        </div>
-        <div className="flex-1 overflow-y-auto px-5 py-4 flex flex-col gap-3">
-          <div>
-            <div className="text-[12px] font-bold uppercase tracking-widest text-muted-foreground mb-1.5">Paste your text</div>
-            <textarea
-              value={correctionText}
-              onChange={e => setCorrectionText(e.target.value)}
-              placeholder="Paste the paragraph or section you want CZAR to critique and improve…"
-              className="w-full min-h-[140px] p-3 border border-border rounded-xl text-[15px] text-foreground bg-secondary/30 resize-none outline-none leading-relaxed focus:border-primary focus:bg-background transition-colors"
-            />
-          </div>
-          <p className="text-[13px] text-muted-foreground leading-relaxed">
-            CZAR will analyse your text for argument flow, citation completeness, register consistency, and structural fit — then return a revised version with a clear explanation of each change.
-          </p>
-        </div>
-        <div className="px-5 pt-3 flex-shrink-0">
-          <button
-            onClick={handleCorrectionSubmit}
-            className="w-full py-3.5 bg-primary text-primary-foreground rounded-xl text-[15px] font-bold hover:opacity-90 transition-opacity"
-          >
-            Correct with CZAR
-          </button>
-        </div>
       </div>
 
     </div>

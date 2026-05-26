@@ -558,31 +558,33 @@ async function generateImage(
     }
   } catch { /* fall through to next model */ }
 
-  // Fallback: Gemini 2.0 Flash with image output modality
-  try {
-    const resp = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-preview-image-generation:generateContent?key=${apiKey}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ role: "user", parts: [{ text: prompt }] }],
-          generationConfig: { responseModalities: ["IMAGE"] },
-        }),
-        signal,
-      },
-    );
-    if (resp.ok) {
-      const data = await resp.json();
-      const parts: any[] = data?.candidates?.[0]?.content?.parts ?? [];
-      for (const part of parts) {
-        if (part?.inlineData?.data) {
-          const mime = part.inlineData.mimeType || "image/png";
-          return `data:${mime};base64,${part.inlineData.data}`;
+  // Fallback: Gemini 2.0 Flash Exp — supports native image output modality
+  for (const fallbackModel of ["gemini-2.0-flash-exp", "gemini-2.0-flash"]) {
+    try {
+      const resp = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${fallbackModel}:generateContent?key=${apiKey}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ role: "user", parts: [{ text: prompt }] }],
+            generationConfig: { responseModalities: ["TEXT", "IMAGE"] },
+          }),
+          signal,
+        },
+      );
+      if (resp.ok) {
+        const data = await resp.json();
+        const parts: any[] = data?.candidates?.[0]?.content?.parts ?? [];
+        for (const part of parts) {
+          if (part?.inlineData?.data) {
+            const mime = part.inlineData.mimeType || "image/png";
+            return `data:${mime};base64,${part.inlineData.data}`;
+          }
         }
       }
-    }
-  } catch { /* both models failed */ }
+    } catch { /* try next model */ }
+  }
 
   return null;
 }
@@ -1571,7 +1573,11 @@ Rules:
 
     // ── Special path: Correction mode — structured JSON analysis ──────────
     if (mode === "correct" && !signal.aborted) {
-      const docText: string = (req.settings?.correction_paste as string | undefined) || fileContext;
+      // Accept text from: settings.correction_paste, file upload, or the user message itself
+      const docText: string =
+        (req.settings?.correction_paste as string | undefined) ||
+        fileContext ||
+        req.user_message;
       const correctionNotes: string = (req.settings?.correction_notes as string | undefined) || "";
 
       if (!docText.trim()) {
