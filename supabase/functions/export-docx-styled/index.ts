@@ -36,11 +36,10 @@ serve(async (req) => {
     }
 
     let profile: StyleProfile = {
-      fontName: "Times New Roman",
+      font: "Times New Roman",
       fontSize: 12,
       lineSpacing: 1.5,
-      paragraphAlignment: "justify",
-      margins: { top: 1440, bottom: 1440, left: 1440, right: 1440 },
+      alignment: "justify",
     };
 
     if (styleId) {

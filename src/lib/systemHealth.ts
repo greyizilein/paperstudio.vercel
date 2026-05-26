@@ -1,17 +1,13 @@
 export const checkSystemHealth = async () => {
-  const health = {
-    supabase: false,
-    aiProvider: false,
-    version: "2.1.0",
-  };
-
+  const health = { db: false, api: false, latency: 0 };
+  const start = Date.now();
   try {
-    const supabaseResp = await fetch(import.meta.env.VITE_SUPABASE_URL + "/rest/v1/", { method: "HEAD" });
-    health.supabase = supabaseResp.ok;
-    health.aiProvider = true;
+    const res = await fetch(import.meta.env.VITE_SUPABASE_URL + "/rest/v1/", { method: "HEAD" });
+    health.db = res.ok;
+    health.api = true;
+    health.latency = Date.now() - start;
   } catch {
     console.error("System Health Critical");
   }
-
   return health;
 };

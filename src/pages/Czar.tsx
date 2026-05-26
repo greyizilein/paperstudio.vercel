@@ -6,9 +6,10 @@ import {
   ChevronDown, ChevronRight, LayoutPanelLeft, FileSearch, Clock, X,
   BookOpen, Film, Scale, Download, Volume2, VolumeX, Edit3, Eye, FileText, Sparkles,
   Compass, FlaskConical, Pen, Library, Gavel, RefreshCw, ImageIcon,
-  Copy, Trash2, MoreHorizontal, Check, FileDown, LayoutGrid,
+  Copy, Trash2, MoreHorizontal, Check, FileDown, LayoutGrid, Settings,
 } from "lucide-react";
 import { PsThemeToggle } from "@/components/ps/PsThemeToggle";
+import { usePsTheme } from "@/contexts/PsThemeContext";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Packer } from "docx";
@@ -104,6 +105,53 @@ const MODE_COLOURS: Record<CzarMode, string> = {
   legal: "bg-slate-500/15 text-slate-600 dark:text-slate-400",
 };
 
+// ── PC Settings ────────────────────────────────────────────────────
+
+const PC_MODE_OPTIONS: { num: number; mode: CzarMode; name: string; desc: string }[] = [
+  { num: 1, mode: "chat",             name: "Chat",       desc: "Conversational — ask anything, get direct answers" },
+  { num: 2, mode: "write",            name: "Write",      desc: "Generate essays, reports, stories, scripts" },
+  { num: 3, mode: "correct",          name: "Correct",    desc: "Paste your text — CZAR critiques and improves it" },
+  { num: 4, mode: "research",         name: "Research",   desc: "Gather sources, synthesise literature" },
+  { num: 5, mode: "plan",             name: "Plan",       desc: "Outline and structure your document" },
+  { num: 6, mode: "literature_review",name: "Lit Review", desc: "Systematic literature review synthesis" },
+  { num: 7, mode: "screenplay",       name: "Screenplay", desc: "Write in proper screenplay format" },
+  { num: 8, mode: "legal",            name: "Legal",      desc: "Legal documents and case analysis" },
+];
+
+const CITE_STYLES = ["Harvard", "APA 7th", "Chicago", "Vancouver", "IEEE", "MLA"];
+const WRITING_LEVELS = ["GCSE", "A-Level", "Undergraduate", "Graduate", "PhD", "Professional"];
+const LANGUAGES = ["British English", "American English", "Australian English", "Canadian English"];
+
+interface CzarSettings {
+  citationStyle: string;
+  writingLevel: string;
+  language: string;
+  autoDetectDomain: boolean;
+  formalRegister: boolean;
+  saveCheckpoints: boolean;
+}
+
+const DEFAULT_CZAR_SETTINGS: CzarSettings = {
+  citationStyle: "Harvard",
+  writingLevel: "Graduate",
+  language: "British English",
+  autoDetectDomain: true,
+  formalRegister: false,
+  saveCheckpoints: true,
+};
+
+function loadCzarSettings(): CzarSettings {
+  try {
+    const raw = localStorage.getItem("czar-mobile-settings");
+    if (raw) return { ...DEFAULT_CZAR_SETTINGS, ...JSON.parse(raw) };
+  } catch {}
+  return DEFAULT_CZAR_SETTINGS;
+}
+
+function persistCzarSettings(s: CzarSettings) {
+  localStorage.setItem("czar-mobile-settings", JSON.stringify(s));
+}
+
 
 // ── Main component ─────────────────────────────────────────────────
 
@@ -113,9 +161,16 @@ export default function CzarPage() {
 
   useEffect(() => { if (user === null) navigate("/auth"); }, [user]);
 
+  const { mode: themeMode } = usePsTheme();
+  const isDark = themeMode === "dark";
+
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mobileHistoryOpen, setMobileHistoryOpen] = useState(false);
   const [mobileDashboardOpen, setMobileDashboardOpen] = useState(false);
+  const [pcModeOpen, setPcModeOpen] = useState(false);
+  const [pcSettingsOpen, setPcSettingsOpen] = useState(false);
+  const [settings, setSettings] = useState<CzarSettings>(loadCzarSettings);
+  const [wordBalance, setWordBalance] = useState<number | null>(null);
 
   const [convId, setConvId] = useState<string | null>(null);
   const [messages, setMessages] = useState<UIMessage[]>([]);
@@ -152,8 +207,13 @@ export default function CzarPage() {
     setUserName(name);
     setUserInitials(name[0]?.toUpperCase() ?? "U");
     setAvatarUrl(user.user_metadata?.avatar_url);
-    supabase.from("subscriptions" as any).select("tier").eq("user_id", user.id).maybeSingle()
-      .then(({ data }) => { if (data) setUserTier((data as any).tier); });
+    supabase.from("subscriptions" as any).select("tier,words_remaining").eq("user_id", user.id).maybeSingle()
+      .then(({ data }) => {
+        if (data) {
+          setUserTier((data as any).tier);
+          setWordBalance((data as any).words_remaining ?? null);
+        }
+      });
   }, [user]);
 
   const loadConv = useCallback(async (id: string) => {
@@ -409,14 +469,26 @@ export default function CzarPage() {
     return hasDocRef && wordCount <= 10;
   }
 
+  const updateSettings = useCallback((patch: Partial<CzarSettings>) => {
+    setSettings(prev => { const next = { ...prev, ...patch }; persistCzarSettings(next); return next; });
+  }, []);
+
+  const buildSettingsMeta = useCallback((): Record<string, any> => ({
+    citation_style: settings.citationStyle.toLowerCase().replace(/\s+/g, "_"),
+    writing_level: settings.writingLevel.toLowerCase(),
+    language: settings.language,
+    formal_register: settings.formalRegister,
+    auto_detect_domain: settings.autoDetectDomain,
+  }), [settings]);
+
   const handleCommandSend = useCallback((text: string, files: File[], meta?: Record<string, any>) => {
     // Pure download intent — trigger download without sending to the backend
     if (files.length === 0 && !meta?.autoDownload && isDownloadIntent(text)) {
       handleDownloadLast();
       return;
     }
-    sendMessage(text, files, meta ?? {});
-  }, [sendMessage, handleDownloadLast]);
+    sendMessage(text, files, { ...buildSettingsMeta(), ...(meta ?? {}) });
+  }, [sendMessage, handleDownloadLast, buildSettingsMeta]);
 
   const handleSelectionAction = useCallback((action: string, selectedText: string) => {
     const prompts: Record<string, string> = {
@@ -497,22 +569,144 @@ export default function CzarPage() {
         )}
 
         {/* ── DESKTOP main — hidden on mobile ── */}
-        <div className="hidden lg:flex flex-col flex-1 relative min-w-0 min-h-0">
+        <div
+          className="hidden lg:flex flex-col flex-1 relative min-w-0 min-h-0"
+          style={{
+            background: isDark
+              ? "radial-gradient(ellipse at 30% 40%, rgba(21,128,61,.18) 0%, transparent 60%), radial-gradient(ellipse at 75% 70%, rgba(20,83,45,.12) 0%, transparent 55%), hsl(var(--background))"
+              : "radial-gradient(ellipse at 30% 40%, rgba(134,239,172,.35) 0%, transparent 60%), radial-gradient(ellipse at 75% 70%, rgba(187,247,208,.25) 0%, transparent 55%), #f8fdf9",
+          }}
+        >
           {messages.length === 0 && <WelcomeAurora />}
 
-          {/* Floating sidebar toggle (top-left) */}
-          <button
-            onClick={() => setSidebarOpen(o => !o)}
-            className="absolute top-2 left-3 z-[60] p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
-            title={sidebarOpen ? "Hide history" : "Show history"}
-          >
-            {sidebarOpen ? <PanelLeftClose size={16} /> : <PanelLeftOpen size={16} />}
-          </button>
-
-          {/* Floating theme toggle (top-right) */}
-          <div className="absolute top-2 right-3 z-[60] flex items-center gap-1">
-            <PsThemeToggle size={15} />
+          {/* Floating sidebar toggle + mode selector (top-left) */}
+          <div className="absolute top-2 left-3 z-[60] flex items-center gap-1">
+            <button
+              onClick={() => setSidebarOpen(o => !o)}
+              className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary/60 transition-colors"
+              title={sidebarOpen ? "Hide history" : "Show history"}
+            >
+              {sidebarOpen ? <PanelLeftClose size={16} /> : <PanelLeftOpen size={16} />}
+            </button>
+            <button
+              onClick={() => setPcModeOpen(true)}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-border text-[12px] font-medium text-foreground bg-background/60 hover:bg-secondary/60 transition-colors backdrop-blur-sm"
+            >
+              <span
+                className="flex items-center justify-center rounded-full bg-primary text-primary-foreground text-[10px] font-bold flex-shrink-0"
+                style={{ width: 18, height: 18 }}
+              >
+                {PC_MODE_OPTIONS.find(o => o.mode === mode)?.num ?? 1}
+              </span>
+              {modeLabel(mode)}
+              <ChevronDown size={11} className="text-muted-foreground/60" />
+            </button>
           </div>
+
+          {/* Theme + Settings (top-right) */}
+          <div className="absolute top-2 right-3 z-[60] flex items-center gap-0.5">
+            <PsThemeToggle size={15} />
+            <button
+              onClick={() => setPcSettingsOpen(true)}
+              className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary/60 transition-colors"
+              title="Settings"
+            >
+              <Settings size={15} />
+            </button>
+          </div>
+
+          {/* PC Mode picker — bottom sheet */}
+          {pcModeOpen && (
+            <>
+              <div className="fixed inset-0 bg-foreground/30 z-[80]" onClick={() => setPcModeOpen(false)} />
+              <div
+                className="fixed inset-x-0 bottom-0 bg-background rounded-t-[20px] z-[90]"
+                style={{ paddingBottom: "calc(16px + env(safe-area-inset-bottom, 0px))" }}
+              >
+                <div className="w-9 h-1 bg-border rounded-full mx-auto mt-3" />
+                <div className="text-[13px] font-semibold uppercase tracking-widest text-muted-foreground px-5 py-3.5 border-b border-border">
+                  Writing mode
+                </div>
+                {PC_MODE_OPTIONS.map(opt => (
+                  <button
+                    key={opt.mode}
+                    onClick={() => {
+                      setMode(opt.mode);
+                      setPcModeOpen(false);
+                      if (opt.mode === "correct") setTimeout(() => setCorrectionModalOpen(true), 280);
+                    }}
+                    className={`w-full flex items-center gap-3.5 px-5 py-3.5 border-b border-border text-left transition-colors ${mode === opt.mode ? "bg-primary/5" : "hover:bg-secondary/50"}`}
+                  >
+                    <span
+                      className="w-7 h-7 rounded-full flex items-center justify-center text-[13px] font-bold flex-shrink-0 border transition-colors"
+                      style={mode === opt.mode
+                        ? { background: "hsl(var(--primary))", borderColor: "hsl(var(--primary))", color: "hsl(var(--primary-foreground))" }
+                        : { background: "hsl(var(--secondary))", borderColor: "hsl(var(--border))", color: "hsl(var(--muted-foreground))" }
+                      }
+                    >
+                      {opt.num}
+                    </span>
+                    <div>
+                      <div className="text-[15px] font-semibold text-foreground">{opt.name}</div>
+                      <div className="text-[12px] text-muted-foreground">{opt.desc}</div>
+                    </div>
+                    {mode === opt.mode && <Check size={14} className="ml-auto text-primary" />}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+
+          {/* PC Settings panel — slides in from right */}
+          {pcSettingsOpen && (
+            <>
+              <div className="fixed inset-0 bg-foreground/30 z-[80]" onClick={() => setPcSettingsOpen(false)} />
+              <div
+                className="fixed top-0 right-0 bottom-0 w-[320px] bg-background border-l border-border z-[90] flex flex-col overflow-y-auto shadow-2xl"
+                style={{ paddingBottom: "calc(20px + env(safe-area-inset-bottom, 0px))" }}
+              >
+                <div className="flex items-center justify-between px-5 py-4 border-b border-border flex-shrink-0">
+                  <span className="text-[16px] font-bold text-foreground">Settings</span>
+                  <button onClick={() => setPcSettingsOpen(false)} className="w-8 h-8 flex items-center justify-center rounded-lg text-muted-foreground hover:bg-secondary transition-colors">
+                    <X size={16} />
+                  </button>
+                </div>
+
+                <CzarSettingsPickerRow label="Citation style" value={settings.citationStyle} options={CITE_STYLES}
+                  onChange={v => updateSettings({ citationStyle: v })} />
+                <CzarSettingsPickerRow label="Writing level" value={settings.writingLevel} options={WRITING_LEVELS}
+                  onChange={v => updateSettings({ writingLevel: v })} />
+                <div className="flex items-center justify-between px-5 py-3.5 border-b border-border">
+                  <div>
+                    <div className="text-[14px] text-foreground">Language</div>
+                    <div className="text-[12px] text-muted-foreground mt-0.5">{settings.language}</div>
+                  </div>
+                  <select
+                    value={settings.language}
+                    onChange={e => updateSettings({ language: e.target.value })}
+                    className="text-[12px] text-muted-foreground bg-secondary border border-border rounded-lg px-2 py-1.5 outline-none cursor-pointer"
+                  >
+                    {LANGUAGES.map(l => <option key={l}>{l}</option>)}
+                  </select>
+                </div>
+                <CzarSettingsToggleRow label="Auto-detect domain" sub="Detects academic, fiction, professional…"
+                  value={settings.autoDetectDomain} onChange={v => updateSettings({ autoDetectDomain: v })} />
+                <CzarSettingsToggleRow label="Formal register" sub="No contractions, third person"
+                  value={settings.formalRegister} onChange={v => updateSettings({ formalRegister: v })} />
+                <CzarSettingsToggleRow label="Save checkpoints" sub="Remember context across sessions"
+                  value={settings.saveCheckpoints} onChange={v => updateSettings({ saveCheckpoints: v })} />
+                {wordBalance !== null && (
+                  <div className="flex items-center justify-between px-5 py-3.5 border-b border-border">
+                    <div>
+                      <div className="text-[14px] text-foreground">Word balance</div>
+                      <div className="text-[12px] text-muted-foreground mt-0.5">{wordBalance.toLocaleString()} remaining</div>
+                    </div>
+                    <ChevronRight size={16} className="text-muted-foreground" />
+                  </div>
+                )}
+              </div>
+            </>
+          )}
 
           {/* Thread */}
           <div className={`flex-1 relative min-h-0 ${messages.length > 0 ? "overflow-y-auto" : "overflow-hidden"}`}>
@@ -1273,4 +1467,57 @@ function WelcomeScreen({ userName, userInitials, avatarUrl }: {
 
 function InputFallback() {
   return <div className="h-20 rounded-xl border border-border bg-background/50 animate-pulse" />;
+}
+
+function CzarSettingsToggleRow({
+  label, sub, value, onChange,
+}: { label: string; sub: string; value: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <div className="flex items-center justify-between px-5 py-3.5 border-b border-border">
+      <div>
+        <div className="text-[14px] text-foreground">{label}</div>
+        <div className="text-[12px] text-muted-foreground mt-0.5">{sub}</div>
+      </div>
+      <button
+        onClick={() => onChange(!value)}
+        className="flex-shrink-0 rounded-full relative transition-colors"
+        style={{ width: 44, height: 26, background: value ? "hsl(var(--primary))" : "hsl(var(--border))" }}
+      >
+        <span
+          className="absolute top-[3px] w-5 h-5 rounded-full bg-white shadow-sm transition-transform duration-200"
+          style={{ left: 3, transform: value ? "translateX(18px)" : "translateX(0)" }}
+        />
+      </button>
+    </div>
+  );
+}
+
+function CzarSettingsPickerRow({
+  label, value, options, onChange,
+}: { label: string; value: string; options: string[]; onChange: (v: string) => void }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="border-b border-border">
+      <button onClick={() => setOpen(p => !p)} className="w-full flex items-center justify-between px-5 py-3.5 text-left">
+        <div>
+          <div className="text-[14px] text-foreground">{label}</div>
+          <div className="text-[12px] text-muted-foreground mt-0.5">{value}</div>
+        </div>
+        <ChevronRight size={14} className={`text-muted-foreground transition-transform duration-200 ${open ? "rotate-90" : ""}`} />
+      </button>
+      {open && (
+        <div className="pb-3 px-5 flex flex-wrap gap-2">
+          {options.map(o => (
+            <button
+              key={o}
+              onClick={() => { onChange(o); setOpen(false); }}
+              className={`px-3 py-1.5 rounded-full text-[12px] font-medium border transition-colors ${o === value ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground hover:bg-secondary"}`}
+            >
+              {o}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
