@@ -4,7 +4,7 @@ import {
   TableRow, TableCell, Table, WidthType, BorderStyle, ShadingType,
   LevelFormat, PageBreak, Footer, Header, PageNumber, ImageRun, TableOfContents,
   SectionType, NumberFormat, FootnoteReferenceRun,
-} from "https://esm.sh/docx@8.5.0";
+} from "npm:docx@8.5.0";
 import { getCitationStyleDocx } from "../generate-chapter/citationStyles.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
