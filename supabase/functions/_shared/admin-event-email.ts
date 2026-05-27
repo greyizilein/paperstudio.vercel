@@ -73,7 +73,7 @@ export async function notifyAdmin(
     }
 
     // Also log into admin_emails for the dashboard (best-effort)
-    const { createClient } = await import("https://esm.sh/@supabase/supabase-js@2");
+    const { createClient } = await import("npm:@supabase/supabase-js@2");
     const svc = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,

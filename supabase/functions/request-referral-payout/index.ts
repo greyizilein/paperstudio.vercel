@@ -1,4 +1,4 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "npm:@supabase/supabase-js@2";
 import { notifyAdmin } from "../_shared/admin-event-email.ts";
 
 const corsHeaders = {

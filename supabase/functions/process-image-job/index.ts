@@ -8,7 +8,7 @@
 // Each figure has a 45s per-model timeout; one stuck call cannot poison the
 // rest of the batch.
 
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "npm:@supabase/supabase-js@2";
 import { buildImagePrompt, generateImage, getScheme } from "../_shared/image-gen.ts";
 import { buildZipBase64 } from "../_shared/zip-builder.ts";
 
