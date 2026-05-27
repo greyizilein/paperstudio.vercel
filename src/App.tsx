@@ -27,6 +27,7 @@ const ShareView = lazy(() => import("./pages/ShareView.tsx"));
 const Dashboard = lazy(() => import("./pages/Dashboard.tsx"));
 const WriterPage = lazy(() => import("./pages/Writer.tsx"));
 const Czar = lazy(() => import("./pages/Czar.tsx"));
+const CzarEditor = lazy(() => import("./pages/CzarEditor.tsx"));
 const NewProjectPage = lazy(() => import("./pages/NewProjectPage.tsx"));
 const SettingsPage = lazy(() => import("./pages/Settings.tsx"));
 const AdminPage = lazy(() => import("./pages/Admin.tsx"));
@@ -94,6 +95,7 @@ const App = () => (
                   <Route path="/new-project" element={<NewProjectPage />} />
                   <Route path="/writer/:projectId" element={<WriterPage />} />
                   <Route path="/czar" element={<Czar />} />
+                  <Route path="/editor" element={<CzarEditor />} />
                   <Route path="/settings" element={<SettingsPage />} />
                   <Route path="/admin" element={<AdminPage />} />
                 </Route>

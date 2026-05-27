@@ -66,154 +66,20 @@ const SCENE_CSS = `
   .dark .czar-svg [stroke="white"]   { stroke: hsl(var(--background)); }
 `;
 
-// ─── TeamScene — main welcome illustration (natural proportions) ─────────────
+// ─── TeamScene — uses purchased illustration ───────────────────────────────
 
 export function TeamScene() {
   return (
     <div className="w-full max-w-[560px] mx-auto select-none" aria-hidden>
       <style>{SCENE_CSS}</style>
-      <svg viewBox="0 0 520 280" fill="none" xmlns="http://www.w3.org/2000/svg" className="czar-svg w-full h-auto" strokeLinejoin="round" strokeLinecap="round">
-
-        {/* ── DESK ──────────────────────────────────────────────── */}
-        <rect x="10" y="240" width="500" height="2" fill="#1a1a1a"/>
-        <rect x="20" y="240" width="8" height="35" rx="3" fill="#1a1a1a" opacity="0.6"/>
-        <rect x="492" y="240" width="8" height="35" rx="3" fill="#1a1a1a" opacity="0.6"/>
-
-        {/* ══════════════════════════════════════════════════════════
-            LEFT CHARACTER — Glasses wearer, compact build
-        ══════════════════════════════════════════════════════════ */}
-
-        {/* Head outline */}
-        <circle cx="90" cy="85" r="28" fill="white" stroke="#1a1a1a" strokeWidth="2.2"/>
-
-        {/* Hair (short, neat) */}
-        <path d="M62 75 Q62 50 90 48 Q118 50 118 75 L118 85 Q118 88 115 88 Q112 82 90 82 Q68 82 65 88 Q62 88 62 85 Z" fill="#1a1a1a"/>
-
-        {/* Glasses */}
-        <circle cx="78" cy="82" r="11" fill="none" stroke="#1a1a1a" strokeWidth="2"/>
-        <circle cx="102" cy="82" r="11" fill="none" stroke="#1a1a1a" strokeWidth="2"/>
-        <line x1="89" y1="82" x2="91" y2="82" stroke="#1a1a1a" strokeWidth="2"/>
-        <line x1="66" y1="80" x2="60" y2="78" stroke="#1a1a1a" strokeWidth="2"/>
-
-        {/* Eyes (small, natural) */}
-        <circle cx="78" cy="82" r="3.5" fill="#1a1a1a"/>
-        <circle cx="102" cy="82" r="3.5" fill="#1a1a1a"/>
-        <circle cx="79" cy="80" r="1.2" fill="white"/>
-        <circle cx="103" cy="80" r="1.2" fill="white"/>
-
-        {/* Nose (simple line) */}
-        <line x1="90" y1="88" x2="90" y2="98" stroke="#1a1a1a" strokeWidth="1.5" opacity="0.5"/>
-
-        {/* Smile */}
-        <path d="M75 105 Q90 115 105 105" fill="none" stroke="#1a1a1a" strokeWidth="2.2"/>
-
-        {/* Neck */}
-        <rect x="85" y="110" width="10" height="15" fill="white"/>
-
-        {/* Body — simple line art style */}
-        <path d="M65 125 L75 130 L75 170 L105 170 L105 130 L115 125" fill="white" stroke="#1a1a1a" strokeWidth="2.2"/>
-
-        {/* Left arm */}
-        <path d="M75 135 L50 160" stroke="#1a1a1a" strokeWidth="3.2"/>
-        <circle cx="48" cy="162" r="5" fill="white" stroke="#1a1a1a" strokeWidth="2"/>
-
-        {/* Right arm — resting */}
-        <path d="M105 135 L130 155" stroke="#1a1a1a" strokeWidth="3.2"/>
-        <circle cx="132" cy="157" r="5" fill="white" stroke="#1a1a1a" strokeWidth="2"/>
-
-
-        {/* ══════════════════════════════════════════════════════════
-            CENTER CHARACTER — Friendly, engaged, at laptop
-        ══════════════════════════════════════════════════════════ */}
-
-        {/* Head */}
-        <circle cx="260" cy="80" r="30" fill="white" stroke="#1a1a1a" strokeWidth="2.2"/>
-
-        {/* Hair (dark, natural) */}
-        <path d="M230 65 Q230 40 260 38 Q290 40 290 65 L290 80 Q290 85 285 85 L235 85 Q230 85 230 80 Z" fill="#1a1a1a"/>
-
-        {/* Eyes (normal, warm) */}
-        <circle cx="248" cy="78" r="4" fill="#1a1a1a"/>
-        <circle cx="272" cy="78" r="4" fill="#1a1a1a"/>
-        <circle cx="249.5" cy="76" r="1.4" fill="white"/>
-        <circle cx="273.5" cy="76" r="1.4" fill="white"/>
-
-        {/* Eyebrows */}
-        <path d="M240 72 Q248 68 256 72" fill="none" stroke="#1a1a1a" strokeWidth="2" opacity="0.6"/>
-        <path d="M264 72 Q272 68 280 72" fill="none" stroke="#1a1a1a" strokeWidth="2" opacity="0.6"/>
-
-        {/* Nose */}
-        <line x1="260" y1="82" x2="260" y2="92" stroke="#1a1a1a" strokeWidth="1.5" opacity="0.4"/>
-
-        {/* Smile (happy, engaged) */}
-        <path d="M242 100 Q260 110 278 100" fill="none" stroke="#1a1a1a" strokeWidth="2.2"/>
-
-        {/* Neck */}
-        <rect x="255" y="108" width="10" height="12" fill="white"/>
-
-        {/* Body — sitting at desk */}
-        <path d="M238 120 L252 125 L252 180 L268 180 L268 125 L282 120" fill="white" stroke="#1a1a1a" strokeWidth="2.2"/>
-
-        {/* Arms — typing motion */}
-        <g style={{ animation: "czar-typing 1.2s ease-in-out infinite", transformOrigin: "260px 130px" }}>
-          <path d="M252 130 L240 155" stroke="#1a1a1a" strokeWidth="3"/>
-          <circle cx="238" cy="157" r="5" fill="white" stroke="#1a1a1a" strokeWidth="2"/>
-          <path d="M268 130 L280 155" stroke="#1a1a1a" strokeWidth="3"/>
-          <circle cx="282" cy="157" r="5" fill="white" stroke="#1a1a1a" strokeWidth="2"/>
-        </g>
-
-        {/* Laptop in front (simplified) */}
-        <rect x="230" y="160" width="60" height="35" rx="3" fill="#1a1a1a" stroke="#1a1a1a" strokeWidth="1.5"/>
-        <rect x="235" y="165" width="50" height="26" fill="#2a2a2a"/>
-        <line x1="240" y1="172" x2="280" y2="172" stroke="white" strokeWidth="2" opacity="0.5"/>
-        <line x1="240" y1="178" x2="275" y2="178" stroke="white" strokeWidth="1.5" opacity="0.4"/>
-
-
-        {/* ══════════════════════════════════════════════════════════
-            RIGHT CHARACTER — Long hair, elegant pose
-        ══════════════════════════════════════════════════════════ */}
-
-        {/* Head */}
-        <circle cx="420" cy="88" r="28" fill="white" stroke="#1a1a1a" strokeWidth="2.2"/>
-
-        {/* Hair (long, flowing) */}
-        <path d="M392 70 Q390 45 420 43 Q450 45 448 70
-                 L448 90 Q448 115 442 145
-                 L398 145 Q392 115 392 90 Z" fill="#1a1a1a"/>
-        <path d="M398 65 Q405 60 420 60 Q435 60 442 65" fill="none" stroke="white" strokeWidth="1.2" opacity="0.2"/>
-
-        {/* Eyes (expressive, smart) */}
-        <circle cx="408" cy="85" r="4" fill="#1a1a1a"/>
-        <circle cx="432" cy="85" r="4" fill="#1a1a1a"/>
-        <circle cx="409.5" cy="83" r="1.4" fill="white"/>
-        <circle cx="433.5" cy="83" r="1.4" fill="white"/>
-
-        {/* Eyebrows */}
-        <path d="M400 78 Q408 74 416 78" fill="none" stroke="#1a1a1a" strokeWidth="2" opacity="0.6"/>
-        <path d="M424 78 Q432 74 440 78" fill="none" stroke="#1a1a1a" strokeWidth="2" opacity="0.6"/>
-
-        {/* Nose */}
-        <line x1="420" y1="90" x2="420" y2="99" stroke="#1a1a1a" strokeWidth="1.5" opacity="0.4"/>
-
-        {/* Smile (subtle, confident) */}
-        <path d="M405 107 Q420 115 435 107" fill="none" stroke="#1a1a1a" strokeWidth="2.2"/>
-
-        {/* Neck */}
-        <rect x="415" y="114" width="10" height="12" fill="white"/>
-
-        {/* Body — confident posture */}
-        <path d="M398 126 L412 131 L412 180 L428 180 L428 131 L442 126" fill="white" stroke="#1a1a1a" strokeWidth="2.2"/>
-
-        {/* Left arm — resting */}
-        <path d="M412 138 L390 165" stroke="#1a1a1a" strokeWidth="3"/>
-        <circle cx="388" cy="167" r="5" fill="white" stroke="#1a1a1a" strokeWidth="2"/>
-
-        {/* Right arm — pen/writing */}
-        <path d="M428 138 L450 165" stroke="#1a1a1a" strokeWidth="3"/>
-        <circle cx="452" cy="167" r="5" fill="white" stroke="#1a1a1a" strokeWidth="2"/>
-        <line x1="448" y1="163" x2="465" y2="150" stroke="#1a1a1a" strokeWidth="3.5"/>
-
-      </svg>
+      <div className="rounded-2xl overflow-hidden bg-white dark:bg-white/5 shadow-sm">
+        <img
+          src="/characters/team-scene.svg"
+          alt=""
+          className="w-full h-auto block"
+          draggable={false}
+        />
+      </div>
     </div>
   );
 }
