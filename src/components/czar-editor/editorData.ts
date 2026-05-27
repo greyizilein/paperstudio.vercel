@@ -7,29 +7,6 @@ export interface CzVoice {
   meters: { warmth: number; formality: number; brevity: number; wit: number };
 }
 
-export interface CzPiece {
-  id: string;
-  name: string;
-  meta: string;
-  meta2?: string;
-  active?: boolean;
-}
-
-export interface CzOutlineItem {
-  id: string;
-  text: string;
-  level: 1 | 2;
-  current?: boolean;
-}
-
-export interface CzSuggestion {
-  id: string;
-  kind: 'voice' | 'grammar' | 'cut';
-  tone: string;
-  was: string;
-  now: string;
-}
-
 export const CZ_VOICES: CzVoice[] = [
   { id: 'self', name: 'Your voice', tag: 'baseline', glyph: '§',
     desc: 'Your own rhythm — Czar studied 12,000 words you wrote and learned the shape of it.',
@@ -49,32 +26,4 @@ export const CZ_VOICES: CzVoice[] = [
   { id: 'longform', name: 'Longform essay', tag: 'considered', glyph: 'L',
     desc: 'Build the argument. Earn the reader. Trust them with subordinate clauses.',
     meters: { warmth: 58, formality: 72, brevity: 24, wit: 60 } },
-];
-
-export const CZ_PIECES: CzPiece[] = [
-  { id: 'p1', name: 'Letter to the founders', meta: '1,842w', active: true },
-  { id: 'p2', name: 'A short story — Margaret', meta: '4,612w' },
-  { id: 'p3', name: 'Sub-stack #14', meta: '880w' },
-  { id: 'p4', name: 'Cold pitch — Vogue', meta: '320w', meta2: 'draft' },
-];
-
-export const CZ_OUTLINE: CzOutlineItem[] = [
-  { id: 'o1', text: 'A letter to the founders, with apology', level: 1, current: true },
-  { id: 'o2', text: 'What we said we would build', level: 2 },
-  { id: 'o3', text: 'What we actually built', level: 2 },
-  { id: 'o4', text: 'The thing about Wednesdays', level: 1 },
-  { id: 'o5', text: 'On burning the deck', level: 2 },
-  { id: 'o6', text: 'A modest proposal', level: 1 },
-];
-
-export const CZ_SUGGESTIONS: CzSuggestion[] = [
-  { id: 's1', kind: 'voice', tone: 'sharper',
-    was: 'I believe we were perhaps a little too eager in our promises.',
-    now: 'We promised too much.' },
-  { id: 's2', kind: 'grammar', tone: 'fix',
-    was: 'Each of the founders have their own version of the story.',
-    now: 'Each of the founders has their own version of the story.' },
-  { id: 's3', kind: 'cut', tone: '— 14 words',
-    was: 'It is important to note, at this juncture, that we did, in fact, ship.',
-    now: 'We shipped.' },
 ];
