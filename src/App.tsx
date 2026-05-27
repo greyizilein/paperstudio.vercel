@@ -94,7 +94,8 @@ const App = () => (
                   <Route path="/dashboard" element={<Dashboard />} />
                   <Route path="/new-project" element={<NewProjectPage />} />
                   <Route path="/writer/:projectId" element={<WriterPage />} />
-                  <Route path="/czar" element={<Czar />} />
+                  <Route path="/czar" element={<CzarEditor />} />
+                  <Route path="/czar-ai" element={<Czar />} />
                   <Route path="/editor" element={<CzarEditor />} />
                   <Route path="/settings" element={<SettingsPage />} />
                   <Route path="/admin" element={<AdminPage />} />
