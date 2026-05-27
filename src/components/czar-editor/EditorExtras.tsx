@@ -1,10 +1,7 @@
 import { useState, useEffect } from 'react';
 import { CZ_VOICES } from './editorData';
-
-interface EditorPrefs {
-  width: string; cursor: string; spell: string; focus: string;
-  autosave: string; lang: string; punct: string; filler: string; apply: string;
-}
+import type { CzEditorPrefs } from './useCzarEditor';
+import type { ImportedFile } from './editorHooks';
 
 // ── Mic wave ──────────────────────────────────────────────────
 export function CzMicWave({ count = 28 }: { count?: number }) {
@@ -72,16 +69,22 @@ export function CzDropOverlay({ visible }: { visible: boolean }) {
   );
 }
 
-export function CzImportedChip({ file, onClose }: { file: { name: string; kind: string; size: string; words: string } | null; onClose: () => void }) {
+export function CzImportedChip({ file, onClose }: { file: ImportedFile | null; onClose: () => void }) {
   if (!file) return null;
+  const isUploading = file.status === 'uploading';
+  const isError = file.status === 'error';
   return (
-    <div className="cz-imported">
-      <span className="cz-imported-icon">§</span>
+    <div className="cz-imported" data-status={file.status}>
+      <span className="cz-imported-icon">{isUploading ? '↑' : isError ? '!' : '§'}</span>
       <div className="cz-imported-body">
-        <span className="cz-imported-name">Imported · {file.name}</span>
-        <span className="cz-imported-meta">{file.kind} · {file.size} · {file.words}w added</span>
+        <span className="cz-imported-name">
+          {isUploading ? 'Uploading…' : isError ? 'Upload failed' : 'Imported'} · {file.name}
+        </span>
+        <span className="cz-imported-meta">
+          {file.kind} · {file.size} · {isUploading ? 'processing…' : `${file.words}w`}
+        </span>
       </div>
-      <button className="cz-imported-close" onClick={onClose}>×</button>
+      {!isUploading && <button className="cz-imported-close" onClick={onClose}>×</button>}
     </div>
   );
 }
@@ -129,18 +132,26 @@ function CzModesPane({ activeVoice, setVoice }: { activeVoice: string; setVoice:
   );
 }
 
-function SegCtl({ k, prefs, setPrefs, opts }: { k: keyof EditorPrefs; prefs: EditorPrefs; setPrefs: (p: EditorPrefs) => void; opts: { value: string; label: string }[] }) {
+function SegCtl({ k, prefs, setPrefs, opts }: {
+  k: keyof CzEditorPrefs;
+  prefs: CzEditorPrefs;
+  setPrefs: (patch: Partial<CzEditorPrefs>) => void;
+  opts: { value: string; label: string }[];
+}) {
   return (
     <div className="cz-pref-segctl">
       {opts.map((o) => (
-        <button key={o.value} data-active={prefs[k] === o.value ? 'true' : undefined}
-                onClick={() => setPrefs({ ...prefs, [k]: o.value })}>{o.label}</button>
+        <button key={o.value}
+                data-active={prefs[k] === o.value ? 'true' : undefined}
+                onClick={() => setPrefs({ [k]: o.value } as Partial<CzEditorPrefs>)}>
+          {o.label}
+        </button>
       ))}
     </div>
   );
 }
 
-function CzEditorPane({ prefs, setPrefs }: { prefs: EditorPrefs; setPrefs: (p: EditorPrefs) => void }) {
+function CzEditorPane({ prefs, setPrefs }: { prefs: CzEditorPrefs; setPrefs: (patch: Partial<CzEditorPrefs>) => void }) {
   return (
     <>
       <h2 className="cz-modal-pane-h">Editor</h2>
@@ -166,7 +177,7 @@ function CzEditorPane({ prefs, setPrefs }: { prefs: EditorPrefs; setPrefs: (p: E
   );
 }
 
-function CzDictationPane({ prefs, setPrefs }: { prefs: EditorPrefs; setPrefs: (p: EditorPrefs) => void }) {
+function CzDictationPane({ prefs, setPrefs }: { prefs: CzEditorPrefs; setPrefs: (patch: Partial<CzEditorPrefs>) => void }) {
   return (
     <>
       <h2 className="cz-modal-pane-h">Dictation</h2>
@@ -237,7 +248,7 @@ function CzShortcutsPane() {
   const rows: [string, string][] = [
     ['Tighten paragraph', '⌘ ⇧ T'], ['Shift voice', '⌘ ⇧ V'], ['Continue from here', '⌘ ⏎'],
     ['Dictate', '⌥ Space'], ['Quick import', '⌘ I'], ['Toggle focus mode', '⌘ .'],
-    ['Save', '⌘ S'], ['Search piece', '⌘ F'],
+    ['Save', '⌘ S'], ['Export / download', '⌘ E'], ['Search piece', '⌘ F'],
   ];
   return (
     <>
@@ -259,14 +270,16 @@ function CzShortcutsPane() {
   );
 }
 
-function CzAccountPane() {
+function CzAccountPane({ userEmail }: { userEmail?: string }) {
   return (
     <>
       <h2 className="cz-modal-pane-h">Account</h2>
       <p className="cz-modal-pane-sub">The bookkeeping bits.</p>
       <div className="cz-pref-row">
         <div className="cz-pref-label">Email</div>
-        <div className="cz-pref-control"><input className="cz-pref-text" defaultValue="margaret@paperstudio.app" /></div>
+        <div className="cz-pref-control">
+          <input className="cz-pref-text" readOnly value={userEmail || '—'} />
+        </div>
       </div>
       <div className="cz-pref-row">
         <div className="cz-pref-label">Plan</div>
@@ -296,14 +309,13 @@ interface SettingsModalProps {
   activeVoice: string;
   setVoice: (id: string) => void;
   initialSection?: SectionId;
+  prefs: CzEditorPrefs;
+  setPrefs: (patch: Partial<CzEditorPrefs>) => void;
+  userEmail?: string;
 }
 
-export function CzSettingsModal({ open, onClose, activeVoice, setVoice, initialSection = 'modes' }: SettingsModalProps) {
+export function CzSettingsModal({ open, onClose, activeVoice, setVoice, initialSection = 'modes', prefs, setPrefs, userEmail }: SettingsModalProps) {
   const [section, setSection] = useState<SectionId>(initialSection);
-  const [prefs, setPrefs] = useState<EditorPrefs>({
-    width: 'medium', cursor: 'blink', spell: 'on', focus: 'off', autosave: '30s',
-    lang: 'en-us', punct: 'auto', filler: 'trim', apply: 'pause',
-  });
 
   useEffect(() => { if (open) setSection(initialSection); }, [open, initialSection]);
 
@@ -347,7 +359,7 @@ export function CzSettingsModal({ open, onClose, activeVoice, setVoice, initialS
             {section === 'dictation' && <CzDictationPane prefs={prefs} setPrefs={setPrefs} />}
             {section === 'import' && <CzImportPane />}
             {section === 'shortcuts' && <CzShortcutsPane />}
-            {section === 'account' && <CzAccountPane />}
+            {section === 'account' && <CzAccountPane userEmail={userEmail} />}
           </div>
         </div>
       </div>
@@ -361,11 +373,29 @@ interface MobileSettingsProps {
   onClose: () => void;
   activeVoice: string;
   setVoice: (id: string) => void;
+  prefs: CzEditorPrefs;
+  setPrefs: (patch: Partial<CzEditorPrefs>) => void;
 }
 
-export function CzMobileSettings({ open, onClose, activeVoice, setVoice }: MobileSettingsProps) {
+export function CzMobileSettings({ open, onClose, activeVoice, setVoice, prefs, setPrefs }: MobileSettingsProps) {
   const [tab, setTab] = useState<'modes' | 'editor' | 'dictation'>('modes');
   if (!open) return null;
+
+  const prefRow = (label: string, k: keyof CzEditorPrefs, opts: string[]) => (
+    <div className="cz-m-pref-row" key={label}>
+      <div><div className="cz-m-pref-label">{label}</div></div>
+      <div className="cz-pref-segctl" style={{ padding: 2 }}>
+        {opts.map((o) => (
+          <button key={o}
+                  data-active={prefs[k] === o ? 'true' : undefined}
+                  onClick={() => setPrefs({ [k]: o } as Partial<CzEditorPrefs>)}>
+            {o}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+
   return (
     <div className="cz-m-sheet-backdrop" onClick={onClose}>
       <div className="cz-m-sheet" onClick={(e) => e.stopPropagation()}>
@@ -407,38 +437,19 @@ export function CzMobileSettings({ open, onClose, activeVoice, setVoice }: Mobil
 
         {tab === 'editor' && (
           <>
-            {[
-              { label: 'Paper width', opts: ['narrow','medium','wide'], active: 'medium' },
-              { label: 'Spell check', opts: ['on','soft','off'], active: 'on' },
-              { label: 'Focus line', opts: ['off','line','paragraph'], active: 'paragraph' },
-              { label: 'Autosave', opts: ['live','30s','manual'], active: '30s' },
-              { label: 'Theme', opts: ['dark','light'], active: 'dark' },
-            ].map((p) => (
-              <div className="cz-m-pref-row" key={p.label}>
-                <div><div className="cz-m-pref-label">{p.label}</div></div>
-                <div className="cz-pref-segctl" style={{ padding: 2 }}>
-                  {p.opts.map((o) => <button key={o} data-active={o === p.active ? 'true' : undefined}>{o}</button>)}
-                </div>
-              </div>
-            ))}
+            {prefRow('Paper width', 'width', ['narrow', 'medium', 'wide'])}
+            {prefRow('Spell check', 'spell', ['on', 'soft', 'off'])}
+            {prefRow('Focus line', 'focus', ['off', 'line', 'paragraph'])}
+            {prefRow('Autosave', 'autosave', ['live', '30s', 'manual'])}
           </>
         )}
 
         {tab === 'dictation' && (
           <>
-            {[
-              { label: 'Language', opts: ['EN-US','EN-GB','ES','FR'], active: 'EN-US' },
-              { label: 'Punctuation', opts: ['inferred','spoken'], active: 'inferred' },
-              { label: 'Filler words', opts: ['keep','trim','cut'], active: 'trim' },
-              { label: 'Apply voice', opts: ['live','pause','off'], active: 'pause' },
-            ].map((p) => (
-              <div className="cz-m-pref-row" key={p.label}>
-                <div><div className="cz-m-pref-label">{p.label}</div></div>
-                <div className="cz-pref-segctl" style={{ padding: 2 }}>
-                  {p.opts.map((o) => <button key={o} data-active={o === p.active ? 'true' : undefined}>{o}</button>)}
-                </div>
-              </div>
-            ))}
+            {prefRow('Language', 'lang', ['en-us', 'en-gb', 'es', 'fr'])}
+            {prefRow('Punctuation', 'punct', ['auto', 'spoken'])}
+            {prefRow('Filler words', 'filler', ['keep', 'trim', 'cut'])}
+            {prefRow('Apply voice', 'apply', ['live', 'pause', 'off'])}
           </>
         )}
       </div>

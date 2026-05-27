@@ -839,3 +839,50 @@
   border: 1px solid var(--rule); background: var(--paper-2); color: var(--ink); cursor: pointer;
 }
 .cz-m-mic-actions button[data-tone="primary"] { background: var(--primary); color: var(--primary-ink); border-color: var(--primary); }
+
+/* ── Live textarea canvas ── */
+.cz-leaf-textarea {
+  font-family: var(--f-display); font-size: 16px; font-weight: 300; line-height: 1.75;
+  color: var(--sheet-ink); background: transparent; border: none; outline: none;
+  resize: none; width: 100%; min-height: 520px; field-sizing: content;
+  padding: 0; margin: 0; letter-spacing: 0.005em;
+}
+.cz-leaf-textarea::placeholder { font-style: italic; color: var(--sheet-faint); }
+
+/* ── Rendered markdown in Read/Voice mode ── */
+.cz-leaf-render { font-family: var(--f-display); font-size: 16px; font-weight: 300; line-height: 1.75; color: var(--sheet-ink); }
+.cz-leaf-render h1 { font-size: 1.7em; font-weight: 700; margin: 0 0 0.5em; letter-spacing: -0.02em; }
+.cz-leaf-render h2 { font-size: 1.25em; font-weight: 600; margin: 1.5em 0 0.5em; letter-spacing: -0.01em; }
+.cz-leaf-render p { margin: 0 0 1em; }
+.cz-leaf-render em { font-style: italic; }
+.cz-leaf-render strong { font-weight: 700; }
+.cz-leaf-render ul, .cz-leaf-render ol { padding-left: 1.5em; margin: 0 0 1em; }
+
+/* ── Loading skeleton ── */
+@keyframes cz-shimmer {
+  0% { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+.cz-leaf-skeleton > div, .cz-piece-skeleton .cz-piece-name, .cz-sugg-skeleton > div {
+  background: linear-gradient(90deg, var(--rule-soft) 25%, var(--hover) 50%, var(--rule-soft) 75%);
+  background-size: 800px 100%;
+  animation: cz-shimmer 1.6s infinite linear;
+  border-radius: 4px;
+}
+.cz-piece-skeleton { pointer-events: none; }
+.cz-piece-skeleton .cz-piece-name { display: inline-block; height: 11px; }
+
+/* ── Streaming indicator ── */
+.cz-leaf[data-streaming="true"] .cz-leaf-textarea {
+  border-right: 2px solid var(--primary);
+}
+.cz-leaf[data-streaming="true"]::after {
+  content: ""; position: absolute; bottom: 0; left: 0; right: 0;
+  height: 2px; background: var(--primary); opacity: 0.6;
+  animation: cz-shimmer 1s infinite linear; border-radius: 0 0 3px 3px;
+}
+
+/* ── Imported chip status variants ── */
+.cz-imported[data-status="uploading"] { border-color: var(--primary-dim); }
+.cz-imported[data-status="error"] { border-color: hsl(0 50% 40%); }
+.cz-imported[data-status="error"] .cz-imported-icon { color: hsl(0 60% 65%); }
