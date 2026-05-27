@@ -6,7 +6,7 @@ import {
   SectionType, NumberFormat, FootnoteReferenceRun,
 } from "https://esm.sh/docx@8.5.0";
 import { getCitationStyleDocx } from "../generate-chapter/citationStyles.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "npm:@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",

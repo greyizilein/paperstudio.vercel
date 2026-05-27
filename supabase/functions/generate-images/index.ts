@@ -13,7 +13,7 @@
 // Authenticate with the user's JWT to gate billing/tier and to write the
 // job row under their user_id. The background worker uses the service role.
 
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "npm:@supabase/supabase-js@2";
 import {
   buildImagePrompt,
   generateImage,

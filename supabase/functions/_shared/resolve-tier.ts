@@ -2,7 +2,7 @@
 // Mirrors the inline block in generate-chapter so other reasoning functions can route
 // to Claude when the user is on a paid tier (or is the admin).
 
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "npm:@supabase/supabase-js@2";
 import { isAdminEmail } from "./pick-model.ts";
 
 export interface ResolvedTier {

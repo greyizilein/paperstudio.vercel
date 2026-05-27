@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "npm:@supabase/supabase-js@2";
 import { logAiUsage } from "../_shared/log-ai-usage.ts";
 import { streamAnthropic, AnthropicRateLimitError, CLAUDE_MODEL } from "../_shared/anthropic.ts";
 import { pickWriterModel, tierAllowsThinking } from "../_shared/pick-model.ts";

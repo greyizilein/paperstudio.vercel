@@ -2,7 +2,7 @@
 // Handles chat, write, correct, research, and plan modes.
 // Streams SSE events back to the client.
 
-import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { createClient, SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { CZAR_BRAIN_SYSTEM_PROMPT } from "./brain.ts";
 import { runOrchestrator } from "./orchestrator.ts";
 import { pickPlaybook, playbookText, RouterSignals } from "./promptLibrary.ts";
