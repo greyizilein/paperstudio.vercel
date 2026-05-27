@@ -493,7 +493,7 @@ export default function CzarPage() {
         </div>
 
         {/* Input */}
-        <div className="flex-shrink-0 bg-background sticky bottom-0 z-[100]">
+        <div className="flex-shrink-0 sticky bottom-0 z-[100]">
           <div className="max-w-3xl mx-auto px-4 py-3">
             <Suspense fallback={<InputFallback />}>
               <CommandInput
