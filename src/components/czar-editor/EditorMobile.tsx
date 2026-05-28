@@ -12,6 +12,9 @@ import { Packer } from 'docx';
 import { supabase } from '@/integrations/supabase/client';
 import type { CzPanelSettings } from './useCzarEditor';
 
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const mammoth = require('mammoth') as { extractRawText: (opts: { arrayBuffer: ArrayBuffer }) => Promise<{ value: string }> };
+
 const LANG_MAP: Record<string, string> = {
   'en-us': 'en-US', 'en-gb': 'en-GB', 'es': 'es-ES', 'fr': 'fr-FR',
 };
@@ -378,13 +381,29 @@ export function CzarMobile() {
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
   const [uploadStep, setUploadStep] = useState(0);
   const [uploadInfo, setUploadInfo] = useState<{ name: string; kind: string; size: string } | null>(null);
+  const [uploadStreamingStarted, setUploadStreamingStarted] = useState(false);
 
+  // Track when streaming starts (after import is triggered)
   useEffect(() => {
-    if (!editor.streamingDoc && uploadStep === 2 && uploadModalOpen) {
-      const t = setTimeout(() => setUploadStep(3), 400);
+    if (uploadModalOpen && uploadStep === 2 && editor.streamingDoc) {
+      setUploadStreamingStarted(true);
+    }
+  }, [uploadModalOpen, uploadStep, editor.streamingDoc]);
+
+  // Advance to "Done" only after streaming has started AND stopped
+  useEffect(() => {
+    if (uploadModalOpen && uploadStep === 2 && uploadStreamingStarted && !editor.streamingDoc) {
+      const t = setTimeout(() => { setUploadStep(3); setUploadStreamingStarted(false); }, 400);
       return () => clearTimeout(t);
     }
-  }, [editor.streamingDoc, uploadStep, uploadModalOpen]);
+  }, [editor.streamingDoc, uploadStep, uploadModalOpen, uploadStreamingStarted]);
+
+  // Safety fallback: show Done after 60s regardless
+  useEffect(() => {
+    if (!uploadModalOpen || uploadStep !== 2) return;
+    const t = setTimeout(() => setUploadStep(3), 60_000);
+    return () => clearTimeout(t);
+  }, [uploadModalOpen, uploadStep]);
 
   useEffect(() => {
     if (!editor.streamingDoc && editor.docContent) setEditMode(false);
@@ -411,8 +430,10 @@ export function CzarMobile() {
     if (!f) return;
     e.target.value = '';
 
-    const ext = (f.name.split('.').pop() || '').toUpperCase();
-    setUploadInfo({ name: f.name, kind: ext, size: (f.size / 1024).toFixed(1) + ' KB' });
+    const ext = (f.name.split('.').pop() || '').toLowerCase();
+    const kindLabel = ext.toUpperCase();
+    setUploadInfo({ name: f.name, kind: kindLabel, size: (f.size / 1024).toFixed(1) + ' KB' });
+    setUploadStreamingStarted(false);
     setUploadStep(0);
     setUploadModalOpen(true);
 
@@ -421,19 +442,54 @@ export function CzarMobile() {
     await new Promise<void>(r => setTimeout(r, 750));
     setUploadStep(2);
 
-    if (user?.id) {
-      const safeName = f.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-      const path = `${user.id}/${Date.now()}_${safeName}`;
-      const { error } = await supabase.storage.from('czar-uploads').upload(path, f);
-      if (!error) {
-        editor.importFile({ storage_path: path, filename: f.name, size: f.size, mime: f.type || 'application/octet-stream' });
-      } else {
-        editor.importFile({ storage_path: '', filename: f.name, size: f.size, mime: f.type || 'application/octet-stream' });
-      }
-    } else {
-      editor.importFile({ storage_path: '', filename: f.name, size: f.size, mime: f.type || 'application/octet-stream' });
+    // ── Text files: extract in-browser, send as message ──────────────────
+    if (ext === 'txt' || ext === 'md') {
+      const text = await f.text();
+      editor.writeFromPrompt(
+        `I've uploaded a file called "${f.name}". Here is its content:\n\n${text}\n\nPlease read it carefully, tell me what it's about, and ask what you'd like to do with it.`,
+        { mode: 'chat' },
+      );
+      return;
     }
-  }, [user?.id, editor]);
+
+    // ── .docx: extract text using mammoth, send as message ───────────────
+    if (ext === 'docx') {
+      const arrayBuffer = await f.arrayBuffer();
+      const { value: text } = await mammoth.extractRawText({ arrayBuffer });
+      editor.writeFromPrompt(
+        `I've uploaded a Word document called "${f.name}". Here is its full text content:\n\n${text}\n\nPlease read it carefully, tell me what this document is about, and ask what you'd like to do with it.`,
+        { mode: 'chat' },
+      );
+      return;
+    }
+
+    // ── Binary files (images, audio, PDF): upload to storage ─────────────
+    // Normalise audio MIME types — iOS sends audio/x-m4a which Gemini rejects
+    let mime = f.type || 'application/octet-stream';
+    if (mime === 'audio/x-m4a' || (ext === 'm4a' && !mime.startsWith('audio/'))) mime = 'audio/mp4';
+    if (mime === 'audio/mpeg' && ext === 'mp3') mime = 'audio/mp3';
+
+    if (!user?.id) {
+      // Not logged in — can't upload to storage
+      editor.writeFromPrompt(
+        `I tried to upload "${f.name}" but need to be signed in to process binary files. Please log in and try again.`,
+        { mode: 'chat' },
+      );
+      return;
+    }
+
+    const safeName = f.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const path = `${user.id}/${Date.now()}_${safeName}`;
+    const { error } = await supabase.storage.from('czar-uploads').upload(path, f, { contentType: mime });
+    if (error) {
+      editor.writeFromPrompt(
+        `Upload failed for "${f.name}": ${error.message}. Please try again.`,
+        { mode: 'chat' },
+      );
+      return;
+    }
+    editor.importFile({ storage_path: path, filename: f.name, size: f.size, mime });
+  }, [user?.id, editor, setUploadStreamingStarted]);
 
   const saveLabel = editor.saveStatus === 'saving' ? 'saving…' : editor.saveStatus === 'error' ? 'save failed' : editor.saveStatus === 'unsaved' ? 'unsaved' : 'saved';
 
@@ -564,7 +620,7 @@ export function CzarMobile() {
       </div>
 
       {/* ── HIDDEN FILE INPUT ── */}
-      <input ref={fileInputRef} type="file" accept=".txt,.md,.docx,.pdf,.mp3,.wav,.m4a" className="hidden" onChange={handleFileInput} />
+      <input ref={fileInputRef} type="file" accept=".txt,.md,.docx,.pdf,.mp3,.wav,.m4a,.jpg,.jpeg,.png,.gif,.webp" className="hidden" onChange={handleFileInput} />
 
       {/* ── INLINE BOTTOM SHEETS ── */}
       <CzMobileVoiceSheet open={voiceSheet} onClose={() => setVoiceSheet(false)} voice={editor.activeVoice} setVoice={editor.setActiveVoice} />
