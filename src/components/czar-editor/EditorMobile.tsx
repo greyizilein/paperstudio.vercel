@@ -12,9 +12,6 @@ import { Packer } from 'docx';
 import { supabase } from '@/integrations/supabase/client';
 import type { CzPanelSettings } from './useCzarEditor';
 
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const mammoth = require('mammoth') as { extractRawText: (opts: { arrayBuffer: ArrayBuffer }) => Promise<{ value: string }> };
-
 const LANG_MAP: Record<string, string> = {
   'en-us': 'en-US', 'en-gb': 'en-GB', 'es': 'es-ES', 'fr': 'fr-FR',
 };
@@ -452,9 +449,10 @@ export function CzarMobile() {
       return;
     }
 
-    // ── .docx: extract text using mammoth, send as message ───────────────
+    // ── .docx: extract text using mammoth (lazy-loaded), send as message ─
     if (ext === 'docx') {
       const arrayBuffer = await f.arrayBuffer();
+      const mammoth = await import('mammoth');
       const { value: text } = await mammoth.extractRawText({ arrayBuffer });
       editor.writeFromPrompt(
         `I've uploaded a Word document called "${f.name}". Here is its full text content:\n\n${text}\n\nPlease read it carefully, tell me what this document is about, and ask what you'd like to do with it.`,
