@@ -19,7 +19,7 @@ export default function CzarEditor() {
   const isMobile = useIsMobile();
 
   return (
-    <div style={{ width: "100vw", height: "100dvh", overflow: "hidden" }}>
+    <div style={{ width: "100vw", height: "100dvh" }}>
       {isMobile ? <CzarMobile /> : <CzarDesktop />}
     </div>
   );
