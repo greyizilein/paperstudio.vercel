@@ -191,6 +191,7 @@ export interface UseCzarEditorReturn {
   selectPiece: (id: string) => void;
   createPiece: () => Promise<void>;
   deletePiece: (id: string) => Promise<void>;
+  renamePiece: (id: string, name: string) => Promise<void>;
   retryLoadPieces: () => void;
 
   // Document
@@ -776,12 +777,18 @@ export function useCzarEditor(): UseCzarEditorReturn {
     await supabase.from('czar_conversations').delete().eq('id', id);
   }, [activePieceId, pieces]);
 
+  const renamePiece = useCallback(async (id: string, name: string) => {
+    setPieces(prev => prev.map(p => p.id === id ? { ...p, name } : p));
+    if (id === activePieceId) setDocTitleRaw(name);
+    await supabase.from('czar_conversations').update({ title: name }).eq('id', id);
+  }, [activePieceId]);
+
   const retryLoadPieces = useCallback(() => { loadPieces(); }, [loadPieces]);
   const retryLoadDoc = useCallback(() => { if (activePieceId) loadDoc(activePieceId); }, [activePieceId, loadDoc]);
 
   return {
     pieces, piecesLoading, piecesError, activePieceId,
-    selectPiece, createPiece, deletePiece, retryLoadPieces,
+    selectPiece, createPiece, deletePiece, renamePiece, retryLoadPieces,
     docContent, setDocContent, docTitle, setDocTitle, docLoading, docError, retryLoadDoc,
     wordCount, readingTime, outline,
     activeVoice, setActiveVoice, audience, setAudience, targetLength, setTargetLength,

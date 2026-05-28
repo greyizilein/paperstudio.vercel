@@ -78,14 +78,15 @@ export function useCzDictation(lang = 'en-US'): DictationState {
     recognitionRef.current = recognition;
 
     recognition.onresult = (event: SpeechRecognitionEvent) => {
-      let fin = '';
       let int = '';
-      for (let i = 0; i < event.results.length; i++) {
+      for (let i = event.resultIndex; i < event.results.length; i++) {
         const result = event.results[i];
-        if (result.isFinal) fin += result[0].transcript;
-        else int += result[0].transcript;
+        if (result.isFinal) {
+          setFinalText(prev => (prev ? prev + ' ' : '') + result[0].transcript.trim());
+        } else {
+          int = result[0].transcript;
+        }
       }
-      setFinalText(fin);
       setInterimText(int);
     };
     recognition.onerror = (e: SpeechRecognitionErrorEvent) => {
