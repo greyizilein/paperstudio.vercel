@@ -105,7 +105,7 @@ function CzCGroup({ label, ai = false, children }: { label: string; ai?: boolean
 function CzComposer({
   textareaRef, dictLive, onMicToggle, onOpenSettings,
   onTighten, onContinue, onStop, onCorrect, onAskCzar, onImport,
-  streaming, langLabel, onSetDocContent,
+  streaming, langLabel, onSetDocContent, onSwitchToEdit,
 }: {
   textareaRef: React.RefObject<HTMLTextAreaElement>;
   dictLive: boolean; onMicToggle: () => void;
@@ -114,10 +114,12 @@ function CzComposer({
   onCorrect: () => void; onAskCzar: () => void; onImport: () => void;
   streaming: boolean; langLabel: string;
   onSetDocContent: (text: string) => void;
+  onSwitchToEdit: () => void;
 }) {
   const [styleOpen, setStyleOpen] = useState(false);
 
   function toggleMd(wrap: string) {
+    onSwitchToEdit();
     const ta = textareaRef.current;
     if (!ta) return;
     const { selectionStart: s, selectionEnd: e, value } = ta;
@@ -130,6 +132,7 @@ function CzComposer({
   }
 
   function insertLinePrefix(prefix: string) {
+    onSwitchToEdit();
     const ta = textareaRef.current;
     if (!ta) return;
     const { selectionStart: s, value } = ta;
@@ -145,6 +148,7 @@ function CzComposer({
   }
 
   function insertAt(text: string) {
+    onSwitchToEdit();
     const ta = textareaRef.current;
     if (!ta) return;
     const { selectionStart: s, selectionEnd: e, value } = ta;
@@ -331,7 +335,7 @@ function CzRail({
 // ── Canvas / leaf ─────────────────────────────────────────────
 function CzLeaf({
   content, onChange, mode, docLoading, streaming, currentAgent, drop, textareaRef,
-  activePieceId, onAskCzar, onCorrect, onImport,
+  activePieceId, onAskCzar, onCorrect, onImport, onSwitchToEdit,
 }: {
   content: string; onChange: (v: string) => void;
   mode: string; docLoading: boolean; streaming: boolean; currentAgent: string | null;
@@ -339,6 +343,7 @@ function CzLeaf({
   textareaRef: React.RefObject<HTMLTextAreaElement>;
   activePieceId: string | null;
   onAskCzar: () => void; onCorrect: () => void; onImport: () => void;
+  onSwitchToEdit: () => void;
 }) {
   const showWelcome = !docLoading && content === '' && activePieceId !== null;
 
@@ -370,38 +375,36 @@ function CzLeaf({
             <div style={{ width: '100%', height: 14, marginBottom: 8 }} />
             <div style={{ width: '94%', height: 14 }} />
           </div>
-        ) : mode === 'edit' ? (
-          showWelcome ? (
-            <div className="cz-welcome">
-              <div className="cz-welcome-eyebrow">czar · drafting room</div>
-              <h2 className="cz-welcome-h">What would you like to write today?</h2>
-              <div className="cz-welcome-grid">
-                <div className="cz-welcome-card" onClick={() => textareaRef.current?.focus()}>
-                  <div className="cz-welcome-card-icon">✏</div>
-                  <div className="cz-welcome-card-title">Write freely</div>
-                  <div className="cz-welcome-card-desc">Start typing — blank page, your pace</div>
-                </div>
-                <div className="cz-welcome-card" onClick={onAskCzar}>
-                  <div className="cz-welcome-card-icon">§</div>
-                  <div className="cz-welcome-card-title">Ask Czar to write</div>
-                  <div className="cz-welcome-card-desc">Essays, reports, lit. reviews, scripts…</div>
-                </div>
-                <div className="cz-welcome-card" onClick={onCorrect}>
-                  <div className="cz-welcome-card-icon">✓</div>
-                  <div className="cz-welcome-card-title">Correct a draft</div>
-                  <div className="cz-welcome-card-desc">Upload a document for AI correction</div>
-                </div>
-                <div className="cz-welcome-card" onClick={onImport}>
-                  <div className="cz-welcome-card-icon">↑</div>
-                  <div className="cz-welcome-card-title">Upload a document</div>
-                  <div className="cz-welcome-card-desc">.docx · .pdf · .txt · audio</div>
-                </div>
+        ) : showWelcome ? (
+          <div className="cz-welcome">
+            <div className="cz-welcome-eyebrow">czar · drafting room</div>
+            <h2 className="cz-welcome-h">What would you like to write today?</h2>
+            <div className="cz-welcome-grid">
+              <div className="cz-welcome-card" onClick={() => { onSwitchToEdit(); setTimeout(() => textareaRef.current?.focus(), 50); }}>
+                <div className="cz-welcome-card-icon">✏</div>
+                <div className="cz-welcome-card-title">Write freely</div>
+                <div className="cz-welcome-card-desc">Start typing — blank page, your pace</div>
+              </div>
+              <div className="cz-welcome-card" onClick={onAskCzar}>
+                <div className="cz-welcome-card-icon">§</div>
+                <div className="cz-welcome-card-title">Ask Czar to write</div>
+                <div className="cz-welcome-card-desc">Essays, reports, lit. reviews, scripts…</div>
+              </div>
+              <div className="cz-welcome-card" onClick={onCorrect}>
+                <div className="cz-welcome-card-icon">✓</div>
+                <div className="cz-welcome-card-title">Correct a draft</div>
+                <div className="cz-welcome-card-desc">Upload a document for AI correction</div>
+              </div>
+              <div className="cz-welcome-card" onClick={onImport}>
+                <div className="cz-welcome-card-icon">↑</div>
+                <div className="cz-welcome-card-title">Upload a document</div>
+                <div className="cz-welcome-card-desc">.docx · .pdf · .txt · audio</div>
               </div>
             </div>
-          ) : null
+          </div>
         ) : null}
 
-        {!docLoading && mode === 'edit' && (
+        {!docLoading && !showWelcome && mode === 'edit' && (
           <textarea
             ref={textareaRef}
             className="cz-leaf-textarea"
@@ -409,18 +412,17 @@ function CzLeaf({
             onChange={(e) => onChange(e.target.value)}
             spellCheck
             placeholder="Start writing, or click § Ask Czar to let Czar begin for you."
-            style={{ display: showWelcome ? 'none' : undefined }}
           />
         )}
 
-        {!docLoading && mode !== 'edit' && (
+        {!docLoading && !showWelcome && mode !== 'edit' && (
           <div className="cz-leaf-render">
-            {content ? (
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
-            ) : (
-              <p style={{ color: 'var(--ink-faint)', fontStyle: 'italic' }}>
-                Nothing here yet. Switch to Edit mode to start writing.
-              </p>
+            {content && (
+              <ReactMarkdown remarkPlugins={[remarkGfm]} components={{
+                img: ({ node, ...props }: any) => (
+                  <img {...props} style={{ maxWidth: '100%', borderRadius: 4, display: 'block', margin: '16px 0' }} />
+                ),
+              }}>{content}</ReactMarkdown>
             )}
           </div>
         )}
@@ -591,7 +593,7 @@ export function CzarDesktop() {
   const { user } = useAuth();
   const editor = useCzarEditor();
 
-  const [mode, setMode] = useState('edit');
+  const [mode, setMode] = useState('read');
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsSection, setSettingsSection] = useState<SectionId>('modes');
   const [savedAt, setSavedAt] = useState<Date | null>(null);
@@ -618,6 +620,11 @@ export function CzarDesktop() {
       startReadAloud();
     }
   }, [mode]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Auto-switch to read mode during/after streaming so content renders formatted
+  useEffect(() => {
+    if (editor.streamingDoc) setMode('read');
+  }, [editor.streamingDoc]);
 
   function startReadAloud(rate?: number) {
     if (!window.speechSynthesis) return;
@@ -718,6 +725,7 @@ export function CzarDesktop() {
         streaming={editor.streamingDoc}
         langLabel={langLabel}
         onSetDocContent={editor.setDocContent}
+        onSwitchToEdit={() => setMode('edit')}
       />
 
       {writePanelOpen && (
@@ -751,6 +759,7 @@ export function CzarDesktop() {
           onAskCzar={() => setWritePanelOpen(true)}
           onCorrect={() => setCorrectionOpen(true)}
           onImport={() => fileInputRef.current?.click()}
+          onSwitchToEdit={() => setMode('edit')}
         />
         <CzInspector
           voice={editor.activeVoice} length={editor.targetLength}
