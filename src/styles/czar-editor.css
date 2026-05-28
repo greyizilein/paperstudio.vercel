@@ -417,14 +417,32 @@
 .cz-status-cluster button:hover { color: var(--ink); }
 
 /* ── Mobile ── */
+/* .cz-m is the root of the mobile layout. It MUST define all design tokens
+   because it has no .cz-app ancestor (the desktop wrapper that owns those vars). */
 .cz-m {
+  /* Design tokens — dark theme */
+  --paper: hsl(28 8% 9%); --paper-2: hsl(28 8% 11%);
+  --sheet: hsl(40 18% 96%); --sheet-ink: hsl(24 12% 14%);
+  --sheet-rule: hsl(28 14% 86%); --sheet-faint: hsl(24 8% 52%);
+  --ink: hsl(40 22% 94%); --ink-soft: hsl(40 14% 78%);
+  --ink-faint: hsl(40 8% 56%); --ink-ghost: hsl(40 6% 36%);
+  --rule: hsl(28 8% 22%); --rule-soft: hsl(28 8% 16%); --hover: hsl(28 8% 15%);
+  --primary: hsl(18 50% 53%); --primary-ink: #fff;
+  --primary-dark: hsl(18 55% 44%); --primary-pale: hsl(18 30% 22%);
+  --primary-dim: hsl(18 35% 38%);
+  --accent-1: hsl(37 56% 60%); --accent-2: hsl(153 22% 55%);
+  --f-display: 'Fraunces', Georgia, serif;
+  --f-body: 'Inter', system-ui, sans-serif;
+  --f-mono: 'JetBrains Mono', Consolas, monospace;
+  /* Flexbox sandwich — strict column, no overflow: hidden (would trap position:fixed sheets on iOS) */
   display: flex; flex-direction: column; width: 100%; height: 100%;
-  background: var(--paper); position: relative;
+  color: var(--ink); background: var(--paper); font-family: var(--f-body);
+  -webkit-font-smoothing: antialiased; letter-spacing: -0.005em;
 }
 .cz-m-bar {
-  display: grid; grid-template-columns: 36px 1fr 36px;
-  align-items: center; padding: 8px 10px;
-  border-bottom: 1px solid var(--rule-soft); background: var(--paper-2);
+  display: grid; grid-template-columns: 36px 1fr auto;
+  align-items: center; padding: 8px 10px; flex-shrink: 0;
+  border-bottom: 1px solid var(--rule-soft); background: var(--paper-2); z-index: 10;
 }
 .cz-m-iconbtn {
   width: 32px; height: 32px; background: transparent;
@@ -445,8 +463,9 @@
   max-width: 220px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .cz-m-voice {
-  display: flex; align-items: center; gap: 10px;
+  display: flex; align-items: center; gap: 10px; flex-shrink: 0;
   padding: 10px 16px; border-bottom: 1px solid var(--rule-soft);
+  background: var(--paper-2);
 }
 .cz-m-voice .cz-voice-glyph { width: 26px; height: 26px; font-size: 15px; }
 .cz-m-voice-name {
@@ -464,7 +483,9 @@
   border-radius: 999px; padding: 4px 10px; cursor: pointer;
 }
 .cz-m-canvas {
-  flex: 1; overflow-x: hidden; overflow-y: auto; padding: 18px 22px 100px;
+  /* flex: 1 makes this the only growing element in the sandwich */
+  flex: 1; min-height: 0; overflow-x: hidden; overflow-y: auto;
+  padding: 18px 22px 32px;
   background: var(--paper); min-width: 0; position: relative;
   word-break: break-word;
 }
@@ -487,15 +508,19 @@
 }
 .cz-m-status {
   font-family: var(--f-mono); font-size: 8.5px; letter-spacing: 0.16em;
-  text-transform: uppercase; color: var(--ink-faint);
+  text-transform: uppercase; color: var(--ink-faint); flex-shrink: 0;
   padding: 6px 16px; border-top: 1px solid var(--rule-soft);
   display: flex; justify-content: space-between; background: var(--paper-2);
 }
 .cz-m-status strong { font-weight: 500; color: var(--ink); }
 .cz-m-tools {
-  position: absolute; left: 0; right: 0; bottom: 0;
+  /* CRITICAL: flex-shrink:0 keeps this in-flow as the bottom of the sandwich.
+     Never use position:absolute here — that made the toolbar float over the canvas
+     with a transparent background (vars were undefined), causing content bleed-through. */
+  flex-shrink: 0;
   background: var(--paper-2); border-top: 1px solid var(--rule-soft);
   padding: 8px 12px; display: flex; align-items: center; gap: 6px;
+  z-index: 10;
 }
 .cz-m-tool {
   flex: 1; height: 38px; background: transparent;
@@ -1184,17 +1209,16 @@
   font-family: var(--f-mono);
   white-space: nowrap;
 }
-/* Update tool height to accommodate labels */
-@media (max-width: 768px) {
+/* Mobile tool layout: icon stacked above label — applies to all mobile viewports */
+@media (max-width: 959px) {
   .cz-m-tool {
-    height: 54px !important;
+    height: 52px !important;
     flex-direction: column !important;
-    gap: 1px !important;
+    gap: 2px !important;
     align-items: center !important;
     justify-content: center !important;
-    font-size: 17px !important;
+    font-size: 16px !important;
   }
-  .cz-m-tools { height: 60px; }
 }
 
 /* ── Desktop responsive layout ───────────────────────────────── */
