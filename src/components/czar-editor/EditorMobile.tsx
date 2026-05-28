@@ -575,7 +575,6 @@ export function CzarMobile() {
             value={editor.docContent}
             onChange={(e) => editor.setDocContent(e.target.value)}
             autoFocus
-            onBlur={() => { if (editor.docContent && !editor.streamingDoc) setEditMode(false); }}
           />
         )}
       </div>
@@ -583,11 +582,15 @@ export function CzarMobile() {
       {/* ── BOTTOM TOOLS ── */}
       <div className="flex-shrink-0 bg-white dark:bg-zinc-950 border-t border-zinc-200 dark:border-zinc-800 z-20 shadow-[0_-8px_30px_rgba(0,0,0,0.06)] pb-safe relative">
 
-        {/* Status Bar */}
-        <div className="flex justify-between items-center px-4 py-2 bg-zinc-50 dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800 font-mono text-[9px] tracking-widest uppercase text-zinc-500">
-          <span>{editor.wordCount > 0 ? `${editor.wordCount.toLocaleString()} words` : 'empty'}</span>
-          <strong className="text-zinc-800 dark:text-zinc-200">{saveLabel}</strong>
-          <span>{editor.wordCount > 0 ? `${editor.readingTime} read` : '—'}</span>
+        {/* Status Bar — tap to exit edit mode */}
+        <div
+          className={`flex justify-between items-center px-4 py-2 border-b border-zinc-200 dark:border-zinc-800 font-mono text-[9px] tracking-widest uppercase transition-colors ${editMode ? 'bg-[#e85d3f]/8 cursor-pointer active:bg-[#e85d3f]/15' : 'bg-zinc-50 dark:bg-zinc-900'}`}
+          onClick={() => { if (editMode) setEditMode(false); }}>
+          <span className="text-zinc-500">{editor.wordCount > 0 ? `${editor.wordCount.toLocaleString()} words` : 'empty'}</span>
+          {editMode
+            ? <span className="text-[#e85d3f] font-bold tracking-[0.2em]">Done editing ↑</span>
+            : <strong className="text-zinc-800 dark:text-zinc-200">{saveLabel}</strong>}
+          <span className="text-zinc-500">{editor.wordCount > 0 ? `${editor.readingTime} read` : '—'}</span>
         </div>
 
         {/* Buttons Row: Upload · Continue · Correct · Dictate · Write */}
