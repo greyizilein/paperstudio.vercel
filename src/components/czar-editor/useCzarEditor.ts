@@ -707,9 +707,9 @@ export function useCzarEditor(): UseCzarEditorReturn {
     streamCzar(
       {
         conversation_id: activePieceId,
-        user_message: 'Extract and format the content of this file. Integrate it naturally into the existing document or start fresh if the document is empty.',
+        user_message: 'I have uploaded a document for you to read. Please read it carefully, tell me what you understand from it, and ask me what you would like to do with it.',
         attachments: [attachment],
-        mode: 'write',
+        mode: 'chat',
         settings: buildCzarSettings(prefs, activeVoice, audience, targetLength),
       },
       {

@@ -302,9 +302,9 @@ function CzMobileDownloadSheet({ open, onClose, onDocx, onMarkdown }: any) {
 // ─── UPLOAD PROGRESS MODAL ────────────────────────────────────────────────────
 
 const UPLOAD_STEPS = [
-  { label: 'Scanning', desc: 'Reading and identifying document structure…' },
-  { label: 'Parsing', desc: 'Extracting text, headings, and formatting…' },
-  { label: 'Weaving in', desc: 'Integrating content into your piece…' },
+  { label: 'Reading', desc: 'Loading your document…' },
+  { label: 'Analysing', desc: 'Understanding the content and structure…' },
+  { label: 'Thinking', desc: 'Czar is forming a response…' },
 ];
 
 function CzMobileUploadModal({ open, onClose, info, step }: { open: boolean; onClose: () => void; info: { name: string; kind: string; size: string } | null; step: number }) {
@@ -489,27 +489,7 @@ export function CzarMobile() {
             <div className="h-4 bg-zinc-200 dark:bg-zinc-800 rounded w-5/6"></div>
             <div className="h-4 bg-zinc-200 dark:bg-zinc-800 rounded w-full"></div>
           </div>
-        ) : editor.docContent === '' ? (
-          <div className="flex flex-col gap-3 pt-4">
-            <p className="font-serif italic text-zinc-400 text-sm mb-2">What would you like to write?</p>
-            <button onClick={() => setWritePanel(true)} className="bg-[#e85d3f]/10 border border-[#e85d3f]/20 p-4 rounded-xl text-left font-serif italic font-bold text-[15px] text-[#e85d3f]">
-              § Ask Czar to write →
-            </button>
-            <button onClick={() => setCorrectionOpen(true)} className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-4 rounded-xl text-left font-sans text-[14px] text-zinc-600 dark:text-zinc-400">
-              ✓ Correct a draft
-            </button>
-            <button onClick={() => fileInputRef.current?.click()} className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-4 rounded-xl text-left font-sans text-[14px] text-zinc-600 dark:text-zinc-400">
-              ↑ Upload a document
-            </button>
-            <textarea
-              ref={textareaRef}
-              className="w-full min-h-[120px] mt-4 bg-transparent border-none outline-none font-serif text-[17px] leading-relaxed resize-none text-zinc-800 dark:text-zinc-200 placeholder:text-zinc-400 placeholder:italic"
-              value={editor.docContent}
-              onChange={(e) => editor.setDocContent(e.target.value)}
-              placeholder="Or start writing freely…"
-            />
-          </div>
-        ) : !editMode ? (
+        ) : !editMode && editor.docContent ? (
           <div
             className="prose prose-zinc dark:prose-invert max-w-none prose-headings:font-serif prose-headings:font-bold prose-h1:text-3xl prose-h2:text-2xl prose-h3:text-xl prose-h4:text-lg prose-p:font-serif prose-p:text-[17px] prose-p:leading-[1.8] pb-6"
             onClick={() => setEditMode(true)}>
