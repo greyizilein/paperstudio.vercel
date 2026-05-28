@@ -422,6 +422,9 @@ function CzLeaf({
                 img: ({ node, ...props }: any) => (
                   <img {...props} style={{ maxWidth: '100%', borderRadius: 4, display: 'block', margin: '16px 0' }} />
                 ),
+                table: ({ node, ...props }: any) => (
+                  <div className="cz-table-wrap"><table {...props} /></div>
+                ),
               }}>{content}</ReactMarkdown>
             )}
           </div>

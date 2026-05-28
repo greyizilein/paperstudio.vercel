@@ -378,6 +378,9 @@ export function CzarMobile() {
                 img: ({ node, ...props }: any) => (
                   <img {...props} style={{ maxWidth: '100%', borderRadius: 4, display: 'block', margin: '12px 0' }} />
                 ),
+                table: ({ node, ...props }: any) => (
+                  <div className="cz-table-wrap"><table {...props} /></div>
+                ),
               }}
             >
               {editor.docContent}
