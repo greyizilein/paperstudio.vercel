@@ -116,6 +116,8 @@ function CzMobilePiecesSheet({ open, onClose, pieces, activePieceId, onSelectPie
   const [renameValue, setRenameValue] = useState('');
   const [swipedLeftId, setSwipedLeftId] = useState<string | null>(null);
   const touchStart = useRef<{ x: number; y: number; id: string } | null>(null);
+  // Used to prevent blur-save when the cancel button is tapped
+  const cancellingRef = useRef(false);
 
   const startSwipe = (e: React.TouchEvent, id: string) => {
     touchStart.current = { x: e.touches[0].clientX, y: e.touches[0].clientY, id };
@@ -126,14 +128,14 @@ function CzMobilePiecesSheet({ open, onClose, pieces, activePieceId, onSelectPie
     const dx = e.changedTouches[0].clientX - touchStart.current.x;
     const dy = Math.abs(e.changedTouches[0].clientY - touchStart.current.y);
     touchStart.current = null;
-    if (dy > 25) return; // vertical scroll, ignore
-    if (dx < -55) {
+    if (dy > 30) return;
+    if (dx < -40) {
       setSwipedLeftId(id);
       setRenamingId(null);
-    } else if (dx > 55) {
+    } else if (dx > 40) {
       const piece = pieces.find((p: any) => p.id === id);
       if (piece) { setRenamingId(id); setRenameValue(piece.name); setSwipedLeftId(null); }
-    } else {
+    } else if (swipedLeftId === id) {
       setSwipedLeftId(null);
     }
   };
@@ -147,7 +149,7 @@ function CzMobilePiecesSheet({ open, onClose, pieces, activePieceId, onSelectPie
   const handleClose = () => { setSwipedLeftId(null); setRenamingId(null); onClose(); };
 
   return (
-    <BottomSheet open={open} onClose={handleClose} title="Pieces" actionText="+" onAction={() => { onCreatePiece(); handleClose(); }}>
+    <BottomSheet open={open} onClose={handleClose} title="Pieces" actionText="+ New" onAction={() => { onCreatePiece(); handleClose(); }}>
       {pieces.length === 0 && <p className="text-[13px] text-zinc-500 py-2">No pieces yet.</p>}
       {pieces.map((p: any) => (
         <div key={p.id} className="relative mb-1 overflow-hidden rounded-lg">
@@ -161,25 +163,37 @@ function CzMobilePiecesSheet({ open, onClose, pieces, activePieceId, onSelectPie
           </div>
 
           {renamingId === p.id ? (
-            // Inline rename input
+            // Inline rename input — saves on blur (tap away) or Enter; cancel with ✕
             <div className={`flex items-center gap-2 p-3 rounded-lg border ${p.id === activePieceId ? 'border-[#e85d3f]/40 bg-[#e85d3f]/5' : 'border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950'}`}>
               <input
                 autoFocus
                 className="flex-1 bg-transparent border-none outline-none font-sans text-[13px] text-zinc-900 dark:text-zinc-100 min-w-0"
                 value={renameValue}
                 onChange={(e) => setRenameValue(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') commitRename(p.id); if (e.key === 'Escape') setRenamingId(null); }}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); commitRename(p.id); } }}
+                onBlur={() => {
+                  if (!cancellingRef.current) commitRename(p.id);
+                  cancellingRef.current = false;
+                }}
               />
-              <button className="text-[#e85d3f] text-[13px] font-bold px-2 flex-shrink-0" onClick={() => commitRename(p.id)}>✓</button>
-              <button className="text-zinc-400 text-[15px] px-1 flex-shrink-0" onClick={() => setRenamingId(null)}>×</button>
+              <button
+                className="w-9 h-9 flex items-center justify-center text-[#e85d3f] text-[15px] font-bold flex-shrink-0"
+                onPointerDown={() => { cancellingRef.current = false; }}
+                onClick={() => commitRename(p.id)}>✓</button>
+              <button
+                className="w-9 h-9 flex items-center justify-center text-zinc-400 text-[17px] flex-shrink-0"
+                onPointerDown={() => { cancellingRef.current = true; }}
+                onClick={() => { setRenamingId(null); setRenameValue(''); }}>×</button>
             </div>
           ) : (
-            // Normal row (slides left on swipe to reveal delete)
+            // Normal row — touch-action: pan-y so browser handles vertical scroll
+            // but our handlers receive horizontal swipe events
             <div
               style={{
-                transform: swipedLeftId === p.id ? 'translateX(-72px)' : 'translateX(0)',
-                transition: 'transform 0.2s ease',
+                transform: swipedLeftId === p.id ? 'translateX(-80px)' : 'translateX(0)',
+                transition: 'transform 0.22s ease',
                 opacity: p.isPending ? 0.5 : 1,
+                touchAction: 'pan-y',
               }}
               className={`flex items-center gap-2.5 p-3 rounded-lg cursor-pointer ${p.id === activePieceId ? 'bg-[#e85d3f]/10' : 'bg-white dark:bg-zinc-950 hover:bg-zinc-50 dark:hover:bg-zinc-900'}`}
               onClick={() => {
@@ -192,15 +206,14 @@ function CzMobilePiecesSheet({ open, onClose, pieces, activePieceId, onSelectPie
               <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${p.id === activePieceId ? 'bg-[#e85d3f]' : 'bg-zinc-300 dark:bg-zinc-600'}`} />
               <span className="font-sans text-[13px] font-medium text-zinc-900 dark:text-zinc-100 flex-1 truncate">{p.name}</span>
               <span className="font-mono text-[9px] tracking-widest uppercase text-zinc-500 mr-1">{p.meta}</span>
-              {/* Explicit icon buttons */}
               <div className="flex items-center gap-0.5" onClick={(e) => e.stopPropagation()}>
                 <button
-                  className="w-7 h-7 flex items-center justify-center text-zinc-400 hover:text-[#e85d3f] rounded text-[14px]"
+                  className="w-9 h-9 flex items-center justify-center text-zinc-400 hover:text-[#e85d3f] rounded text-[14px]"
                   onClick={() => { setRenamingId(p.id); setRenameValue(p.name); setSwipedLeftId(null); }}>
                   ✎
                 </button>
                 <button
-                  className="w-7 h-7 flex items-center justify-center text-zinc-400 hover:text-red-500 rounded text-[12px]"
+                  className="w-9 h-9 flex items-center justify-center text-zinc-400 hover:text-red-500 rounded text-[13px]"
                   onClick={() => { onDeletePiece(p.id); if (p.id === activePieceId) handleClose(); }}>
                   ✕
                 </button>
@@ -209,7 +222,7 @@ function CzMobilePiecesSheet({ open, onClose, pieces, activePieceId, onSelectPie
           )}
         </div>
       ))}
-      <p className="font-mono text-[9px] text-zinc-400 text-center mt-3 tracking-widest uppercase">Swipe left to delete · Swipe right to rename</p>
+      <p className="font-mono text-[9px] text-zinc-400 text-center mt-3 tracking-widest uppercase">← swipe left to delete · swipe right to rename →</p>
     </BottomSheet>
   );
 }
