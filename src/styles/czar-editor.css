@@ -144,13 +144,13 @@
 /* ── Body grid ── */
 .cz-stage {
   flex: 1; display: grid; grid-template-columns: 220px 1fr 280px;
-  min-height: 0; background: var(--paper);
+  min-height: 0; background: var(--paper); overflow: hidden;
 }
 
 /* Left rail */
 .cz-rail {
   border-right: 1px solid var(--rule-soft); background: var(--paper-2);
-  display: flex; flex-direction: column; overflow: hidden;
+  display: flex; flex-direction: column; overflow: hidden; min-width: 0;
 }
 .cz-rail-section { padding: 14px 14px 10px; border-bottom: 1px solid var(--rule-soft); flex-shrink: 0; }
 .cz-rail-section:last-child { border-bottom: 0; flex: 1; overflow-y: auto; }
@@ -208,7 +208,7 @@
 }
 
 /* Canvas — the paper */
-.cz-canvas { overflow-y: auto; padding: 32px 32px 80px; display: flex; justify-content: center; background: var(--paper); position: relative; }
+.cz-canvas { overflow: hidden; overflow-y: auto; padding: 32px 32px 80px; display: flex; justify-content: center; background: var(--paper); position: relative; min-width: 0; }
 .cz-leaf {
   width: 100%; max-width: 680px; background: var(--sheet); color: var(--sheet-ink);
   border-radius: 3px; padding: 64px 72px 96px; position: relative; min-height: 100%;
@@ -280,7 +280,7 @@
 /* ── Right inspector ── */
 .cz-inspector {
   background: var(--paper-2); border-left: 1px solid var(--rule-soft);
-  overflow-y: auto; display: flex; flex-direction: column;
+  overflow: hidden; overflow-y: auto; display: flex; flex-direction: column; min-width: 0;
 }
 .cz-insp-section { padding: 14px 16px; border-bottom: 1px solid var(--rule-soft); }
 .cz-insp-section:last-child { border-bottom: 0; }
@@ -463,7 +463,7 @@
   border-radius: 999px; padding: 4px 10px; cursor: pointer;
 }
 .cz-m-canvas {
-  flex: 1; overflow-y: auto; padding: 18px 22px 100px; background: var(--paper);
+  flex: 1; overflow: hidden; overflow-y: auto; padding: 18px 22px 100px; background: var(--paper); min-width: 0;
 }
 .cz-m-canvas h1 {
   font-family: var(--f-display); font-weight: 600; font-style: italic;
@@ -1184,4 +1184,16 @@
     font-size: 17px !important;
   }
   .cz-m-tools { height: 60px; }
+}
+
+/* ── Desktop responsive layout ───────────────────────────────── */
+/* 960–1099px: 2-column (rail + canvas), hide inspector */
+@media (min-width: 960px) and (max-width: 1099px) {
+  .cz-stage { grid-template-columns: 200px 1fr; }
+  .cz-inspector { display: none; }
+}
+
+/* 1100–1199px: 3-column with narrower inspector */
+@media (min-width: 1100px) and (max-width: 1199px) {
+  .cz-stage { grid-template-columns: 200px 1fr 220px; }
 }
