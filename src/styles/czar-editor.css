@@ -416,6 +416,39 @@
 }
 .cz-status-cluster button:hover { color: var(--ink); }
 
+/* ── Mobile CSS-var provider ─────────────────────────────────────────────────
+   .cz-m-vars is added to the Tailwind-based mobile root div. It ONLY defines
+   CSS custom properties (no layout rules) so they inherit down to all children
+   including CzMobileSettings (.cz-m-sheet) and CzMobileMic (.cz-m-mic), which
+   use var(--paper/ink/etc) but have no .cz-app ancestor to inherit from.
+   Light-theme values match the Tailwind bg-white / zinc palette used by the canvas.
+   ──────────────────────────────────────────────────────────────────────────── */
+.cz-m-vars {
+  --paper: hsl(40 24% 97%);   /* warm near-white — canvas bg */
+  --paper-2: hsl(40 18% 93%); /* slightly darker — toolbar/sheet bg */
+  --sheet: #fff;
+  --sheet-ink: hsl(24 12% 12%);
+  --sheet-rule: hsl(30 14% 86%);
+  --sheet-faint: hsl(24 8% 50%);
+  --ink: hsl(24 12% 14%);
+  --ink-soft: hsl(24 10% 30%);
+  --ink-faint: hsl(24 8% 50%);
+  --ink-ghost: hsl(24 6% 72%);
+  --rule: hsl(30 14% 84%);
+  --rule-soft: hsl(30 14% 90%);
+  --hover: hsl(30 14% 92%);
+  --primary: hsl(18 50% 53%);
+  --primary-ink: #fff;
+  --primary-dark: hsl(18 55% 44%);
+  --primary-pale: hsl(18 45% 94%);
+  --primary-dim: hsl(18 30% 72%);
+  --accent-1: hsl(37 56% 60%);
+  --accent-2: hsl(153 22% 55%);
+  --f-display: 'Fraunces', Georgia, serif;
+  --f-body: 'Inter', system-ui, sans-serif;
+  --f-mono: 'JetBrains Mono', Consolas, monospace;
+}
+
 /* ── Mobile ── */
 /* .cz-m is the root of the mobile layout. It MUST define all design tokens
    because it has no .cz-app ancestor (the desktop wrapper that owns those vars). */

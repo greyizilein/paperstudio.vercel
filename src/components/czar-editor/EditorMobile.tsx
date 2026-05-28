@@ -221,7 +221,9 @@ export function CzarMobile() {
 
   return (
     // 1. ROOT CONTAINER: 100dvh flex column. Overrides any external body scrolling.
-    <div className="flex flex-col w-full h-[100dvh] fixed inset-0 bg-white dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 font-sans z-[9000] overflow-hidden">
+    // cz-m-vars: provides CSS custom properties (--paper, --ink, --primary etc.) so that
+    // CzMobileSettings and CzMobileMic (EditorExtras) can inherit them via var().
+    <div className="cz-m-vars flex flex-col w-full h-[100dvh] fixed inset-0 bg-white dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 font-sans z-[9000] overflow-hidden">
       
       {/* ── TOP BAR (FLEX-SHRINK-0 = Stays at top) ── */}
       <div className="flex-shrink-0 bg-white dark:bg-zinc-950 border-b border-zinc-200 dark:border-zinc-800 z-20 px-3 pt-safe relative shadow-sm">
