@@ -7,7 +7,8 @@ import { useCzDictation, useCzDropZone } from './editorHooks';
 import { CzMobileSettings, CzMobileMic } from './EditorExtras';
 import { useAuth } from '@/contexts/AuthContext';
 import { CorrectionModal } from '@/components/czar/CorrectionModal';
-import { buildDocx, docxFilename } from '@/lib/czarDocUtils.tsx';
+// BUG FIX: Removed .tsx extension from this import!
+import { buildDocx, docxFilename } from '@/lib/czarDocUtils';
 import { Packer } from 'docx';
 import type { CzPanelSettings } from './useCzarEditor';
 
@@ -35,81 +36,70 @@ function downloadMarkdown(title: string, content: string) {
   document.body.removeChild(a); URL.revokeObjectURL(url);
 }
 
-function CzMobileVoiceSheet({ open, onClose, voice, setVoice }: {
-  open: boolean; onClose: () => void; voice: string; setVoice: (id: string) => void;
-}) {
+// ─── PURE TAILWIND OVERLAY SHEETS ─────────────────────────────────────────────
+
+const BottomSheet = ({ open, onClose, title, actionText, onAction, children }: any) => {
   if (!open) return null;
   return (
-    <div className="cz-m-sheet-backdrop" onClick={onClose}>
-      <div className="cz-m-sheet" onClick={(e) => e.stopPropagation()}>
-        <span className="cz-m-sheet-handle" />
-        <div className="cz-m-sheet-h">
-          <span>Voice library</span>
-          <button className="cz-m-sheet-close" onClick={onClose}>Done</button>
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[99999] flex flex-col justify-end animate-in fade-in duration-200" onClick={onClose}>
+      <div 
+        className="w-full bg-white dark:bg-zinc-950 rounded-t-2xl shadow-[0_-10px_40px_rgba(0,0,0,0.3)] border-t border-zinc-200 dark:border-zinc-800 p-5 pb-safe overflow-y-auto max-h-[85vh] animate-in slide-in-from-bottom duration-300 relative z-[100000]"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="w-12 h-1.5 bg-zinc-300 dark:bg-zinc-700 rounded-full mx-auto mb-5" />
+        <div className="flex justify-between items-center mb-5 font-mono text-[10px] tracking-[0.2em] uppercase text-zinc-500">
+          <span>{title}</span>
+          <button className="text-[#e85d3f] font-bold py-1 px-2 hover:bg-red-50 dark:hover:bg-red-900/20 rounded" onClick={onAction || onClose}>
+            {actionText || 'Close'}
+          </button>
         </div>
-        {CZ_VOICES.map((v) => (
-          <div key={v.id} className="cz-voice-chip"
-               data-active={voice === v.id ? 'true' : undefined}
-               onClick={() => { setVoice(v.id); onClose(); }}>
-            <span className="cz-voice-glyph">{v.glyph}</span>
-            <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
-              <span className="cz-voice-name">{v.name}</span>
-              <span className="cz-voice-tag" style={{ marginTop: 2 }}>{v.desc}</span>
-            </div>
-          </div>
-        ))}
+        {children}
       </div>
     </div>
   );
-}
+};
 
-function CzMobilePiecesSheet({ open, onClose, pieces, activePieceId, onSelectPiece, onCreatePiece }: {
-  open: boolean; onClose: () => void;
-  pieces: ReturnType<typeof useCzarEditor>['pieces'];
-  activePieceId: string | null;
-  onSelectPiece: (id: string) => void;
-  onCreatePiece: () => void;
-}) {
-  if (!open) return null;
+function CzMobileVoiceSheet({ open, onClose, voice, setVoice }: any) {
   return (
-    <div className="cz-m-sheet-backdrop" onClick={onClose}>
-      <div className="cz-m-sheet" onClick={(e) => e.stopPropagation()}>
-        <span className="cz-m-sheet-handle" />
-        <div className="cz-m-sheet-h">
-          <span>Pieces</span>
-          <button className="cz-m-sheet-close" onClick={() => { onCreatePiece(); onClose(); }}
-                  style={{ fontFamily: 'var(--f-mono)', fontSize: 18, lineHeight: 1 }}>+</button>
-        </div>
-        {pieces.length === 0 && (
-          <p style={{ fontSize: 13, color: 'var(--ink-faint)', padding: '8px 0' }}>No pieces yet.</p>
-        )}
-        {pieces.map((p) => (
-          <div key={p.id} className="cz-piece"
-               data-active={p.id === activePieceId ? 'true' : undefined}
-               onClick={() => { if (!p.isPending) { onSelectPiece(p.id); onClose(); } }}
-               style={{ padding: '10px 12px', opacity: p.isPending ? 0.5 : 1 }}>
-            <span className="cz-piece-dot" />
-            <span className="cz-piece-name">{p.name}</span>
-            <span className="cz-piece-meta">{p.meta}</span>
+    <BottomSheet open={open} onClose={onClose} title="Voice Library" actionText="Done">
+      {CZ_VOICES.map((v) => (
+        <div key={v.id} 
+          className={`flex items-center gap-3 p-3 rounded-lg border mb-2 cursor-pointer transition-colors ${voice === v.id ? 'border-[#e85d3f] bg-[#e85d3f]/10' : 'border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/50'}`}
+          onClick={() => { setVoice(v.id); onClose(); }}>
+          <span className="font-serif italic font-bold text-lg text-[#e85d3f] w-8 flex-shrink-0 text-center">{v.glyph}</span>
+          <div className="flex flex-col flex-1 min-w-0">
+            <span className="font-sans text-[13px] font-semibold text-zinc-900 dark:text-zinc-100">{v.name}</span>
+            <span className="font-mono text-[9px] tracking-widest uppercase text-zinc-500 mt-0.5">{v.desc}</span>
           </div>
-        ))}
-      </div>
-    </div>
+        </div>
+      ))}
+    </BottomSheet>
   );
 }
 
-function CzMobileWritePanel({ open, onClose, onSubmit, onCorrect, defaultPrefs }: {
-  open: boolean; onClose: () => void;
-  onSubmit: (instruction: string, settings: CzPanelSettings) => void;
-  onCorrect: () => void;
-  defaultPrefs: { citation_style: string; writing_level: string };
-}) {
+function CzMobilePiecesSheet({ open, onClose, pieces, activePieceId, onSelectPiece, onCreatePiece }: any) {
+  return (
+    <BottomSheet open={open} onClose={onClose} title="Pieces" actionText="+" onAction={() => { onCreatePiece(); onClose(); }}>
+      {pieces.length === 0 && <p className="text-[13px] text-zinc-500 py-2">No pieces yet.</p>}
+      {pieces.map((p: any) => (
+        <div key={p.id} 
+             className={`flex items-center gap-2.5 p-3 rounded-lg cursor-pointer mb-1 ${p.id === activePieceId ? 'bg-[#e85d3f]/10' : 'hover:bg-zinc-100 dark:hover:bg-zinc-800'}`}
+             onClick={() => { if (!p.isPending) { onSelectPiece(p.id); onClose(); } }}
+             style={{ opacity: p.isPending ? 0.5 : 1 }}>
+          <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${p.id === activePieceId ? 'bg-[#e85d3f]' : 'bg-zinc-300 dark:bg-zinc-600'}`} />
+          <span className="font-sans text-[13px] font-medium text-zinc-900 dark:text-zinc-100 flex-1 truncate">{p.name}</span>
+          <span className="font-mono text-[9px] tracking-widest uppercase text-zinc-500">{p.meta}</span>
+        </div>
+      ))}
+    </BottomSheet>
+  );
+}
+
+function CzMobileWritePanel({ open, onClose, onSubmit, onCorrect, defaultPrefs }: any) {
   const [mode, setMode] = useState<CzPanelSettings['mode']>('write');
   const [citation, setCitation] = useState(defaultPrefs.citation_style);
   const [level, setLevel] = useState(defaultPrefs.writing_level);
   const [instruction, setInstruction] = useState('');
-
-  if (!open) return null;
 
   const ACADEMIC = ['write', 'research', 'plan', 'literature_review', 'legal'];
   const showAcademic = ACADEMIC.includes(mode);
@@ -117,110 +107,77 @@ function CzMobileWritePanel({ open, onClose, onSubmit, onCorrect, defaultPrefs }
   const handleSubmit = () => {
     if (mode === 'correct') { onCorrect(); onClose(); return; }
     if (!instruction.trim()) return;
-    onSubmit(instruction.trim(), {
-      mode, citation_style: showAcademic ? citation : undefined,
-      writing_level: showAcademic ? level : undefined,
-    });
+    onSubmit(instruction.trim(), { mode, citation_style: showAcademic ? citation : undefined, writing_level: showAcademic ? level : undefined });
     setInstruction('');
     onClose();
   };
 
   return (
-    <div className="cz-m-sheet-backdrop" onClick={onClose}>
-      <div className="cz-m-sheet" onClick={(e) => e.stopPropagation()} style={{ maxHeight: '85%' }}>
-        <span className="cz-m-sheet-handle" />
-        <div className="cz-m-sheet-h">
-          <span>Ask Czar to write</span>
-          <button className="cz-m-sheet-close" onClick={onClose}>×</button>
-        </div>
-        <div className="cz-m-write-panel">
-          <div className="cz-m-write-selrow">
-            <select className="cz-m-write-sel" value={mode}
-                    onChange={(e) => setMode(e.target.value as CzPanelSettings['mode'])}>
-              <option value="write">Write</option>
-              <option value="research">Research</option>
-              <option value="plan">Plan</option>
-              <option value="literature_review">Lit. Review</option>
-              <option value="screenplay">Screenplay</option>
-              <option value="legal">Legal</option>
-              <option value="chat">Chat · Images</option>
-              <option value="correct">Correct →</option>
+    <BottomSheet open={open} onClose={onClose} title="Ask Czar to write" actionText="×">
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-wrap gap-2">
+          <select className="flex-1 min-w-[100px] h-9 px-3 bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg text-xs outline-none" 
+                  value={mode} onChange={(e) => setMode(e.target.value as any)}>
+            <option value="write">Write</option>
+            <option value="research">Research</option>
+            <option value="plan">Plan</option>
+            <option value="literature_review">Lit. Review</option>
+            <option value="screenplay">Screenplay</option>
+            <option value="legal">Legal</option>
+            <option value="chat">Chat · Images</option>
+            <option value="correct">Correct →</option>
+          </select>
+          {showAcademic && (
+            <select className="flex-1 min-w-[100px] h-9 px-3 bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg text-xs outline-none" 
+                    value={level} onChange={(e) => setLevel(e.target.value)}>
+              <option value="undergrad">Undergraduate</option>
+              <option value="grad">Graduate</option>
+              <option value="phd">PhD</option>
+              <option value="professional">Professional</option>
             </select>
-            {showAcademic && (
-              <select className="cz-m-write-sel" value={level} onChange={(e) => setLevel(e.target.value)}>
-                <option value="undergrad">Undergraduate</option>
-                <option value="grad">Graduate</option>
-                <option value="phd">PhD</option>
-                <option value="professional">Professional</option>
-                <option value="alevel">A-Level</option>
-                <option value="gcse">GCSE</option>
-              </select>
-            )}
-            {showAcademic && (
-              <select className="cz-m-write-sel" value={citation} onChange={(e) => setCitation(e.target.value)}>
-                <option value="harvard">Harvard</option>
-                <option value="apa">APA 7th</option>
-                <option value="chicago">Chicago</option>
-                <option value="mla">MLA</option>
-                <option value="ieee">IEEE</option>
-                <option value="vancouver">Vancouver</option>
-                <option value="oscola">OSCOLA</option>
-              </select>
-            )}
-          </div>
-          <textarea
-            className="cz-m-write-ta"
-            value={instruction}
-            onChange={(e) => setInstruction(e.target.value)}
-            placeholder={mode === 'correct'
-              ? 'Tap § Correct → to open the correction workflow…'
-              : mode === 'chat'
-              ? 'Ask anything, or say "Generate a diagram of…" to create images'
-              : 'Tell Czar what to write — e.g. "2,000-word essay on AI ethics. Harvard."'}
-            rows={3}
-          />
-          <button className="cz-m-write-submit" onClick={handleSubmit}
-                  disabled={mode !== 'correct' && !instruction.trim()}>
-            {mode === 'correct' ? '§ Correct →' : '§ Write →'}
-          </button>
+          )}
         </div>
+        <textarea
+          className="w-full min-h-[80px] p-3 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl font-serif italic text-[15px] text-zinc-900 dark:text-zinc-100 outline-none resize-none"
+          value={instruction}
+          onChange={(e) => setInstruction(e.target.value)}
+          placeholder={mode === 'correct' ? 'Tap § Correct → to open workflow…' : 'Tell Czar what to write — e.g. "2,000-word essay on AI ethics..."'}
+        />
+        <button 
+          className="w-full h-12 bg-[#e85d3f] hover:bg-[#d65135] text-white rounded-xl font-serif italic font-bold text-[16px] disabled:opacity-50"
+          onClick={handleSubmit} disabled={mode !== 'correct' && !instruction.trim()}>
+          {mode === 'correct' ? '§ Correct →' : '§ Write →'}
+        </button>
       </div>
-    </div>
+    </BottomSheet>
   );
 }
 
-function CzMobileDownloadSheet({ open, onClose, onDocx, onMarkdown }: {
-  open: boolean; onClose: () => void; onDocx: () => void; onMarkdown: () => void;
-}) {
-  if (!open) return null;
+function CzMobileDownloadSheet({ open, onClose, onDocx, onMarkdown }: any) {
   return (
-    <div className="cz-m-sheet-backdrop" onClick={onClose}>
-      <div className="cz-m-sheet" onClick={(e) => e.stopPropagation()}>
-        <span className="cz-m-sheet-handle" />
-        <div className="cz-m-sheet-h">
-          <span>Download</span>
-          <button className="cz-m-sheet-close" onClick={onClose}>×</button>
-        </div>
-        <div className="cz-piece" onClick={() => { onDocx(); onClose(); }}
-             style={{ padding: '14px 8px', cursor: 'pointer' }}>
-          <span style={{ fontFamily: 'var(--f-display)', fontStyle: 'italic', color: 'var(--primary)', fontSize: 18, width: 24 }}>W</span>
+    <BottomSheet open={open} onClose={onClose} title="Download" actionText="×">
+      <div className="flex flex-col gap-2">
+        <div className="flex items-center gap-4 p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-900 cursor-pointer" onClick={() => { onDocx(); onClose(); }}>
+          <span className="font-serif italic text-[#e85d3f] text-2xl w-8 text-center">W</span>
           <div>
-            <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--ink)' }}>Word document (.docx)</div>
-            <div style={{ fontSize: 11, color: 'var(--ink-faint)', marginTop: 2 }}>Fully formatted — headings, bold, tables</div>
+            <div className="text-[15px] font-semibold text-zinc-900 dark:text-zinc-100">Word document (.docx)</div>
+            <div className="text-[12px] text-zinc-500 mt-0.5">Fully formatted — headings, bold, tables</div>
           </div>
         </div>
-        <div className="cz-piece" onClick={() => { onMarkdown(); onClose(); }}
-             style={{ padding: '14px 8px', cursor: 'pointer' }}>
-          <span style={{ fontFamily: 'var(--f-display)', fontStyle: 'italic', color: 'var(--primary)', fontSize: 18, width: 24 }}>§</span>
+        <div className="flex items-center gap-4 p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-900 cursor-pointer" onClick={() => { onMarkdown(); onClose(); }}>
+          <span className="font-serif italic text-[#e85d3f] text-2xl w-8 text-center">§</span>
           <div>
-            <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--ink)' }}>Markdown (.md)</div>
-            <div style={{ fontSize: 11, color: 'var(--ink-faint)', marginTop: 2 }}>Plain text with markup</div>
+            <div className="text-[15px] font-semibold text-zinc-900 dark:text-zinc-100">Markdown (.md)</div>
+            <div className="text-[12px] text-zinc-500 mt-0.5">Plain text with markup</div>
           </div>
         </div>
       </div>
-    </div>
+    </BottomSheet>
   );
 }
+
+
+// ─── MAIN EDITOR COMPONENT (FLEXBOX SANDWICH) ────────────────────────────────
 
 export function CzarMobile() {
   const { user } = useAuth();
@@ -232,10 +189,8 @@ export function CzarMobile() {
   const [writePanel, setWritePanel] = useState(false);
   const [correctionOpen, setCorrectionOpen] = useState(false);
   const [downloadSheet, setDownloadSheet] = useState(false);
-
   const [editMode, setEditMode] = useState(false);
 
-  // Return to read mode when streaming completes
   useEffect(() => {
     if (!editor.streamingDoc && editor.docContent) setEditMode(false);
   }, [editor.streamingDoc, editor.docContent]);
@@ -262,235 +217,171 @@ export function CzarMobile() {
     e.target.value = '';
   }, [editor]);
 
-  const saveLabel = editor.saveStatus === 'saving' ? 'saving…'
-    : editor.saveStatus === 'error' ? 'save failed'
-    : editor.saveStatus === 'unsaved' ? 'unsaved'
-    : 'saved';
+  const saveLabel = editor.saveStatus === 'saving' ? 'saving…' : editor.saveStatus === 'error' ? 'save failed' : editor.saveStatus === 'unsaved' ? 'unsaved' : 'saved';
 
   return (
-    <div className="cz-m">
-      <div className="cz-m-bar" style={{ gridTemplateColumns: '36px 1fr auto' }}>
-        <button className="cz-m-iconbtn" title="Pieces" onClick={() => setPiecesSheet(true)}>≡</button>
-        <div className="cz-m-bar-title">
-          <span className="cz-m-brand">czar</span>
-          <span className="cz-m-doc" contentEditable suppressContentEditableWarning
-                onBlur={(e) => {
-                  const t = e.currentTarget.textContent?.trim();
-                  if (t && t !== editor.docTitle) editor.setDocTitle(t);
-                }}>
-            {editor.docTitle}
-          </span>
-        </div>
-        <div style={{ display: 'flex', gap: 4 }}>
-          <button className="cz-m-iconbtn" title="Download" onClick={() => setDownloadSheet(true)} style={{ fontSize: 18 }}>↓</button>
-          <button className="cz-m-iconbtn" title="Settings" onClick={() => setSettingsSheet(true)} style={{ fontSize: 16 }}>⚙</button>
-        </div>
-      </div>
-
-      <div className="cz-m-voice">
-        <span className="cz-voice-glyph">{v.glyph}</span>
-        <div style={{ display: 'flex', flexDirection: 'column' }}>
-          <span className="cz-m-voice-name">{v.name}</span>
-          <span className="cz-m-voice-tag">{v.tag} · writing mode</span>
-        </div>
-        <button className="cz-m-voice-switch" onClick={() => setVoiceSheet(true)}>switch</button>
-      </div>
-
-      <div className="cz-m-canvas" {...drop.handlers} style={{ position: 'relative' }}>
-        {drop.dragOver && (
-          <div className="cz-m-dropzone">
-            <span style={{ fontFamily: 'var(--f-display)', fontStyle: 'italic', fontWeight: 700, fontSize: 48, color: 'var(--primary)', lineHeight: 1 }}>§</span>
-            <p style={{ fontFamily: 'var(--f-display)', fontStyle: 'italic', fontWeight: 600, fontSize: 18, color: 'var(--ink)', margin: 0 }}>Drop to import</p>
-            <p style={{ fontFamily: 'var(--f-mono)', fontSize: 9, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--ink-faint)', margin: 0 }}>.txt · .md · .docx · audio</p>
-          </div>
-        )}
-        {drop.imported && (
-          <div className="cz-imported" style={{ position: 'absolute', left: 16, bottom: 16, right: 16 }}>
-            <span className="cz-imported-icon">
-              {drop.imported.status === 'uploading' ? '↑' : drop.imported.status === 'error' ? '!' : '§'}
+    // 1. ROOT CONTAINER: 100dvh flex column. Overrides any external body scrolling.
+    <div className="flex flex-col w-full h-[100dvh] fixed inset-0 bg-white dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 font-sans z-[9000] overflow-hidden">
+      
+      {/* ── TOP BAR (FLEX-SHRINK-0 = Stays at top) ── */}
+      <div className="flex-shrink-0 bg-white dark:bg-zinc-950 border-b border-zinc-200 dark:border-zinc-800 z-20 px-3 pt-safe relative shadow-sm">
+        <div className="flex items-center justify-between h-14">
+          <button className="w-10 h-10 flex items-center justify-center text-xl text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-900 rounded-lg" onClick={() => setPiecesSheet(true)}>≡</button>
+          
+          <div className="flex flex-col items-center flex-1 min-w-0 px-2">
+            <div className="font-serif italic font-bold text-[16px] text-[#e85d3f]">czar<span className="text-zinc-900 dark:text-white">.</span></div>
+            <span className="font-mono text-[9px] tracking-[0.15em] uppercase text-zinc-500 mt-0.5 truncate w-full text-center" 
+                  contentEditable suppressContentEditableWarning onBlur={(e) => { const t = e.currentTarget.textContent?.trim(); if (t && t !== editor.docTitle) editor.setDocTitle(t); }}>
+              {editor.docTitle}
             </span>
-            <div className="cz-imported-body">
-              <span className="cz-imported-name">
-                {drop.imported.status === 'uploading' ? 'Uploading…' : 'Imported'} · {drop.imported.name}
-              </span>
-              <span className="cz-imported-meta">{drop.imported.kind} · {drop.imported.words}w</span>
-            </div>
-            {drop.imported.status !== 'uploading' && (
-              <button className="cz-imported-close" onClick={() => drop.setImported(null)}>×</button>
-            )}
           </div>
-        )}
 
+          <div className="flex items-center gap-1">
+            <button className="w-9 h-9 flex items-center justify-center text-lg text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-900 rounded-lg" onClick={() => setDownloadSheet(true)}>↓</button>
+            <button className="w-9 h-9 flex items-center justify-center text-lg text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-900 rounded-lg" onClick={() => setSettingsSheet(true)}>⚙</button>
+          </div>
+        </div>
+        
+        {/* Voice Strip */}
+        <div className="flex items-center gap-3 py-3 border-t border-zinc-100 dark:border-zinc-900">
+          <span className="font-serif italic font-bold text-lg text-[#e85d3f] w-6 text-center">{v.glyph}</span>
+          <div className="flex flex-col flex-1">
+            <span className="font-serif italic font-bold text-[15px]">{v.name}</span>
+            <span className="font-mono text-[9px] tracking-[0.15em] uppercase text-zinc-500">{v.tag} · writing mode</span>
+          </div>
+          <button className="text-[10px] font-mono uppercase tracking-widest text-[#e85d3f] px-3 py-1.5 border border-[#e85d3f]/30 rounded-full" onClick={() => setVoiceSheet(true)}>switch</button>
+        </div>
+      </div>
+
+      {/* ── SCROLLABLE CANVAS (FLEX-1 = Fills remaining middle space, clips overflow) ── */}
+      <div className="flex-1 overflow-y-auto overflow-x-hidden bg-[#fcfbf9] dark:bg-[#121212] p-5 relative z-0" {...drop.handlers}>
+        
         {editor.streamingDoc && editor.currentAgent && (
-          <div className="cz-agent-step" style={{ margin: '8px 0' }}>
-            <span className="cz-agent-step-dot" />
-            <span className="cz-agent-step-label">{editor.currentAgent}</span>
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 mb-4 bg-[#e85d3f]/10 border border-[#e85d3f]/20 rounded-md">
+            <span className="w-2 h-2 rounded-full bg-[#e85d3f] animate-pulse" />
+            <span className="font-mono text-[9px] tracking-widest uppercase text-[#e85d3f]">{editor.currentAgent}</span>
           </div>
         )}
 
         {editor.docLoading ? (
-          <div className="cz-leaf-skeleton" style={{ padding: '20px 0' }}>
-            <div style={{ width: '80%', height: 22, marginBottom: 12 }} />
-            <div style={{ width: '55%', height: 14, marginBottom: 20 }} />
-            <div style={{ width: '100%', height: 14, marginBottom: 8 }} />
-            <div style={{ width: '95%', height: 14, marginBottom: 8 }} />
-            <div style={{ width: '88%', height: 14 }} />
+          <div className="space-y-4 animate-pulse opacity-50 py-4">
+            <div className="h-6 bg-zinc-200 dark:bg-zinc-800 rounded w-3/4"></div>
+            <div className="h-4 bg-zinc-200 dark:bg-zinc-800 rounded w-1/2 mb-6"></div>
+            <div className="h-4 bg-zinc-200 dark:bg-zinc-800 rounded w-full"></div>
+            <div className="h-4 bg-zinc-200 dark:bg-zinc-800 rounded w-5/6"></div>
+            <div className="h-4 bg-zinc-200 dark:bg-zinc-800 rounded w-full"></div>
           </div>
         ) : editor.docContent === '' ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, paddingTop: 12 }}>
-            <p style={{ fontFamily: 'var(--f-display)', fontStyle: 'italic', fontSize: 14, color: 'var(--ink-faint)', margin: '0 0 4px' }}>
-              What would you like to write?
-            </p>
-            <button onClick={() => setWritePanel(true)} style={{
-              background: 'var(--primary-pale)', border: '1px solid var(--primary-dim)',
-              borderRadius: 8, padding: '12px 14px', cursor: 'pointer',
-              fontFamily: 'var(--f-display)', fontStyle: 'italic', fontWeight: 600,
-              fontSize: 14, color: 'var(--primary)', textAlign: 'left',
-            }}>§ Ask Czar to write →</button>
-            <button onClick={() => setCorrectionOpen(true)} style={{
-              background: 'transparent', border: '1px solid var(--rule)',
-              borderRadius: 8, padding: '12px 14px', cursor: 'pointer',
-              fontFamily: 'var(--f-body)', fontSize: 13, color: 'var(--ink-soft)', textAlign: 'left',
-            }}>✓ Correct a draft</button>
-            <button onClick={() => fileInputRef.current?.click()} style={{
-              background: 'transparent', border: '1px solid var(--rule)',
-              borderRadius: 8, padding: '12px 14px', cursor: 'pointer',
-              fontFamily: 'var(--f-body)', fontSize: 13, color: 'var(--ink-soft)', textAlign: 'left',
-            }}>↑ Upload a document</button>
+          <div className="flex flex-col gap-3 pt-4">
+            <p className="font-serif italic text-zinc-400 text-sm mb-2">What would you like to write?</p>
+            <button onClick={() => setWritePanel(true)} className="bg-[#e85d3f]/10 border border-[#e85d3f]/20 p-4 rounded-xl text-left font-serif italic font-bold text-[15px] text-[#e85d3f]">
+              § Ask Czar to write →
+            </button>
+            <button onClick={() => setCorrectionOpen(true)} className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-4 rounded-xl text-left font-sans text-[14px] text-zinc-600 dark:text-zinc-400">
+              ✓ Correct a draft
+            </button>
+            <button onClick={() => fileInputRef.current?.click()} className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-4 rounded-xl text-left font-sans text-[14px] text-zinc-600 dark:text-zinc-400">
+              ↑ Upload a document
+            </button>
             <textarea
               ref={textareaRef}
-              className="cz-leaf-textarea"
+              className="w-full min-h-[120px] mt-4 bg-transparent border-none outline-none font-serif text-[17px] leading-relaxed resize-none text-zinc-800 dark:text-zinc-200 placeholder:text-zinc-400 placeholder:italic"
               value={editor.docContent}
               onChange={(e) => editor.setDocContent(e.target.value)}
               placeholder="Or start writing freely…"
-              spellCheck
-              style={{ minHeight: 80, marginTop: 8 }}
             />
           </div>
         ) : !editMode ? (
-          <div
-            className="cz-leaf-render cz-m-render"
-            onClick={() => setEditMode(true)}
-          >
-            <ReactMarkdown
-              remarkPlugins={[remarkGfm]}
-              components={{
-                img: ({ node, ...props }: any) => (
-                  <img {...props} style={{ maxWidth: '100%', borderRadius: 4, display: 'block', margin: '12px 0' }} />
-                ),
-                table: ({ node, ...props }: any) => (
-                  <div className="cz-table-wrap"><table {...props} /></div>
-                ),
-              }}
-            >
-              {editor.docContent}
-            </ReactMarkdown>
-            {!editor.streamingDoc && (
-              <p className="cz-tap-edit-hint">tap to edit</p>
-            )}
+          <div className="prose prose-zinc dark:prose-invert max-w-none font-serif text-[17px] leading-[1.8] text-zinc-800 dark:text-zinc-200 pb-6" onClick={() => setEditMode(true)}>
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{editor.docContent}</ReactMarkdown>
+            {!editor.streamingDoc && <p className="text-center font-mono text-[10px] tracking-widest text-zinc-400 mt-8 uppercase opacity-60">Tap to edit</p>}
           </div>
         ) : (
           <textarea
             ref={textareaRef}
-            className="cz-leaf-textarea"
+            className="w-full min-h-full bg-transparent border-none outline-none font-serif text-[17px] leading-[1.8] resize-none text-zinc-800 dark:text-zinc-200 pb-6"
             value={editor.docContent}
             onChange={(e) => editor.setDocContent(e.target.value)}
-            placeholder="Start writing…"
-            spellCheck
             autoFocus
-            style={{ minHeight: '100%' }}
             onBlur={() => { if (editor.docContent && !editor.streamingDoc) setEditMode(false); }}
           />
         )}
       </div>
 
-      <div className="cz-m-status">
-        <span>{editor.wordCount > 0 ? `${editor.wordCount.toLocaleString()} words` : 'empty'}</span>
-        <span><strong>{saveLabel}</strong></span>
-        <span>{editor.wordCount > 0 ? `${editor.readingTime} read` : '—'}</span>
+      {/* ── BOTTOM TOOLS (FLEX-SHRINK-0 = Forced into flow at the bottom, CANNOT overlap) ── */}
+      <div className="flex-shrink-0 bg-white dark:bg-zinc-950 border-t border-zinc-200 dark:border-zinc-800 z-20 shadow-[0_-8px_30px_rgba(0,0,0,0.06)] pb-safe relative">
+        
+        {/* Status Bar */}
+        <div className="flex justify-between items-center px-4 py-2 bg-zinc-50 dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800 font-mono text-[9px] tracking-widest uppercase text-zinc-500">
+          <span>{editor.wordCount > 0 ? `${editor.wordCount.toLocaleString()} words` : 'empty'}</span>
+          <strong className="text-zinc-800 dark:text-zinc-200">{saveLabel}</strong>
+          <span>{editor.wordCount > 0 ? `${editor.readingTime} read` : '—'}</span>
+        </div>
+
+        {/* Buttons Row */}
+        <div className="flex items-center gap-2 p-2 px-3">
+          <button className="flex-1 h-12 flex flex-col items-center justify-center bg-transparent hover:bg-zinc-100 dark:hover:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-600 dark:text-zinc-300"
+                  onClick={() => {
+                    setEditMode(true);
+                    const ta = textareaRef.current; if (!ta) return;
+                    const { selectionStart: s, selectionEnd: e, value } = ta;
+                    const sel = value.slice(s, e) || 'text';
+                    const rep = sel.startsWith('**') && sel.endsWith('**') ? sel.slice(2, -2) : `**${sel}**`;
+                    editor.setDocContent(value.slice(0, s) + rep + value.slice(e));
+                  }}>
+            <span className="font-serif font-bold text-[16px]">B</span>
+            <span className="font-mono text-[8px] uppercase tracking-wider opacity-70 mt-0.5">Bold</span>
+          </button>
+          
+          <button className="flex-1 h-12 flex flex-col items-center justify-center bg-transparent hover:bg-zinc-100 dark:hover:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-600 dark:text-zinc-300"
+                  onClick={() => {
+                    setEditMode(true);
+                    const ta = textareaRef.current; if (!ta) return;
+                    const { selectionStart: s, selectionEnd: e, value } = ta;
+                    const sel = value.slice(s, e) || 'text';
+                    const isBold = sel.startsWith('**');
+                    const rep = !isBold && sel.startsWith('*') && sel.endsWith('*') ? sel.slice(1, -1) : `*${sel}*`;
+                    editor.setDocContent(value.slice(0, s) + rep + value.slice(e));
+                  }}>
+            <span className="font-serif italic text-[16px]">I</span>
+            <span className="font-mono text-[8px] uppercase tracking-wider opacity-70 mt-0.5">Italic</span>
+          </button>
+          
+          <button className="flex-1 h-12 flex flex-col items-center justify-center bg-transparent hover:bg-zinc-100 dark:hover:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-600 dark:text-zinc-300" onClick={() => setCorrectionOpen(true)}>
+            <span className="text-[14px]">✓</span>
+            <span className="font-mono text-[8px] uppercase tracking-wider opacity-70 mt-0.5">Correct</span>
+          </button>
+          
+          <button className={`flex-1 h-12 flex flex-col items-center justify-center border rounded-lg ${dict.live ? 'bg-red-500 border-red-500 text-white animate-pulse' : 'bg-transparent hover:bg-zinc-100 dark:hover:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300'}`}
+                  onClick={() => dict.live ? dict.stop() : dict.start()}>
+            <span className="text-[14px]">{dict.live ? '◉' : '◎'}</span>
+            <span className="font-mono text-[8px] uppercase tracking-wider opacity-70 mt-0.5">Dictate</span>
+          </button>
+          
+          <button className="flex-[1.5] h-12 flex flex-col items-center justify-center bg-[#e85d3f] border border-[#e85d3f] rounded-lg text-white"
+                  onClick={editor.streamingDoc ? editor.stopStream : () => setWritePanel(true)}>
+            <span className="font-serif italic font-bold text-[16px]">{editor.streamingDoc ? '◼' : '§'}</span>
+            <span className="font-mono text-[8px] uppercase tracking-wider opacity-90 mt-0.5">{editor.streamingDoc ? 'Stop' : 'Write'}</span>
+          </button>
+        </div>
       </div>
 
-      <div className="cz-m-tools">
-        <button className="cz-m-tool cz-m-tool-bold" title="Bold"
-                onClick={() => {
-                  setEditMode(true);
-                  const ta = textareaRef.current; if (!ta) return;
-                  const { selectionStart: s, selectionEnd: e, value } = ta;
-                  const sel = value.slice(s, e) || 'text';
-                  const rep = sel.startsWith('**') && sel.endsWith('**') ? sel.slice(2, -2) : `**${sel}**`;
-                  editor.setDocContent(value.slice(0, s) + rep + value.slice(e));
-                }}>
-          <span className="cz-m-tool-icon">B</span>
-          <span className="cz-m-tool-lbl">Bold</span>
-        </button>
-        <button className="cz-m-tool cz-m-tool-italic" title="Italic"
-                onClick={() => {
-                  setEditMode(true);
-                  const ta = textareaRef.current; if (!ta) return;
-                  const { selectionStart: s, selectionEnd: e, value } = ta;
-                  const sel = value.slice(s, e) || 'text';
-                  const isBold = sel.startsWith('**');
-                  const rep = !isBold && sel.startsWith('*') && sel.endsWith('*') ? sel.slice(1, -1) : `*${sel}*`;
-                  editor.setDocContent(value.slice(0, s) + rep + value.slice(e));
-                }}>
-          <span className="cz-m-tool-icon">I</span>
-          <span className="cz-m-tool-lbl">Italic</span>
-        </button>
-        <button className="cz-m-tool" title="Correct draft" onClick={() => setCorrectionOpen(true)}>
-          <span className="cz-m-tool-icon" style={{ fontSize: 13 }}>✓</span>
-          <span className="cz-m-tool-lbl">Correct</span>
-        </button>
-        <button className="cz-m-tool" title="Upload file"
-                onClick={() => fileInputRef.current?.click()}>
-          <span className="cz-m-tool-icon" style={{ fontSize: 15 }}>↑</span>
-          <span className="cz-m-tool-lbl">Upload</span>
-        </button>
-        <button className="cz-m-tool" data-live={dict.live ? 'true' : undefined}
-                title="Dictate" onClick={() => dict.live ? dict.stop() : dict.start()}>
-          <span className="cz-m-tool-icon" style={{ fontSize: 15 }}>{dict.live ? '◉' : '◎'}</span>
-          <span className="cz-m-tool-lbl">Dictate</span>
-        </button>
-        <button className="cz-m-tool cz-m-tool-ai" title="Ask Czar to write"
-                onClick={editor.streamingDoc ? editor.stopStream : () => setWritePanel(true)}>
-          <span className="cz-m-tool-icon">{editor.streamingDoc ? '◼' : '§'}</span>
-          <span className="cz-m-tool-lbl">{editor.streamingDoc ? 'Stop' : 'Write'}</span>
-        </button>
+      {/* ── HIDDEN INPUTS & MODALS ── */}
+      <input ref={fileInputRef} type="file" accept=".txt,.md,.docx,.pdf" className="hidden" onChange={handleFileInput} />
+      
+      <CzMobileVoiceSheet open={voiceSheet} onClose={() => setVoiceSheet(false)} voice={editor.activeVoice} setVoice={editor.setActiveVoice} />
+      <CzMobilePiecesSheet open={piecesSheet} onClose={() => setPiecesSheet(false)} pieces={editor.pieces} activePieceId={editor.activePieceId} onSelectPiece={editor.selectPiece} onCreatePiece={editor.createPiece} />
+      <CzMobileWritePanel open={writePanel} onClose={() => setWritePanel(false)} onSubmit={(instruction: string, settings: any) => editor.writeFromPrompt(instruction, settings)} onCorrect={() => { setCorrectionOpen(true); setWritePanel(false); }} defaultPrefs={{ citation_style: editor.prefs.citation_style, writing_level: editor.prefs.writing_level }} />
+      <CzMobileDownloadSheet open={downloadSheet} onClose={() => setDownloadSheet(false)} onDocx={() => downloadAsWord(editor.docContent)} onMarkdown={() => downloadMarkdown(editor.docTitle, editor.docContent)} />
+      
+      {/* External Extras Container - Pushed to absolute top layer */}
+      <div className="fixed inset-0 z-[100000] pointer-events-none">
+        <div className="pointer-events-auto">
+          <CzMobileSettings open={settingsSheet} onClose={() => setSettingsSheet(false)} activeVoice={editor.activeVoice} setVoice={editor.setActiveVoice} prefs={editor.prefs} setPrefs={editor.setPrefs} />
+          <CzMobileMic open={dict.live} seconds={dict.seconds} final={dict.final} interim={dict.interim} onClose={() => dict.stop()} onInsert={handleMicInsert} />
+          <CorrectionModal open={correctionOpen} onClose={() => setCorrectionOpen(false)} onApplied={(content) => { editor.setDocContent(content); editor.manualSave(); }} />
+        </div>
       </div>
-
-      <CzMobileVoiceSheet open={voiceSheet} onClose={() => setVoiceSheet(false)}
-                          voice={editor.activeVoice} setVoice={editor.setActiveVoice} />
-      <CzMobilePiecesSheet open={piecesSheet} onClose={() => setPiecesSheet(false)}
-                           pieces={editor.pieces} activePieceId={editor.activePieceId}
-                           onSelectPiece={editor.selectPiece} onCreatePiece={editor.createPiece} />
-      <CzMobileSettings open={settingsSheet} onClose={() => setSettingsSheet(false)}
-                        activeVoice={editor.activeVoice} setVoice={editor.setActiveVoice}
-                        prefs={editor.prefs} setPrefs={editor.setPrefs} />
-      <CzMobileMic open={dict.live} seconds={dict.seconds}
-                   final={dict.final} interim={dict.interim}
-                   onClose={() => dict.stop()} onInsert={handleMicInsert} />
-      <CzMobileWritePanel
-        open={writePanel} onClose={() => setWritePanel(false)}
-        onSubmit={(instruction, settings) => editor.writeFromPrompt(instruction, settings)}
-        onCorrect={() => { setCorrectionOpen(true); setWritePanel(false); }}
-        defaultPrefs={{ citation_style: editor.prefs.citation_style, writing_level: editor.prefs.writing_level }}
-      />
-      <CzMobileDownloadSheet
-        open={downloadSheet} onClose={() => setDownloadSheet(false)}
-        onDocx={() => downloadAsWord(editor.docContent)}
-        onMarkdown={() => downloadMarkdown(editor.docTitle, editor.docContent)}
-      />
-      <CorrectionModal
-        open={correctionOpen}
-        onClose={() => setCorrectionOpen(false)}
-        onApplied={(content) => { editor.setDocContent(content); editor.manualSave(); }}
-      />
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept=".txt,.md,.docx,.pdf,.mp3,.wav,.m4a,.jpg,.jpeg,.png"
-        style={{ display: 'none' }}
-        onChange={handleFileInput}
-      />
     </div>
   );
 }
