@@ -12,7 +12,7 @@ import type { CzVoice } from './editorData';
 export interface CzPiece {
   id: string;
   name: string;
-  meta: string;        // e.g. "1,842w"
+  meta: string;
   updatedAt: string;
   isDraft: boolean;
   isPending?: boolean;
@@ -35,24 +35,87 @@ export interface CzSuggestion {
   status: 'pending' | 'accepted' | 'dismissed';
 }
 
-export type StreamOp = 'tighten' | 'continue' | 'suggest' | null;
+export type StreamOp = 'tighten' | 'continue' | 'suggest' | 'write' | null;
 export type SaveStatus = 'saved' | 'saving' | 'unsaved' | 'error';
 
 export interface CzEditorPrefs {
+  // Editor UI
   width: 'narrow' | 'medium' | 'wide';
   cursor: 'blink' | 'steady' | 'typewriter';
   spell: 'on' | 'soft' | 'off';
   focus: 'off' | 'line' | 'paragraph';
   autosave: 'live' | '30s' | 'manual';
+  // Dictation
   lang: 'en-us' | 'en-gb' | 'es' | 'fr';
   punct: 'auto' | 'spoken';
   filler: 'keep' | 'trim' | 'cut';
   apply: 'live' | 'pause' | 'off';
+  // Academic pickers (sent to czar-chat settings)
+  citation_style: 'harvard' | 'apa' | 'chicago' | 'mla' | 'ieee' | 'vancouver' | 'oscola';
+  writing_level: 'gcse' | 'alevel' | 'undergrad' | 'grad' | 'phd' | 'professional';
+  language_variant: 'british' | 'american' | 'australian' | 'canadian';
+  tone: 'academic' | 'professional' | 'conversational' | 'creative';
+  // Toggle rules — each maps 1:1 to a czar-chat rule name
+  toggle_vary_sentence_length: boolean;
+  toggle_prefer_active_voice: boolean;
+  toggle_ban_filler: boolean;
+  toggle_no_contractions: boolean;
+  toggle_oxford_comma: boolean;
+  toggle_formal_register: boolean;
+  toggle_cite_every_claim: boolean;
+  toggle_sources_only_2018_plus: boolean;
+  toggle_spell_out_acronyms: boolean;
+  toggle_double_check_numbers: boolean;
+  toggle_show_outline_first: boolean;
+  toggle_section_pause: boolean;
+  toggle_include_executive_summary: boolean;
+  toggle_include_keywords: boolean;
+  toggle_include_word_count_per_section: boolean;
+  toggle_auto_paragraph_break: boolean;
+  toggle_online_lookup: boolean;
+  toggle_thinking_mode: boolean;
+  toggle_auto_detect_domain: boolean;
+  toggle_save_checkpoints: boolean;
+  toggle_british_spelling: boolean;
+}
+
+// Settings passed from the write panel — override prefs for this request
+export interface CzPanelSettings {
+  mode: 'write' | 'research' | 'plan' | 'literature_review' | 'screenplay' | 'legal' | 'chat' | 'correct';
+  citation_style?: string;
+  writing_level?: string;
+  language?: 'british' | 'american' | 'australian' | 'canadian';
+  formal?: boolean;
+  section_pause?: boolean;
+  online_lookup?: boolean;
 }
 
 const DEFAULT_PREFS: CzEditorPrefs = {
   width: 'medium', cursor: 'blink', spell: 'on', focus: 'off', autosave: 'live',
-  lang: 'en-us', punct: 'auto', filler: 'keep', apply: 'live',
+  lang: 'en-gb', punct: 'auto', filler: 'keep', apply: 'live',
+  citation_style: 'harvard', writing_level: 'undergrad',
+  language_variant: 'british', tone: 'academic',
+  toggle_vary_sentence_length: false,
+  toggle_prefer_active_voice: false,
+  toggle_ban_filler: false,
+  toggle_no_contractions: false,
+  toggle_oxford_comma: false,
+  toggle_formal_register: false,
+  toggle_cite_every_claim: false,
+  toggle_sources_only_2018_plus: false,
+  toggle_spell_out_acronyms: false,
+  toggle_double_check_numbers: false,
+  toggle_show_outline_first: false,
+  toggle_section_pause: false,
+  toggle_include_executive_summary: false,
+  toggle_include_keywords: false,
+  toggle_include_word_count_per_section: false,
+  toggle_auto_paragraph_break: false,
+  toggle_online_lookup: false,
+  toggle_thinking_mode: false,
+  toggle_auto_detect_domain: true,
+  toggle_save_checkpoints: false,
+  toggle_british_spelling: false,
 };
 
 const PREFS_KEY = 'czar-editor-prefs-v1';
@@ -63,6 +126,60 @@ function loadPrefs(): CzEditorPrefs {
     if (raw) return { ...DEFAULT_PREFS, ...JSON.parse(raw) };
   } catch {}
   return DEFAULT_PREFS;
+}
+
+const LANG_MAP: Record<string, string> = {
+  british: 'UK', american: 'US', australian: 'AU', canadian: 'CA',
+};
+
+const TOGGLE_MAP: Record<string, string> = {
+  toggle_vary_sentence_length: 'vary_sentence_length',
+  toggle_prefer_active_voice: 'prefer_active_voice',
+  toggle_ban_filler: 'ban_filler',
+  toggle_no_contractions: 'no_contractions',
+  toggle_oxford_comma: 'oxford_comma',
+  toggle_formal_register: 'academic_register_lock',
+  toggle_cite_every_claim: 'cite_every_claim',
+  toggle_sources_only_2018_plus: 'sources_only_2018_plus',
+  toggle_spell_out_acronyms: 'spell_out_acronyms',
+  toggle_double_check_numbers: 'double_check_numbers',
+  toggle_show_outline_first: 'show_outline_first',
+  toggle_section_pause: 'section_pause',
+  toggle_include_executive_summary: 'include_executive_summary',
+  toggle_include_keywords: 'include_keywords',
+  toggle_include_word_count_per_section: 'include_word_count_per_section',
+  toggle_auto_paragraph_break: 'auto_paragraph_break',
+  toggle_thinking_mode: 'thinking_mode',
+  toggle_british_spelling: 'british_spelling',
+};
+
+function buildCzarSettings(
+  prefs: CzEditorPrefs,
+  activeVoice: string,
+  audience: string,
+  targetLength: string,
+  override?: Partial<CzPanelSettings>,
+): Record<string, unknown> {
+  const activeToggles: Record<string, boolean> = {};
+  for (const [prefKey, ruleKey] of Object.entries(TOGGLE_MAP)) {
+    if (prefs[prefKey as keyof CzEditorPrefs]) activeToggles[ruleKey] = true;
+  }
+  if (override?.formal) activeToggles['academic_register_lock'] = true;
+  if (override?.section_pause) activeToggles['section_pause'] = true;
+
+  return {
+    voice_id: activeVoice,
+    language: LANG_MAP[override?.language ?? prefs.language_variant] ?? 'UK',
+    citation_style: override?.citation_style ?? prefs.citation_style,
+    writing_level: override?.writing_level ?? prefs.writing_level,
+    tone: prefs.tone,
+    audience: audience || undefined,
+    target_length: targetLength,
+    ...activeToggles,
+    ...(prefs.toggle_online_lookup || override?.online_lookup ? { online_lookup: true } : {}),
+    ...(prefs.toggle_auto_detect_domain ? { auto_detect_domain: true } : {}),
+    ...(prefs.toggle_save_checkpoints ? { save_checkpoints: true } : {}),
+  };
 }
 
 export interface UseCzarEditorReturn {
@@ -112,11 +229,13 @@ export interface UseCzarEditorReturn {
   // AI operations
   streamOp: StreamOp;
   streamingDoc: boolean;
+  currentAgent: string | null;
   tighten: () => void;
   continueDoc: () => void;
+  writeFromPrompt: (instruction: string, panelSettings: CzPanelSettings) => void;
   stopStream: () => void;
 
-  // Import file (called after upload)
+  // Import file
   importFile: (attachment: CzarRequest['attachments'] extends (infer T)[] ? T : never) => void;
 
   // Prefs
@@ -156,7 +275,7 @@ function parseOutline(text: string): CzOutlineItem[] {
         current: items.length === 0,
       });
     }
-    offset += line.length + 1; // +1 for the \n
+    offset += line.length + 1;
   }
   return items;
 }
@@ -165,6 +284,14 @@ function mapCorrectionKind(type: string): CzSuggestion['kind'] {
   if (type === 'grammar') return 'grammar';
   if (type === 'structure' || type === 'argument') return 'cut';
   return 'voice';
+}
+
+// Image request detection — mirrors czar-chat's isImageRequest()
+const IMAGE_ACTIONS = /\b(generate|create|make|draw|produce|show me|give me|render|build|design)\b/i;
+const IMAGE_SUBJECTS = /\b(diagram|chart|flowchart|graph|table|timeline|mindmap|image|photo|picture|figure|visualization|infographic)\b/i;
+
+function isImageRequest(text: string): boolean {
+  return IMAGE_ACTIONS.test(text) && IMAGE_SUBJECTS.test(text);
 }
 
 // ── Main hook ─────────────────────────────────────────────────────────────────
@@ -251,7 +378,6 @@ export function useCzarEditor(): UseCzarEditorReturn {
         if (error) throw error;
         activeMessageIdRef.current = data.id;
       }
-      // Update conversation updated_at + word count preview
       await supabase
         .from('czar_conversations')
         .update({ updated_at: new Date().toISOString(), last_message: content.slice(0, 200) })
@@ -275,7 +401,6 @@ export function useCzarEditor(): UseCzarEditorReturn {
     await persistContent(docContent);
   }, [docContent, persistContent]);
 
-  // 30s autosave interval
   useEffect(() => {
     if (thirtySecTimerRef.current) clearInterval(thirtySecTimerRef.current);
     if (prefs.autosave === '30s' && activePieceId) {
@@ -296,7 +421,6 @@ export function useCzarEditor(): UseCzarEditorReturn {
       setDocContentRaw(lastAssistant?.content ?? '');
       if (lastAssistant) activeMessageIdRef.current = lastAssistant.id;
 
-      // Load conversation metadata (title, voice, audience, length)
       const { data: conv } = await supabase
         .from('czar_conversations')
         .select('title, checkpoint_data')
@@ -373,7 +497,6 @@ export function useCzarEditor(): UseCzarEditorReturn {
     setSuggestions(prev => {
       const sugg = prev.find(s => s.id === id);
       if (!sugg) return prev;
-      // Apply the change to the document
       setDocContentRaw(doc => {
         const idx = doc.indexOf(sugg.was);
         if (idx === -1) return doc;
@@ -390,6 +513,7 @@ export function useCzarEditor(): UseCzarEditorReturn {
   // ── AI Operations ────────────────────────────────────────────────────────
   const [streamOp, setStreamOp] = useState<StreamOp>(null);
   const [streamingDoc, setStreamingDoc] = useState(false);
+  const [currentAgent, setCurrentAgent] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
@@ -397,6 +521,7 @@ export function useCzarEditor(): UseCzarEditorReturn {
     abortRef.current?.abort();
     setStreamingDoc(false);
     setStreamOp(null);
+    setCurrentAgent(null);
     setSuggestionsLoading(false);
   }, []);
 
@@ -409,7 +534,12 @@ export function useCzarEditor(): UseCzarEditorReturn {
     abortRef.current = ctrl;
 
     streamCzar(
-      { conversation_id: activePieceId, user_message: docContent, mode: 'correct' },
+      {
+        conversation_id: activePieceId,
+        user_message: docContent,
+        mode: 'correct',
+        settings: buildCzarSettings(prefs, activeVoice, audience, targetLength),
+      },
       {
         onCorrectionChange: (e) => {
           newSuggs.push({
@@ -433,9 +563,8 @@ export function useCzarEditor(): UseCzarEditorReturn {
       },
       ctrl.signal,
     );
-  }, [activePieceId, docContent, wordCount, streamingDoc]);
+  }, [activePieceId, docContent, wordCount, streamingDoc, prefs, activeVoice, audience, targetLength]);
 
-  // Auto-suggest debounce (30s after last content change, min 200 words)
   useEffect(() => {
     if (suggestTimerRef.current) clearTimeout(suggestTimerRef.current);
     if (wordCount >= 200 && !streamingDoc && activePieceId) {
@@ -457,25 +586,28 @@ export function useCzarEditor(): UseCzarEditorReturn {
         conversation_id: activePieceId,
         user_message: `Tighten this document. Maintain the voice and meaning — cut unnecessary words, improve sentence rhythm, sharpen the prose:\n\n${docContent}`,
         mode: 'write',
-        settings: { voice_id: activeVoice },
+        settings: buildCzarSettings(prefs, activeVoice, audience, targetLength),
       },
       {
+        onAgentStep: (agent: string) => setCurrentAgent(agent),
         onDelta: (text) => { buffer += text; setDocContentRaw(buffer); },
         onReplace: (e) => { buffer = e.content; setDocContentRaw(buffer); },
         onDone: () => {
           setStreamingDoc(false);
           setStreamOp(null);
+          setCurrentAgent(null);
           persistContent(buffer);
         },
         onError: (msg) => {
           setStreamingDoc(false);
           setStreamOp(null);
+          setCurrentAgent(null);
           setError(msg ?? 'Tighten failed');
         },
       },
       ctrl.signal,
     );
-  }, [activePieceId, docContent, streamingDoc, activeVoice, persistContent]);
+  }, [activePieceId, docContent, streamingDoc, prefs, activeVoice, audience, targetLength, persistContent]);
 
   const continueDoc = useCallback(() => {
     if (!activePieceId || streamingDoc) return;
@@ -491,9 +623,10 @@ export function useCzarEditor(): UseCzarEditorReturn {
         conversation_id: activePieceId,
         user_message: `Continue this document from where it ends. Match the established voice and style:\n\n${base}`,
         mode: 'write',
-        settings: { voice_id: activeVoice },
+        settings: buildCzarSettings(prefs, activeVoice, audience, targetLength),
       },
       {
+        onAgentStep: (agent: string) => setCurrentAgent(agent),
         onDelta: (text) => {
           appended += text;
           setDocContentRaw(base + (appended ? '\n\n' + appended : ''));
@@ -501,17 +634,65 @@ export function useCzarEditor(): UseCzarEditorReturn {
         onDone: () => {
           setStreamingDoc(false);
           setStreamOp(null);
+          setCurrentAgent(null);
           persistContent(base + '\n\n' + appended);
         },
         onError: (msg) => {
           setStreamingDoc(false);
           setStreamOp(null);
+          setCurrentAgent(null);
           setError(msg ?? 'Continue failed');
         },
       },
       ctrl.signal,
     );
-  }, [activePieceId, docContent, streamingDoc, activeVoice, persistContent]);
+  }, [activePieceId, docContent, streamingDoc, prefs, activeVoice, audience, targetLength, persistContent]);
+
+  const writeFromPrompt = useCallback((instruction: string, panelSettings: CzPanelSettings) => {
+    if (!activePieceId || streamingDoc || !instruction.trim()) return;
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
+    setStreamingDoc(true);
+    setStreamOp('write');
+
+    // Auto-detect image requests and route to chat mode
+    const effectiveMode = isImageRequest(instruction) ? 'chat' : panelSettings.mode;
+    const base = docContent;
+    let appended = '';
+
+    streamCzar(
+      {
+        conversation_id: activePieceId,
+        user_message: instruction,
+        mode: effectiveMode as any,
+        settings: buildCzarSettings(prefs, activeVoice, audience, targetLength, panelSettings),
+      },
+      {
+        onAgentStep: (agent: string) => setCurrentAgent(agent),
+        onDelta: (text) => {
+          appended += text;
+          setDocContentRaw(base + (appended ? (base ? '\n\n' : '') + appended : ''));
+        },
+        onReplace: (e) => {
+          appended = e.content;
+          setDocContentRaw(base + (base ? '\n\n' : '') + appended);
+        },
+        onDone: () => {
+          setStreamingDoc(false);
+          setStreamOp(null);
+          setCurrentAgent(null);
+          persistContent(base + (base && appended ? '\n\n' : '') + appended);
+        },
+        onError: (msg) => {
+          setStreamingDoc(false);
+          setStreamOp(null);
+          setCurrentAgent(null);
+          setError(msg ?? 'Write failed');
+        },
+      },
+      ctrl.signal,
+    );
+  }, [activePieceId, docContent, streamingDoc, prefs, activeVoice, audience, targetLength, persistContent]);
 
   const importFile = useCallback((attachment: any) => {
     if (!activePieceId) return;
@@ -528,8 +709,10 @@ export function useCzarEditor(): UseCzarEditorReturn {
         user_message: 'Extract and format the content of this file. Integrate it naturally into the existing document or start fresh if the document is empty.',
         attachments: [attachment],
         mode: 'write',
+        settings: buildCzarSettings(prefs, activeVoice, audience, targetLength),
       },
       {
+        onAgentStep: (agent: string) => setCurrentAgent(agent),
         onDelta: (text) => {
           appended += text;
           setDocContentRaw((base ? base + '\n\n' : '') + appended);
@@ -537,17 +720,19 @@ export function useCzarEditor(): UseCzarEditorReturn {
         onDone: () => {
           setStreamingDoc(false);
           setStreamOp(null);
+          setCurrentAgent(null);
           persistContent((base ? base + '\n\n' : '') + appended);
         },
         onError: (msg) => {
           setStreamingDoc(false);
           setStreamOp(null);
+          setCurrentAgent(null);
           setError(msg ?? 'File import failed');
         },
       },
       ctrl.signal,
     );
-  }, [activePieceId, docContent, streamingDoc, persistContent]);
+  }, [activePieceId, docContent, streamingDoc, prefs, activeVoice, audience, targetLength, persistContent]);
 
   // ── Piece operations ─────────────────────────────────────────────────────
   const selectPiece = useCallback((id: string) => {
@@ -602,7 +787,7 @@ export function useCzarEditor(): UseCzarEditorReturn {
     activeVoice, setActiveVoice, audience, setAudience, targetLength, setTargetLength,
     saveStatus, manualSave,
     suggestions, suggestionsLoading, acceptSuggestion, dismissSuggestion, triggerSuggest,
-    streamOp, streamingDoc, tighten, continueDoc, stopStream, importFile,
+    streamOp, streamingDoc, currentAgent, tighten, continueDoc, writeFromPrompt, stopStream, importFile,
     prefs, setPrefs,
     error, clearError: () => setError(null),
   };
