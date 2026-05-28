@@ -415,9 +415,12 @@ export function CzarMobile() {
     return () => clearTimeout(t);
   }, [uploadModalOpen, uploadStep]);
 
+  // Exit edit mode only when streaming transitions from true → false (not on every doc change)
+  const prevStreamingRef = useRef(false);
   useEffect(() => {
-    if (!editor.streamingDoc && editor.docContent) setEditMode(false);
-  }, [editor.streamingDoc, editor.docContent]);
+    if (prevStreamingRef.current && !editor.streamingDoc) setEditMode(false);
+    prevStreamingRef.current = editor.streamingDoc;
+  }, [editor.streamingDoc]);
 
   // Fix: iOS Safari ignores autoFocus on programmatically-mounted elements.
   // Explicit imperative focus with a tiny delay for the DOM to settle.
