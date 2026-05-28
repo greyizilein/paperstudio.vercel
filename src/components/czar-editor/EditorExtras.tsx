@@ -144,7 +144,7 @@ export function CzWritePanel({ open, onClose, onSubmit, onCorrect, defaultPrefs 
             <option value="literature_review">Lit. Review</option>
             <option value="screenplay">Screenplay</option>
             <option value="legal">Legal</option>
-            <option value="chat">Ask / Chat</option>
+            <option value="chat">Chat · Images</option>
             <option value="correct">Correct →</option>
           </select>
           {showAcademic && (

@@ -1,4 +1,6 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { CZ_VOICES } from './editorData';
 import { useCzarEditor } from './useCzarEditor';
 import { useCzDictation, useCzDropZone } from './editorHooks';
@@ -141,7 +143,7 @@ function CzMobileWritePanel({ open, onClose, onSubmit, onCorrect, defaultPrefs }
               <option value="literature_review">Lit. Review</option>
               <option value="screenplay">Screenplay</option>
               <option value="legal">Legal</option>
-              <option value="chat">Ask / Chat</option>
+              <option value="chat">Chat · Images</option>
               <option value="correct">Correct →</option>
             </select>
             {showAcademic && (
@@ -172,6 +174,8 @@ function CzMobileWritePanel({ open, onClose, onSubmit, onCorrect, defaultPrefs }
             onChange={(e) => setInstruction(e.target.value)}
             placeholder={mode === 'correct'
               ? 'Tap § Correct → to open the correction workflow…'
+              : mode === 'chat'
+              ? 'Ask anything, or say "Generate a diagram of…" to create images'
               : 'Tell Czar what to write — e.g. "2,000-word essay on AI ethics. Harvard."'}
             rows={3}
           />
@@ -228,6 +232,13 @@ export function CzarMobile() {
   const [writePanel, setWritePanel] = useState(false);
   const [correctionOpen, setCorrectionOpen] = useState(false);
   const [downloadSheet, setDownloadSheet] = useState(false);
+
+  const [editMode, setEditMode] = useState(false);
+
+  // Return to read mode when streaming completes
+  useEffect(() => {
+    if (!editor.streamingDoc && editor.docContent) setEditMode(false);
+  }, [editor.streamingDoc, editor.docContent]);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -356,6 +367,25 @@ export function CzarMobile() {
               style={{ minHeight: 80, marginTop: 8 }}
             />
           </div>
+        ) : !editMode ? (
+          <div
+            className="cz-leaf-render cz-m-render"
+            onClick={() => setEditMode(true)}
+          >
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              components={{
+                img: ({ node, ...props }: any) => (
+                  <img {...props} style={{ maxWidth: '100%', borderRadius: 4, display: 'block', margin: '12px 0' }} />
+                ),
+              }}
+            >
+              {editor.docContent}
+            </ReactMarkdown>
+            {!editor.streamingDoc && (
+              <p className="cz-tap-edit-hint">tap to edit</p>
+            )}
+          </div>
         ) : (
           <textarea
             ref={textareaRef}
@@ -364,7 +394,9 @@ export function CzarMobile() {
             onChange={(e) => editor.setDocContent(e.target.value)}
             placeholder="Start writing…"
             spellCheck
+            autoFocus
             style={{ minHeight: '100%' }}
+            onBlur={() => { if (editor.docContent && !editor.streamingDoc) setEditMode(false); }}
           />
         )}
       </div>
@@ -378,32 +410,47 @@ export function CzarMobile() {
       <div className="cz-m-tools">
         <button className="cz-m-tool cz-m-tool-bold" title="Bold"
                 onClick={() => {
+                  setEditMode(true);
                   const ta = textareaRef.current; if (!ta) return;
                   const { selectionStart: s, selectionEnd: e, value } = ta;
                   const sel = value.slice(s, e) || 'text';
                   const rep = sel.startsWith('**') && sel.endsWith('**') ? sel.slice(2, -2) : `**${sel}**`;
                   editor.setDocContent(value.slice(0, s) + rep + value.slice(e));
-                }}>B</button>
+                }}>
+          <span className="cz-m-tool-icon">B</span>
+          <span className="cz-m-tool-lbl">Bold</span>
+        </button>
         <button className="cz-m-tool cz-m-tool-italic" title="Italic"
                 onClick={() => {
+                  setEditMode(true);
                   const ta = textareaRef.current; if (!ta) return;
                   const { selectionStart: s, selectionEnd: e, value } = ta;
                   const sel = value.slice(s, e) || 'text';
                   const isBold = sel.startsWith('**');
                   const rep = !isBold && sel.startsWith('*') && sel.endsWith('*') ? sel.slice(1, -1) : `*${sel}*`;
                   editor.setDocContent(value.slice(0, s) + rep + value.slice(e));
-                }}>I</button>
-        <button className="cz-m-tool" title="Correct draft" onClick={() => setCorrectionOpen(true)}
-                style={{ fontSize: 14 }}>✓</button>
+                }}>
+          <span className="cz-m-tool-icon">I</span>
+          <span className="cz-m-tool-lbl">Italic</span>
+        </button>
+        <button className="cz-m-tool" title="Correct draft" onClick={() => setCorrectionOpen(true)}>
+          <span className="cz-m-tool-icon" style={{ fontSize: 13 }}>✓</span>
+          <span className="cz-m-tool-lbl">Correct</span>
+        </button>
         <button className="cz-m-tool" title="Upload file"
-                onClick={() => fileInputRef.current?.click()} style={{ fontSize: 16 }}>↑</button>
+                onClick={() => fileInputRef.current?.click()}>
+          <span className="cz-m-tool-icon" style={{ fontSize: 15 }}>↑</span>
+          <span className="cz-m-tool-lbl">Upload</span>
+        </button>
         <button className="cz-m-tool" data-live={dict.live ? 'true' : undefined}
-                title="Dictate" onClick={() => dict.live ? dict.stop() : dict.start()} style={{ fontSize: 16 }}>
-          {dict.live ? '◉' : '◎'}
+                title="Dictate" onClick={() => dict.live ? dict.stop() : dict.start()}>
+          <span className="cz-m-tool-icon" style={{ fontSize: 15 }}>{dict.live ? '◉' : '◎'}</span>
+          <span className="cz-m-tool-lbl">Dictate</span>
         </button>
         <button className="cz-m-tool cz-m-tool-ai" title="Ask Czar to write"
                 onClick={editor.streamingDoc ? editor.stopStream : () => setWritePanel(true)}>
-          {editor.streamingDoc ? '◼' : '§'}
+          <span className="cz-m-tool-icon">{editor.streamingDoc ? '◼' : '§'}</span>
+          <span className="cz-m-tool-lbl">{editor.streamingDoc ? 'Stop' : 'Write'}</span>
         </button>
       </div>
 
