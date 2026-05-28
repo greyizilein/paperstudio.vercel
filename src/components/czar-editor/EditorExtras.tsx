@@ -618,10 +618,16 @@ interface MobileSettingsProps {
   open: boolean; onClose: () => void;
   activeVoice: string; setVoice: (id: string) => void;
   prefs: CzEditorPrefs; setPrefs: (patch: Partial<CzEditorPrefs>) => void;
+  initialTab?: 'voices' | 'academic' | 'rules';
 }
 
-export function CzMobileSettings({ open, onClose, activeVoice, setVoice, prefs, setPrefs }: MobileSettingsProps) {
-  const [tab, setTab] = useState<'voices' | 'academic' | 'editor'>('voices');
+export function CzMobileSettings({ open, onClose, initialTab, activeVoice, setVoice, prefs, setPrefs }: MobileSettingsProps) {
+  const [tab, setTab] = useState<'voices' | 'academic' | 'rules'>(initialTab ?? 'voices');
+
+  useEffect(() => {
+    if (open && initialTab) setTab(initialTab);
+  }, [open, initialTab]);
+
   if (!open) return null;
 
   const prefRow = (label: string, k: keyof CzEditorPrefs, opts: string[]) => (
@@ -647,7 +653,7 @@ export function CzMobileSettings({ open, onClose, activeVoice, setVoice, prefs, 
           <button className="cz-m-sheet-close" onClick={onClose}>Done</button>
         </div>
         <div className="cz-m-sheet-tabs">
-          {(['voices', 'academic', 'editor'] as const).map((v) => (
+          {(['voices', 'academic', 'rules'] as const).map((v) => (
             <button key={v} data-active={tab === v ? 'true' : undefined} onClick={() => setTab(v)}>
               {v.charAt(0).toUpperCase() + v.slice(1)}
             </button>
@@ -686,14 +692,67 @@ export function CzMobileSettings({ open, onClose, activeVoice, setVoice, prefs, 
           </>
         )}
 
-        {tab === 'editor' && (
-          <>
-            {prefRow('Paper width', 'width', ['narrow', 'medium', 'wide'])}
-            {prefRow('Spell check', 'spell', ['on', 'soft', 'off'])}
-            {prefRow('Focus line', 'focus', ['off', 'line', 'paragraph'])}
-            {prefRow('Autosave', 'autosave', ['live', '30s', 'manual'])}
-            {prefRow('Language', 'lang', ['en-us', 'en-gb', 'es', 'fr'])}
-          </>
+        {tab === 'rules' && (
+          <div style={{ paddingBottom: 8 }}>
+            {(
+              [
+                { group: 'Style', rules: [
+                  { key: 'toggle_vary_sentence_length', label: 'Vary sentence length', desc: 'Mix short and long sentences; avoid robotic AI cadence' },
+                  { key: 'toggle_prefer_active_voice', label: 'Prefer active voice', desc: 'Use active voice; passive only when agent is unknown' },
+                  { key: 'toggle_ban_filler', label: 'Ban filler phrases', desc: 'Never write "delve", "leverage", "plays a crucial role"…' },
+                  { key: 'toggle_no_contractions', label: 'No contractions', desc: 'Write "do not" not "don\'t"; "will not" not "won\'t"' },
+                  { key: 'toggle_oxford_comma', label: 'Oxford comma', desc: 'Use Oxford comma in all lists' },
+                ]},
+                { group: 'Academic rigour', rules: [
+                  { key: 'toggle_formal_register', label: 'Formal register', desc: 'Academic register throughout; no casual asides' },
+                  { key: 'toggle_cite_every_claim', label: 'Cite every claim', desc: 'Every evidence-based claim must carry an in-text citation' },
+                  { key: 'toggle_sources_only_2018_plus', label: 'Sources 2018+ only', desc: 'Seminal works flagged as exceptions' },
+                  { key: 'toggle_spell_out_acronyms', label: 'Spell out acronyms', desc: 'Write in full on first use — Artificial Intelligence (AI)' },
+                  { key: 'toggle_double_check_numbers', label: 'Double-check numbers', desc: 'Re-verify all statistics and numerical claims' },
+                ]},
+                { group: 'Structure', rules: [
+                  { key: 'toggle_show_outline_first', label: 'Show outline first', desc: 'Display document outline before writing body' },
+                  { key: 'toggle_section_pause', label: 'Section-by-section', desc: 'Write one section, pause, wait for you to continue' },
+                  { key: 'toggle_include_executive_summary', label: 'Executive summary', desc: 'Add 150–200 word summary before the main body' },
+                  { key: 'toggle_include_keywords', label: 'Include keywords', desc: 'Add Keywords block of 5–7 terms beneath abstract' },
+                  { key: 'toggle_include_word_count_per_section', label: 'Word count per section', desc: 'Append [400 words] to each section heading' },
+                  { key: 'toggle_auto_paragraph_break', label: 'Auto paragraph break', desc: 'Break paragraphs after 4–5 sentences' },
+                ]},
+                { group: 'Intelligence', rules: [
+                  { key: 'toggle_online_lookup', label: 'Online lookup', desc: 'Enable live web search for factual claims' },
+                  { key: 'toggle_thinking_mode', label: 'Deep thinking', desc: 'Extended reasoning before drafting (premium)' },
+                  { key: 'toggle_auto_detect_domain', label: 'Auto-detect domain', desc: 'Detect academic, legal, screenplay from context' },
+                ]},
+              ] as { group: string; rules: { key: string; label: string; desc: string }[] }[]
+            ).map(({ group, rules }) => (
+              <div key={group}>
+                <div style={{ fontFamily: 'var(--f-body)', fontSize: 9, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--ink-faint)', padding: '14px 4px 6px' }}>{group}</div>
+                {rules.map(({ key, label, desc }) => {
+                  const active = !!(prefs[key as keyof CzEditorPrefs]);
+                  return (
+                    <div key={key} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '9px 4px', borderBottom: '1px solid var(--rule-soft)' }}
+                         onClick={() => setPrefs({ [key]: !active } as Partial<CzEditorPrefs>)}>
+                      <div style={{
+                        width: 38, height: 22, borderRadius: 11, flexShrink: 0, marginTop: 1, cursor: 'pointer',
+                        background: active ? 'var(--primary)' : 'var(--rule)',
+                        transition: 'background 0.2s', position: 'relative',
+                      }}>
+                        <div style={{
+                          position: 'absolute', top: 3, left: active ? 19 : 3,
+                          width: 16, height: 16, borderRadius: '50%', background: '#fff',
+                          transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                        }} />
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontFamily: 'var(--f-body)', fontSize: 13, fontWeight: 600, color: 'var(--ink)' }}>{label}</div>
+                        <div style={{ fontFamily: 'var(--f-body)', fontSize: 11, color: 'var(--ink-faint)', marginTop: 2 }}>{desc}</div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
         )}
       </div>
     </div>

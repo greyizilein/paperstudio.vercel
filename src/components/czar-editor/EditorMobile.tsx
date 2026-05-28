@@ -366,9 +366,9 @@ export function CzarMobile() {
   const { user } = useAuth();
   const editor = useCzarEditor();
 
-  const [voiceSheet, setVoiceSheet] = useState(false);
   const [piecesSheet, setPiecesSheet] = useState(false);
   const [settingsSheet, setSettingsSheet] = useState(false);
+  const [settingsTab, setSettingsTab] = useState<'voices' | 'academic' | 'rules'>('voices');
   const [writePanel, setWritePanel] = useState(false);
   const [correctionOpen, setCorrectionOpen] = useState(false);
   const [downloadSheet, setDownloadSheet] = useState(false);
@@ -405,6 +405,15 @@ export function CzarMobile() {
   useEffect(() => {
     if (!editor.streamingDoc && editor.docContent) setEditMode(false);
   }, [editor.streamingDoc, editor.docContent]);
+
+  // Fix: iOS Safari ignores autoFocus on programmatically-mounted elements.
+  // Explicit imperative focus with a tiny delay for the DOM to settle.
+  useEffect(() => {
+    if (editMode) {
+      const t = setTimeout(() => textareaRef.current?.focus(), 50);
+      return () => clearTimeout(t);
+    }
+  }, [editMode]);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -506,22 +515,18 @@ export function CzarMobile() {
                   contentEditable suppressContentEditableWarning onBlur={(e) => { const t = e.currentTarget.textContent?.trim(); if (t && t !== editor.docTitle) editor.setDocTitle(t); }}>
               {editor.docTitle}
             </span>
+            {/* Voice chip — tap to open Settings → Voices */}
+            <button
+              className="font-mono text-[8px] tracking-widest uppercase text-[#e85d3f]/60 hover:text-[#e85d3f] mt-0.5"
+              onClick={() => { setSettingsTab('voices'); setSettingsSheet(true); }}>
+              {v.glyph} {v.name}
+            </button>
           </div>
 
           <div className="flex items-center gap-1">
             <button className="w-9 h-9 flex items-center justify-center text-lg text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-900 rounded-lg" onClick={() => setDownloadSheet(true)}>↓</button>
-            <button className="w-9 h-9 flex items-center justify-center text-lg text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-900 rounded-lg" onClick={() => setSettingsSheet(true)}>⚙</button>
+            <button className="w-9 h-9 flex items-center justify-center text-lg text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-900 rounded-lg" onClick={() => { setSettingsTab('academic'); setSettingsSheet(true); }}>⚙</button>
           </div>
-        </div>
-
-        {/* Voice Strip */}
-        <div className="flex items-center gap-3 py-3 border-t border-zinc-100 dark:border-zinc-900">
-          <span className="font-serif italic font-bold text-lg text-[#e85d3f] w-6 text-center">{v.glyph}</span>
-          <div className="flex flex-col flex-1">
-            <span className="font-serif italic font-bold text-[15px]">{v.name}</span>
-            <span className="font-mono text-[9px] tracking-[0.15em] uppercase text-zinc-500">{v.tag} · writing mode</span>
-          </div>
-          <button className="text-[10px] font-mono uppercase tracking-widest text-[#e85d3f] px-3 py-1.5 border border-[#e85d3f]/30 rounded-full" onClick={() => setVoiceSheet(true)}>switch</button>
         </div>
       </div>
 
@@ -582,13 +587,13 @@ export function CzarMobile() {
             <span className="font-mono text-[8px] uppercase tracking-wider opacity-70 mt-0.5">Upload</span>
           </button>
 
-          {/* Continue */}
+          {/* Tighten */}
           <button
-            className="flex-1 h-12 flex flex-col items-center justify-center bg-transparent hover:bg-zinc-100 dark:hover:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-600 dark:text-zinc-300"
-            onClick={() => editor.continueDoc()}
-            disabled={editor.streamingDoc}>
-            <span className="font-serif italic text-[14px]">→</span>
-            <span className="font-mono text-[8px] uppercase tracking-wider opacity-70 mt-0.5">Continue</span>
+            className="flex-1 h-12 flex flex-col items-center justify-center bg-transparent hover:bg-zinc-100 dark:hover:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-600 dark:text-zinc-300 disabled:opacity-40"
+            onClick={() => editor.tighten()}
+            disabled={editor.streamingDoc || !editor.docContent}>
+            <span className="font-serif italic text-[14px]">§</span>
+            <span className="font-mono text-[8px] uppercase tracking-wider opacity-70 mt-0.5">Tighten</span>
           </button>
 
           {/* Correct */}
@@ -621,7 +626,6 @@ export function CzarMobile() {
       <input ref={fileInputRef} type="file" accept=".txt,.md,.docx,.pdf,.mp3,.wav,.m4a,.jpg,.jpeg,.png,.gif,.webp" className="hidden" onChange={handleFileInput} />
 
       {/* ── INLINE BOTTOM SHEETS ── */}
-      <CzMobileVoiceSheet open={voiceSheet} onClose={() => setVoiceSheet(false)} voice={editor.activeVoice} setVoice={editor.setActiveVoice} />
       <CzMobilePiecesSheet
         open={piecesSheet} onClose={() => setPiecesSheet(false)}
         pieces={editor.pieces} activePieceId={editor.activePieceId}
@@ -637,7 +641,7 @@ export function CzarMobile() {
       {/* ── EXTERNAL COMPONENTS (Settings / Mic / Correction) ── */}
       <div className="fixed inset-0 z-[100000] pointer-events-none">
         <div className="pointer-events-auto">
-          <CzMobileSettings open={settingsSheet} onClose={() => setSettingsSheet(false)} activeVoice={editor.activeVoice} setVoice={editor.setActiveVoice} prefs={editor.prefs} setPrefs={editor.setPrefs} />
+          <CzMobileSettings open={settingsSheet} onClose={() => setSettingsSheet(false)} initialTab={settingsTab} activeVoice={editor.activeVoice} setVoice={editor.setActiveVoice} prefs={editor.prefs} setPrefs={editor.setPrefs} />
           <CzMobileMic open={dict.live} seconds={dict.seconds} final={dict.final} interim={dict.interim} onClose={() => dict.stop()} onInsert={handleMicInsert} />
           <CorrectionModal open={correctionOpen} onClose={() => setCorrectionOpen(false)} onApplied={(content) => { editor.setDocContent(content); editor.manualSave(); }} />
         </div>
