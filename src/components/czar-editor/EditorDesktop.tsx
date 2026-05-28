@@ -2,33 +2,42 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { CZ_VOICES } from './editorData';
-import { useCzarEditor, type CzPiece, type CzOutlineItem, type CzSuggestion } from './useCzarEditor';
+import { useCzarEditor, type CzPiece, type CzOutlineItem, type CzSuggestion, type CzPanelSettings } from './useCzarEditor';
 import { useCzDictation, useCzDropZone } from './editorHooks';
-import { CzDropOverlay, CzImportedChip, CzMicPopover, CzSettingsModal } from './EditorExtras';
+import {
+  CzDropOverlay, CzImportedChip, CzMicPopover, CzSettingsModal,
+  CzWritePanel, CzDownloadMenu,
+} from './EditorExtras';
 import { useAuth } from '@/contexts/AuthContext';
+import { CorrectionModal } from '@/components/czar/CorrectionModal';
+import { buildDocx, docxFilename, stripMarkdown } from '@/lib/czarDocUtils.tsx';
+import { Packer } from 'docx';
 
-// ── Types ──────────────────────────────────────────────────────
-interface FormatState {
-  block: string; font: string; size: string;
-  b: boolean; i: boolean; u: boolean; s: boolean;
-  align: 'left' | 'center' | 'right' | 'justify';
-  lh: string;
-}
-
-type SectionId = 'modes' | 'train' | 'editor' | 'dictation' | 'import' | 'shortcuts' | 'account';
+type SectionId = 'modes' | 'train' | 'academic' | 'toggles' | 'editor' | 'dictation' | 'import' | 'shortcuts' | 'account';
 
 const LANG_MAP: Record<string, string> = {
   'en-us': 'en-US', 'en-gb': 'en-GB', 'es': 'es-ES', 'fr': 'fr-FR',
 };
 
-function downloadDoc(title: string, content: string) {
+async function downloadAsWord(content: string) {
+  const doc = buildDocx(content);
+  const blob = await Packer.toBlob(doc);
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = docxFilename(content);
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function downloadMarkdown(title: string, content: string) {
   const blob = new Blob([content], { type: 'text/markdown' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
   a.download = (title || 'untitled').replace(/[^a-zA-Z0-9 ._-]/g, '_') + '.md';
-  document.body.appendChild(a);
-  a.click();
+  document.body.appendChild(a); a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
 }
@@ -42,13 +51,11 @@ function relTime(date: Date | null): string {
 }
 
 // ── Title Bar ────────────────────────────────────────────────
-function CzTitlebar({ docTitle, setDocTitle, mode, setMode, onOpenSettings, onDownload, saving }: {
-  docTitle: string;
-  setDocTitle: (t: string) => void;
-  mode: string;
-  setMode: (m: string) => void;
+function CzTitlebar({ docTitle, setDocTitle, mode, setMode, onOpenSettings, onDownloadDocx, onDownloadMd, saving }: {
+  docTitle: string; setDocTitle: (t: string) => void;
+  mode: string; setMode: (m: string) => void;
   onOpenSettings: (section?: SectionId) => void;
-  onDownload: () => void;
+  onDownloadDocx: () => void; onDownloadMd: () => void;
   saving: boolean;
 }) {
   return (
@@ -58,15 +65,10 @@ function CzTitlebar({ docTitle, setDocTitle, mode, setMode, onOpenSettings, onDo
         <div className="cz-brand-meta">drafting room</div>
       </div>
       <div className="cz-doc-title">
-        <span
-          className="cz-doc-name"
-          contentEditable
-          suppressContentEditableWarning
-          onBlur={(e) => {
-            const t = e.currentTarget.textContent?.trim();
-            if (t && t !== docTitle) setDocTitle(t);
-          }}
-        >{docTitle}</span>
+        <span className="cz-doc-name" contentEditable suppressContentEditableWarning
+              onBlur={(e) => { const t = e.currentTarget.textContent?.trim(); if (t && t !== docTitle) setDocTitle(t); }}>
+          {docTitle}
+        </span>
         <span className="cz-doc-sep">·</span>
         <span className="cz-doc-mode-pill">draft</span>
       </div>
@@ -74,13 +76,12 @@ function CzTitlebar({ docTitle, setDocTitle, mode, setMode, onOpenSettings, onDo
         <div className="cz-mode-tabs">
           {['Edit', 'Read', 'Voice'].map((m) => (
             <button key={m} data-active={mode === m.toLowerCase() ? 'true' : undefined}
-              onClick={() => setMode(m.toLowerCase())}>{m}</button>
+                    onClick={() => setMode(m.toLowerCase())}>{m}</button>
           ))}
         </div>
-        <button className="cz-cbtn" style={{ height: 30, fontSize: 13 }}
-                title="Download (⌘E)" onClick={onDownload}>↓</button>
-        <button className="cz-cbtn" style={{ height: 30, fontSize: 15 }} title="Settings"
-          onClick={() => onOpenSettings('modes')}>⚙</button>
+        <CzDownloadMenu onDocx={onDownloadDocx} onMarkdown={onDownloadMd} />
+        <button className="cz-cbtn" style={{ height: 30, fontSize: 15 }} title="Settings (⌘,)"
+                onClick={() => onOpenSettings('modes')}>⚙</button>
         <button className="cz-cbtn" style={{
           height: 30, background: 'var(--primary)', color: 'var(--primary-ink)',
           fontWeight: 600, padding: '0 14px', borderColor: 'var(--primary)',
@@ -101,78 +102,81 @@ function CzCGroup({ label, ai = false, children }: { label: string; ai?: boolean
   );
 }
 
-function CzComposer({ format, setFormat, dictLive, onMicToggle, onOpenSettings, onTighten, onContinue, onStop, streaming, langLabel }: {
-  format: FormatState;
-  setFormat: (f: FormatState) => void;
-  dictLive: boolean;
-  onMicToggle: () => void;
+function CzComposer({
+  textareaRef, dictLive, onMicToggle, onOpenSettings,
+  onTighten, onContinue, onStop, onCorrect, onAskCzar, onImport,
+  streaming, langLabel, onSetDocContent,
+}: {
+  textareaRef: React.RefObject<HTMLTextAreaElement>;
+  dictLive: boolean; onMicToggle: () => void;
   onOpenSettings: (section?: SectionId) => void;
-  onTighten: () => void;
-  onContinue: () => void;
-  onStop: () => void;
-  streaming: boolean;
-  langLabel: string;
+  onTighten: () => void; onContinue: () => void; onStop: () => void;
+  onCorrect: () => void; onAskCzar: () => void; onImport: () => void;
+  streaming: boolean; langLabel: string;
+  onSetDocContent: (text: string) => void;
 }) {
-  const tog = (k: keyof FormatState) => setFormat({ ...format, [k]: !(format[k] as boolean) });
-  const set = (k: keyof FormatState, v: string) => setFormat({ ...format, [k]: v });
+  const [styleOpen, setStyleOpen] = useState(false);
+
+  function toggleMd(wrap: string) {
+    const ta = textareaRef.current;
+    if (!ta) return;
+    const { selectionStart: s, selectionEnd: e, value } = ta;
+    const sel = value.slice(s, e) || 'text';
+    const already = sel.startsWith(wrap) && sel.endsWith(wrap);
+    const rep = already ? sel.slice(wrap.length, -wrap.length) : `${wrap}${sel}${wrap}`;
+    const next = value.slice(0, s) + rep + value.slice(e);
+    onSetDocContent(next);
+    requestAnimationFrame(() => { ta.focus(); ta.setSelectionRange(s, s + rep.length); });
+  }
+
+  function insertLinePrefix(prefix: string) {
+    const ta = textareaRef.current;
+    if (!ta) return;
+    const { selectionStart: s, value } = ta;
+    const lineStart = value.lastIndexOf('\n', s - 1) + 1;
+    const lineEndRaw = value.indexOf('\n', s);
+    const lineEnd = lineEndRaw === -1 ? value.length : lineEndRaw;
+    const line = value.slice(lineStart, lineEnd);
+    const stripped = line.replace(/^(#{1,2} |> )/, '');
+    const newLine = prefix ? prefix + stripped : stripped;
+    const next = value.slice(0, lineStart) + newLine + value.slice(lineEnd);
+    onSetDocContent(next);
+    requestAnimationFrame(() => ta.focus());
+  }
+
+  function insertAt(text: string) {
+    const ta = textareaRef.current;
+    if (!ta) return;
+    const { selectionStart: s, selectionEnd: e, value } = ta;
+    const next = value.slice(0, s) + text + value.slice(e);
+    onSetDocContent(next);
+    requestAnimationFrame(() => { ta.focus(); ta.setSelectionRange(s + text.length, s + text.length); });
+  }
 
   return (
     <div className="cz-composer">
-      <CzCGroup label="Style">
-        <select className="cz-csel cz-csel-wide" value={format.block} onChange={(e) => set('block', e.target.value)}>
-          <option>Body — Fraunces 16</option>
-          <option>Heading 1</option><option>Heading 2</option><option>Heading 3</option>
-          <option>Pull quote</option><option>Lede paragraph</option>
-        </select>
-      </CzCGroup>
-      <CzCGroup label="Font">
-        <select className="cz-csel cz-csel-wide" value={format.font} onChange={(e) => set('font', e.target.value)}>
-          <option>Fraunces</option><option>Inter</option><option>JetBrains Mono</option>
-          <option>Georgia</option><option>Söhne</option>
-        </select>
-        <select className="cz-csel cz-csel-narrow" value={format.size} onChange={(e) => set('size', e.target.value)}>
-          {['10','11','12','13','14','15','16','17','18','20','24','28','32'].map(s => <option key={s}>{s}</option>)}
-        </select>
-      </CzCGroup>
       <CzCGroup label="Format">
-        <button className="cz-cbtn cz-cbtn-bold"   data-active={format.b ? 'true' : undefined} onClick={() => tog('b')}>B</button>
-        <button className="cz-cbtn cz-cbtn-italic" data-active={format.i ? 'true' : undefined} onClick={() => tog('i')}>I</button>
-        <button className="cz-cbtn cz-cbtn-under"  data-active={format.u ? 'true' : undefined} onClick={() => tog('u')}>U</button>
-        <button className="cz-cbtn cz-cbtn-strike" data-active={format.s ? 'true' : undefined} onClick={() => tog('s')}>S</button>
-        <button className="cz-cbtn" title="Small caps" style={{ fontVariant: 'small-caps', fontWeight: 600, fontSize: 11 }}>sc</button>
-        <button className="cz-cbtn" title="Superscript" style={{ fontSize: 10 }}>x²</button>
-      </CzCGroup>
-      <CzCGroup label="Color">
-        <button className="cz-cbtn cz-cbtn-color" title="Text color"
-                style={{ '--swatch': 'var(--primary)' } as React.CSSProperties}>A</button>
-        <button className="cz-cbtn cz-cbtn-color" title="Highlight"
-                style={{ '--swatch': 'hsl(50 95% 70%)' } as React.CSSProperties}>
-          <span style={{ background: 'hsl(50 95% 70% / 0.4)', padding: '0 3px', borderRadius: 2 }}>a</span>
-        </button>
-      </CzCGroup>
-      <CzCGroup label="Align">
-        <button className="cz-cbtn" data-active={format.align === 'left' ? 'true' : undefined}    onClick={() => set('align', 'left')}    title="Left">⫷</button>
-        <button className="cz-cbtn" data-active={format.align === 'center' ? 'true' : undefined}  onClick={() => set('align', 'center')}  title="Center">⫶</button>
-        <button className="cz-cbtn" data-active={format.align === 'right' ? 'true' : undefined}   onClick={() => set('align', 'right')}   title="Right">⫸</button>
-        <button className="cz-cbtn" data-active={format.align === 'justify' ? 'true' : undefined} onClick={() => set('align', 'justify')} title="Justify">≡</button>
-      </CzCGroup>
-      <CzCGroup label="Flow">
-        <select className="cz-csel cz-csel-narrow" value={format.lh} onChange={(e) => set('lh', e.target.value)} title="Line height">
-          <option>1.4</option><option>1.5</option><option>1.65</option><option>1.8</option><option>2.0</option>
-        </select>
-        <button className="cz-cbtn" title="Indent">→|</button>
-        <button className="cz-cbtn" title="Outdent">|←</button>
-      </CzCGroup>
-      <CzCGroup label="List">
-        <button className="cz-cbtn" title="Bulleted">•</button>
-        <button className="cz-cbtn" title="Numbered">1.</button>
-        <button className="cz-cbtn" title="Quote">❝</button>
+        <button className="cz-cbtn cz-cbtn-bold" title="Bold (**text**)" onClick={() => toggleMd('**')}>B</button>
+        <button className="cz-cbtn cz-cbtn-italic" title="Italic (*text*)" onClick={() => toggleMd('*')}>I</button>
+        <button className="cz-cbtn cz-cbtn-strike" title="Strikethrough (~~text~~)" onClick={() => toggleMd('~~')}>S</button>
+        <div style={{ position: 'relative' }}>
+          <button className="cz-cbtn" title="Heading / block style"
+                  style={{ fontFamily: 'var(--f-display)', fontStyle: 'italic', fontWeight: 600, fontSize: 13 }}
+                  onClick={() => setStyleOpen(!styleOpen)}>Aa ▾</button>
+          {styleOpen && (
+            <div className="cz-dl-menu" style={{ minWidth: 144, left: 0, right: 'auto' }}>
+              {[['Normal', ''], ['Heading 1', '# '], ['Heading 2', '## '], ['Blockquote', '> ']].map(([label, prefix]) => (
+                <div key={label} className="cz-dl-item" onClick={() => { insertLinePrefix(prefix); setStyleOpen(false); }}>
+                  {label}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </CzCGroup>
       <CzCGroup label="Insert">
-        <button className="cz-cbtn" title="Link">↗</button>
-        <button className="cz-cbtn" title="Footnote">†</button>
-        <button className="cz-cbtn" title="Image">▣</button>
-        <button className="cz-cbtn" title="Em-dash">—</button>
+        <button className="cz-cbtn" title="Em dash ( — )" onClick={() => insertAt(' — ')}>—</button>
+        <button className="cz-cbtn" title="Section mark (§)" onClick={() => insertAt('§')}>§</button>
       </CzCGroup>
       <CzCGroup label="Czar AI" ai>
         {streaming ? (
@@ -180,9 +184,10 @@ function CzComposer({ format, setFormat, dictLive, onMicToggle, onOpenSettings, 
                   style={{ color: 'var(--primary)', fontWeight: 700 }}>◼ Stop</button>
         ) : (
           <>
-            <button className="cz-cbtn" title="Tighten" onClick={onTighten}><i>§</i> Tighten</button>
-            <button className="cz-cbtn" title="Voice" onClick={() => onOpenSettings('modes')}><i>§</i> Voice…</button>
-            <button className="cz-cbtn" title="Continue" onClick={onContinue}><i>§</i> Continue</button>
+            <button className="cz-cbtn" title="Tighten prose" onClick={onTighten}><i>§</i> Tighten</button>
+            <button className="cz-cbtn" title="Open correction workflow (⌘⇧C)" onClick={onCorrect}><i>§</i> Correct →</button>
+            <button className="cz-cbtn" title="Continue writing (⌘↩)" onClick={onContinue}><i>§</i> Continue</button>
+            <button className="cz-cbtn" title="Open write panel (⌘⇧A)" onClick={onAskCzar}><i>§</i> Ask Czar</button>
           </>
         )}
       </CzCGroup>
@@ -197,12 +202,57 @@ function CzComposer({ format, setFormat, dictLive, onMicToggle, onOpenSettings, 
         </button>
       </CzCGroup>
       <CzCGroup label="Import">
-        <button className="cz-cbtn" title="Import file…" onClick={() => onOpenSettings('import')}>↓</button>
+        <button className="cz-cbtn" title="Import file (⌘I)" onClick={onImport} style={{ fontSize: 13 }}>↑ Import</button>
       </CzCGroup>
       <div className="cz-composer-spacer" />
-      <CzCGroup label="Find">
-        <button className="cz-cbtn" title="Find">⌕</button>
+      <CzCGroup label="Settings">
+        <button className="cz-cbtn" title="Academic settings" onClick={() => onOpenSettings('academic')} style={{ fontSize: 10 }}>°</button>
+        <button className="cz-cbtn" title="Writing rules" onClick={() => onOpenSettings('toggles')} style={{ fontSize: 12 }}>≡</button>
       </CzCGroup>
+    </div>
+  );
+}
+
+// ── Selection toolbar ─────────────────────────────────────────
+function CzSelectionToolbar({ textareaRef, onAction }: {
+  textareaRef: React.RefObject<HTMLTextAreaElement>;
+  onAction: (action: string, selected: string) => void;
+}) {
+  const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
+  const [selected, setSelected] = useState('');
+
+  useEffect(() => {
+    const ta = textareaRef.current;
+    if (!ta) return;
+    const check = () => {
+      const { selectionStart: s, selectionEnd: e, value } = ta;
+      const sel = value.slice(s, e).trim();
+      if (sel.length > 3) {
+        setSelected(sel);
+        const rect = ta.getBoundingClientRect();
+        setPos({ x: rect.left + 8, y: rect.top - 46 });
+      } else {
+        setPos(null);
+      }
+    };
+    const hide = () => setPos(null);
+    ta.addEventListener('mouseup', check);
+    ta.addEventListener('keyup', check);
+    ta.addEventListener('blur', hide);
+    return () => {
+      ta.removeEventListener('mouseup', check);
+      ta.removeEventListener('keyup', check);
+      ta.removeEventListener('blur', hide);
+    };
+  }, [textareaRef]);
+
+  if (!pos) return null;
+  return (
+    <div className="cz-sel-toolbar" style={{ top: pos.y, left: pos.x }}>
+      {['Improve', 'Shorten', 'Expand', 'Rewrite'].map((a) => (
+        <button key={a} onMouseDown={(e) => e.preventDefault()}
+                onClick={() => { onAction(a, selected); setPos(null); }}>{a}</button>
+      ))}
     </div>
   );
 }
@@ -212,16 +262,10 @@ function CzRail({
   pieces, piecesLoading, piecesError, activePieceId, onSelectPiece, onCreatePiece,
   outline, onScrollTo, activeVoice, setVoice,
 }: {
-  pieces: CzPiece[];
-  piecesLoading: boolean;
-  piecesError: string | null;
-  activePieceId: string | null;
-  onSelectPiece: (id: string) => void;
-  onCreatePiece: () => void;
-  outline: CzOutlineItem[];
-  onScrollTo: (offset: number) => void;
-  activeVoice: string;
-  setVoice: (id: string) => void;
+  pieces: CzPiece[]; piecesLoading: boolean; piecesError: string | null;
+  activePieceId: string | null; onSelectPiece: (id: string) => void; onCreatePiece: () => void;
+  outline: CzOutlineItem[]; onScrollTo: (offset: number) => void;
+  activeVoice: string; setVoice: (id: string) => void;
 }) {
   return (
     <aside className="cz-rail">
@@ -231,30 +275,22 @@ function CzRail({
           <button className="cz-rail-add" title="New piece" onClick={onCreatePiece}>+</button>
         </div>
         {piecesLoading && (
-          <>
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="cz-piece cz-piece-skeleton">
-                <span className="cz-piece-dot" />
-                <span className="cz-piece-name" style={{ width: `${60 + i * 15}%` }} />
-              </div>
-            ))}
-          </>
+          <>{[1, 2, 3].map((i) => (
+            <div key={i} className="cz-piece cz-piece-skeleton">
+              <span className="cz-piece-dot" />
+              <span className="cz-piece-name" style={{ width: `${60 + i * 15}%` }} />
+            </div>
+          ))}</>
         )}
         {!piecesLoading && piecesError && (
-          <div style={{ fontSize: 11, color: 'var(--primary)', padding: '6px 0' }}>
-            Couldn't load pieces
-          </div>
+          <div style={{ fontSize: 11, color: 'var(--primary)', padding: '6px 0' }}>Couldn't load pieces</div>
         )}
         {!piecesLoading && !piecesError && pieces.length === 0 && (
-          <div style={{ fontSize: 11, color: 'var(--ink-faint)', padding: '6px 0' }}>
-            No pieces yet
-          </div>
+          <div style={{ fontSize: 11, color: 'var(--ink-faint)', padding: '6px 0' }}>No pieces yet</div>
         )}
         {!piecesLoading && pieces.map((p) => (
-          <div key={p.id} className="cz-piece"
-               data-active={p.id === activePieceId ? 'true' : undefined}
-               onClick={() => !p.isPending && onSelectPiece(p.id)}
-               style={{ opacity: p.isPending ? 0.5 : 1 }}>
+          <div key={p.id} className="cz-piece" data-active={p.id === activePieceId ? 'true' : undefined}
+               onClick={() => !p.isPending && onSelectPiece(p.id)} style={{ opacity: p.isPending ? 0.5 : 1 }}>
             <span className="cz-piece-dot" />
             <span className="cz-piece-name">{p.name}</span>
             <span className="cz-piece-meta">{p.meta}</span>
@@ -266,10 +302,8 @@ function CzRail({
         <div className="cz-rail-section">
           <div className="cz-rail-heading">Outline</div>
           {outline.map((o) => (
-            <div key={o.id} className="cz-outline-item"
-                 data-level={o.level} data-current={o.current ? 'true' : undefined}
-                 onClick={() => onScrollTo(o.charOffset)}
-                 style={{ cursor: 'pointer' }}>
+            <div key={o.id} className="cz-outline-item" data-level={o.level} data-current={o.current ? 'true' : undefined}
+                 onClick={() => onScrollTo(o.charOffset)} style={{ cursor: 'pointer' }}>
               {o.text}
             </div>
           ))}
@@ -282,8 +316,7 @@ function CzRail({
           <button className="cz-rail-add" title="Train new voice">+</button>
         </div>
         {CZ_VOICES.map((v) => (
-          <div key={v.id} className="cz-voice-chip"
-               data-active={activeVoice === v.id ? 'true' : undefined}
+          <div key={v.id} className="cz-voice-chip" data-active={activeVoice === v.id ? 'true' : undefined}
                onClick={() => setVoice(v.id)}>
             <span className="cz-voice-glyph">{v.glyph}</span>
             <span className="cz-voice-name">{v.name}</span>
@@ -297,16 +330,18 @@ function CzRail({
 
 // ── Canvas / leaf ─────────────────────────────────────────────
 function CzLeaf({
-  content, onChange, mode, docLoading, streaming, drop, textareaRef,
+  content, onChange, mode, docLoading, streaming, currentAgent, drop, textareaRef,
+  activePieceId, onAskCzar, onCorrect, onImport,
 }: {
-  content: string;
-  onChange: (v: string) => void;
-  mode: string;
-  docLoading: boolean;
-  streaming: boolean;
+  content: string; onChange: (v: string) => void;
+  mode: string; docLoading: boolean; streaming: boolean; currentAgent: string | null;
   drop: ReturnType<typeof useCzDropZone>;
   textareaRef: React.RefObject<HTMLTextAreaElement>;
+  activePieceId: string | null;
+  onAskCzar: () => void; onCorrect: () => void; onImport: () => void;
 }) {
+  const showWelcome = !docLoading && content === '' && activePieceId !== null;
+
   return (
     <main className="cz-canvas" {...drop.handlers}>
       <CzDropOverlay visible={drop.dragOver} />
@@ -317,6 +352,13 @@ function CzLeaf({
           <span>{content ? `${content.trim().split(/\s+/).filter(Boolean).length} words` : 'empty'}</span>
         </div>
 
+        {streaming && currentAgent && (
+          <div className="cz-agent-step">
+            <span className="cz-agent-step-dot" />
+            <span className="cz-agent-step-label">{currentAgent}</span>
+          </div>
+        )}
+
         {docLoading ? (
           <div className="cz-leaf-skeleton">
             <div style={{ width: '75%', height: 28, marginBottom: 16 }} />
@@ -326,31 +368,52 @@ function CzLeaf({
             <div style={{ width: '92%', height: 14, marginBottom: 8 }} />
             <div style={{ width: '85%', height: 14, marginBottom: 28 }} />
             <div style={{ width: '100%', height: 14, marginBottom: 8 }} />
-            <div style={{ width: '94%', height: 14, marginBottom: 8 }} />
-            <div style={{ width: '78%', height: 14, marginBottom: 8 }} />
+            <div style={{ width: '94%', height: 14 }} />
           </div>
         ) : mode === 'edit' ? (
-          content === '' ? (
-            <div style={{ position: 'relative' }}>
-              <textarea
-                ref={textareaRef}
-                className="cz-leaf-textarea"
-                value={content}
-                onChange={(e) => onChange(e.target.value)}
-                spellCheck
-                placeholder="Start writing, or click § Continue to let Czar begin for you."
-              />
+          showWelcome ? (
+            <div className="cz-welcome">
+              <div className="cz-welcome-eyebrow">czar · drafting room</div>
+              <h2 className="cz-welcome-h">What would you like to write today?</h2>
+              <div className="cz-welcome-grid">
+                <div className="cz-welcome-card" onClick={() => textareaRef.current?.focus()}>
+                  <div className="cz-welcome-card-icon">✏</div>
+                  <div className="cz-welcome-card-title">Write freely</div>
+                  <div className="cz-welcome-card-desc">Start typing — blank page, your pace</div>
+                </div>
+                <div className="cz-welcome-card" onClick={onAskCzar}>
+                  <div className="cz-welcome-card-icon">§</div>
+                  <div className="cz-welcome-card-title">Ask Czar to write</div>
+                  <div className="cz-welcome-card-desc">Essays, reports, lit. reviews, scripts…</div>
+                </div>
+                <div className="cz-welcome-card" onClick={onCorrect}>
+                  <div className="cz-welcome-card-icon">✓</div>
+                  <div className="cz-welcome-card-title">Correct a draft</div>
+                  <div className="cz-welcome-card-desc">Upload a document for AI correction</div>
+                </div>
+                <div className="cz-welcome-card" onClick={onImport}>
+                  <div className="cz-welcome-card-icon">↑</div>
+                  <div className="cz-welcome-card-title">Upload a document</div>
+                  <div className="cz-welcome-card-desc">.docx · .pdf · .txt · audio</div>
+                </div>
+              </div>
             </div>
-          ) : (
-            <textarea
-              ref={textareaRef}
-              className="cz-leaf-textarea"
-              value={content}
-              onChange={(e) => onChange(e.target.value)}
-              spellCheck
-            />
-          )
-        ) : (
+          ) : null
+        ) : null}
+
+        {!docLoading && mode === 'edit' && (
+          <textarea
+            ref={textareaRef}
+            className="cz-leaf-textarea"
+            value={content}
+            onChange={(e) => onChange(e.target.value)}
+            spellCheck
+            placeholder="Start writing, or click § Ask Czar to let Czar begin for you."
+            style={{ display: showWelcome ? 'none' : undefined }}
+          />
+        )}
+
+        {!docLoading && mode !== 'edit' && (
           <div className="cz-leaf-render">
             {content ? (
               <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
@@ -384,15 +447,10 @@ function CzInspector({
   suggestions, suggestionsLoading, wordCount, readingTime,
   onAcceptSuggestion, onDismissSuggestion, onTriggerSuggest,
 }: {
-  voice: string;
-  length: string;
-  setLength: (l: string) => void;
-  audience: string;
-  setAudience: (a: string) => void;
-  suggestions: CzSuggestion[];
-  suggestionsLoading: boolean;
-  wordCount: number;
-  readingTime: string;
+  voice: string; length: string; setLength: (l: string) => void;
+  audience: string; setAudience: (a: string) => void;
+  suggestions: CzSuggestion[]; suggestionsLoading: boolean;
+  wordCount: number; readingTime: string;
   onAcceptSuggestion: (id: string) => void;
   onDismissSuggestion: (id: string) => void;
   onTriggerSuggest: () => void;
@@ -443,15 +501,13 @@ function CzInspector({
           </button>
         </div>
         {suggestionsLoading && (
-          <>
-            {[1, 2].map((i) => (
-              <div key={i} className="cz-sugg cz-sugg-skeleton">
-                <div style={{ width: '60%', height: 12, marginBottom: 6 }} />
-                <div style={{ width: '90%', height: 12, marginBottom: 4 }} />
-                <div style={{ width: '80%', height: 12 }} />
-              </div>
-            ))}
-          </>
+          <>{[1, 2].map((i) => (
+            <div key={i} className="cz-sugg cz-sugg-skeleton">
+              <div style={{ width: '60%', height: 12, marginBottom: 6 }} />
+              <div style={{ width: '90%', height: 12, marginBottom: 4 }} />
+              <div style={{ width: '80%', height: 12 }} />
+            </div>
+          ))}</>
         )}
         {!suggestionsLoading && pending.length === 0 && (
           <div style={{ fontSize: 11, color: 'var(--ink-faint)', padding: '4px 0', display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -493,12 +549,8 @@ function CzInspector({
 
 // ── Status bar ────────────────────────────────────────────────
 function CzStatus({ wordCount, saveStatus, savedAt, onManualSave, spell, focus }: {
-  wordCount: number;
-  saveStatus: 'saved' | 'saving' | 'unsaved' | 'error';
-  savedAt: Date | null;
-  onManualSave: () => void;
-  spell: string;
-  focus: string;
+  wordCount: number; saveStatus: 'saved' | 'saving' | 'unsaved' | 'error';
+  savedAt: Date | null; onManualSave: () => void; spell: string; focus: string;
 }) {
   const [, tick] = useState(0);
   useEffect(() => {
@@ -540,45 +592,72 @@ export function CzarDesktop() {
   const editor = useCzarEditor();
 
   const [mode, setMode] = useState('edit');
-  const [format, setFormat] = useState<FormatState>({
-    block: 'Body — Fraunces 16', font: 'Fraunces', size: '16',
-    b: false, i: true, u: false, s: false, align: 'left', lh: '1.65',
-  });
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsSection, setSettingsSection] = useState<SectionId>('modes');
   const [savedAt, setSavedAt] = useState<Date | null>(null);
+  const [correctionOpen, setCorrectionOpen] = useState(false);
+  const [writePanelOpen, setWritePanelOpen] = useState(false);
+  const [readAloud, setReadAloud] = useState(false);
+  const [readRate, setReadRate] = useState(1.0);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const dictLang = LANG_MAP[editor.prefs.lang] || 'en-US';
   const dict = useCzDictation(dictLang);
   const drop = useCzDropZone(user?.id ?? undefined, editor.importFile);
 
-  // Track saved timestamp
+  useEffect(() => { if (editor.saveStatus === 'saved') setSavedAt(new Date()); }, [editor.saveStatus]);
+
+  // Stop TTS when leaving voice mode
   useEffect(() => {
-    if (editor.saveStatus === 'saved') setSavedAt(new Date());
-  }, [editor.saveStatus]);
+    if (mode !== 'voice') {
+      window.speechSynthesis?.cancel();
+      setReadAloud(false);
+    } else if (editor.docContent) {
+      startReadAloud();
+    }
+  }, [mode]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function startReadAloud(rate?: number) {
+    if (!window.speechSynthesis) return;
+    window.speechSynthesis.cancel();
+    const r = rate ?? readRate;
+    const utt = new SpeechSynthesisUtterance(stripMarkdown(editor.docContent));
+    utt.rate = r;
+    const voices = window.speechSynthesis.getVoices();
+    const lang = editor.prefs.language_variant === 'british' ? 'en-GB'
+      : editor.prefs.language_variant === 'australian' ? 'en-AU'
+      : editor.prefs.language_variant === 'canadian' ? 'en-CA'
+      : 'en-US';
+    const preferred = voices.find(v => v.lang.startsWith(lang)) || voices[0];
+    if (preferred) utt.voice = preferred;
+    utt.onend = () => setReadAloud(false);
+    utt.onerror = () => setReadAloud(false);
+    window.speechSynthesis.speak(utt);
+    setReadAloud(true);
+  }
 
   // Keyboard shortcuts
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (!(e.metaKey || e.ctrlKey)) return;
-      if (e.key === 's') {
-        e.preventDefault();
-        editor.manualSave();
+      if (e.key === 's') { e.preventDefault(); editor.manualSave(); }
+      if (e.key === 'e') { e.preventDefault(); downloadAsWord(editor.docContent); }
+      if (e.key === 'i') { e.preventDefault(); fileInputRef.current?.click(); }
+      if (e.shiftKey) {
+        if (e.key === 'A') { e.preventDefault(); setWritePanelOpen(v => !v); }
+        if (e.key === 'C') { e.preventDefault(); setCorrectionOpen(true); }
+        if (e.key === 'T') { e.preventDefault(); editor.tighten(); }
       }
-      if (e.key === 'e') {
-        e.preventDefault();
-        downloadDoc(editor.docTitle, editor.docContent);
-      }
+      if (e.key === 'Enter') { e.preventDefault(); editor.continueDoc(); }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [editor.docTitle, editor.docContent, editor.manualSave]);
+  }, [editor.docTitle, editor.docContent, editor.manualSave, editor.tighten, editor.continueDoc]);
 
   const openSettings = useCallback((section: SectionId = 'modes') => {
-    setSettingsSection(section);
-    setSettingsOpen(true);
+    setSettingsSection(section); setSettingsOpen(true);
   }, []);
 
   const handleScrollTo = useCallback((charOffset: number) => {
@@ -586,11 +665,7 @@ export function CzarDesktop() {
     if (!ta) return;
     ta.focus();
     ta.setSelectionRange(charOffset, charOffset);
-    // Approximate scroll position
-    const lineHeight = 24;
-    const charsPerLine = 60;
-    const approxLine = Math.floor(charOffset / charsPerLine);
-    ta.scrollTop = approxLine * lineHeight - 40;
+    ta.scrollTop = Math.floor(charOffset / 60) * 24 - 40;
   }, []);
 
   const handleMicInsert = useCallback((text: string) => {
@@ -599,6 +674,23 @@ export function CzarDesktop() {
     editor.setDocContent(result);
   }, [dict, editor]);
 
+  const handleSelectionAction = useCallback((action: string, selected: string) => {
+    const prompts: Record<string, string> = {
+      'Improve': `Improve this text — make it clearer and more compelling: "${selected}"`,
+      'Shorten': `Shorten this text while preserving all key information: "${selected}"`,
+      'Expand': `Expand this text with more detail and depth: "${selected}"`,
+      'Rewrite': `Rewrite this text in a fresh way, keeping the same meaning: "${selected}"`,
+    };
+    editor.writeFromPrompt(prompts[action] ?? `${action}: "${selected}"`, { mode: 'write' });
+  }, [editor]);
+
+  const handleFileInput = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    editor.importFile({ storage_path: '', filename: f.name, size: f.size, mime: f.type || 'application/octet-stream' });
+    e.target.value = '';
+  }, [editor]);
+
   const langLabel = editor.prefs.lang.toUpperCase().replace('-', '-');
 
   return (
@@ -606,79 +698,107 @@ export function CzarDesktop() {
       <CzTitlebar
         docTitle={editor.docTitle}
         setDocTitle={(t) => editor.setDocTitle(t)}
-        mode={mode}
-        setMode={setMode}
+        mode={mode} setMode={setMode}
         onOpenSettings={openSettings}
-        onDownload={() => downloadDoc(editor.docTitle, editor.docContent)}
+        onDownloadDocx={() => downloadAsWord(editor.docContent)}
+        onDownloadMd={() => downloadMarkdown(editor.docTitle, editor.docContent)}
         saving={editor.saveStatus === 'saving'}
       />
       <CzComposer
-        format={format}
-        setFormat={setFormat}
+        textareaRef={textareaRef}
         dictLive={dict.live}
         onMicToggle={() => dict.live ? dict.stop() : dict.start()}
         onOpenSettings={openSettings}
         onTighten={editor.tighten}
         onContinue={editor.continueDoc}
         onStop={editor.stopStream}
+        onCorrect={() => setCorrectionOpen(true)}
+        onAskCzar={() => setWritePanelOpen(v => !v)}
+        onImport={() => fileInputRef.current?.click()}
         streaming={editor.streamingDoc}
         langLabel={langLabel}
+        onSetDocContent={editor.setDocContent}
       />
+
+      {writePanelOpen && (
+        <CzWritePanel
+          open={writePanelOpen}
+          onClose={() => setWritePanelOpen(false)}
+          onSubmit={(instruction, settings) => editor.writeFromPrompt(instruction, settings)}
+          onCorrect={() => { setCorrectionOpen(true); setWritePanelOpen(false); }}
+          defaultPrefs={{
+            citation_style: editor.prefs.citation_style,
+            writing_level: editor.prefs.writing_level,
+            language_variant: editor.prefs.language_variant,
+          }}
+        />
+      )}
+
       <div className="cz-stage">
         <CzRail
-          pieces={editor.pieces}
-          piecesLoading={editor.piecesLoading}
-          piecesError={editor.piecesError}
-          activePieceId={editor.activePieceId}
-          onSelectPiece={editor.selectPiece}
-          onCreatePiece={editor.createPiece}
-          outline={editor.outline}
-          onScrollTo={handleScrollTo}
-          activeVoice={editor.activeVoice}
-          setVoice={editor.setActiveVoice}
+          pieces={editor.pieces} piecesLoading={editor.piecesLoading}
+          piecesError={editor.piecesError} activePieceId={editor.activePieceId}
+          onSelectPiece={editor.selectPiece} onCreatePiece={editor.createPiece}
+          outline={editor.outline} onScrollTo={handleScrollTo}
+          activeVoice={editor.activeVoice} setVoice={editor.setActiveVoice}
         />
         <CzLeaf
-          content={editor.docContent}
-          onChange={editor.setDocContent}
-          mode={mode}
-          docLoading={editor.docLoading}
-          streaming={editor.streamingDoc}
-          drop={drop}
-          textareaRef={textareaRef}
+          content={editor.docContent} onChange={editor.setDocContent}
+          mode={mode} docLoading={editor.docLoading}
+          streaming={editor.streamingDoc} currentAgent={editor.currentAgent}
+          drop={drop} textareaRef={textareaRef}
+          activePieceId={editor.activePieceId}
+          onAskCzar={() => setWritePanelOpen(true)}
+          onCorrect={() => setCorrectionOpen(true)}
+          onImport={() => fileInputRef.current?.click()}
         />
         <CzInspector
-          voice={editor.activeVoice}
-          length={editor.targetLength}
+          voice={editor.activeVoice} length={editor.targetLength}
           setLength={(l) => editor.setTargetLength(l as any)}
-          audience={editor.audience}
-          setAudience={editor.setAudience}
-          suggestions={editor.suggestions}
-          suggestionsLoading={editor.suggestionsLoading}
-          wordCount={editor.wordCount}
-          readingTime={editor.readingTime}
+          audience={editor.audience} setAudience={editor.setAudience}
+          suggestions={editor.suggestions} suggestionsLoading={editor.suggestionsLoading}
+          wordCount={editor.wordCount} readingTime={editor.readingTime}
           onAcceptSuggestion={editor.acceptSuggestion}
           onDismissSuggestion={editor.dismissSuggestion}
           onTriggerSuggest={editor.triggerSuggest}
         />
       </div>
+
+      {mode === 'voice' && (
+        <div className="cz-voice-player">
+          <span className="cz-voice-player-label">Read aloud</span>
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            <button className="cz-cbtn" onClick={readAloud ? () => { window.speechSynthesis.cancel(); setReadAloud(false); } : () => startReadAloud()}>
+              {readAloud ? '◼ Stop' : '▶ Resume'}
+            </button>
+          </div>
+          <div className="cz-voice-player-rates">
+            {[0.8, 1.0, 1.25, 1.5].map((r) => (
+              <button key={r} className="cz-voice-player-rate"
+                      data-active={readRate === r ? 'true' : undefined}
+                      onClick={() => { setReadRate(r); startReadAloud(r); }}>{r}×</button>
+            ))}
+          </div>
+        </div>
+      )}
+
       <CzStatus
-        wordCount={editor.wordCount}
-        saveStatus={editor.saveStatus}
-        savedAt={savedAt}
-        onManualSave={editor.manualSave}
-        spell={editor.prefs.spell}
-        focus={editor.prefs.focus}
+        wordCount={editor.wordCount} saveStatus={editor.saveStatus}
+        savedAt={savedAt} onManualSave={editor.manualSave}
+        spell={editor.prefs.spell} focus={editor.prefs.focus}
       />
+
       <CzMicPopover
-        open={dict.live}
-        live={dict.live}
-        seconds={dict.seconds}
-        final={dict.final}
-        interim={dict.interim}
-        onClose={() => dict.stop()}
-        onInsert={handleMicInsert}
+        open={dict.live} live={dict.live} seconds={dict.seconds}
+        final={dict.final} interim={dict.interim}
+        onClose={() => dict.stop()} onInsert={handleMicInsert}
         style={{ right: 300, bottom: 60 }}
       />
+
+      {mode === 'edit' && (
+        <CzSelectionToolbar textareaRef={textareaRef} onAction={handleSelectionAction} />
+      )}
+
       {editor.error && (
         <div style={{
           position: 'fixed', bottom: 80, left: '50%', transform: 'translateX(-50%)',
@@ -686,22 +806,33 @@ export function CzarDesktop() {
           borderRadius: 8, fontSize: 13, zIndex: 1000, display: 'flex', gap: 12, alignItems: 'center',
         }}>
           {editor.error}
-          <button onClick={editor.clearError}
-                  style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.4)',
-                           color: '#fff', borderRadius: 4, padding: '2px 8px', cursor: 'pointer', fontSize: 11 }}>
-            dismiss
-          </button>
+          <button onClick={editor.clearError} style={{
+            background: 'transparent', border: '1px solid rgba(255,255,255,0.4)',
+            color: '#fff', borderRadius: 4, padding: '2px 8px', cursor: 'pointer', fontSize: 11,
+          }}>dismiss</button>
         </div>
       )}
+
       <CzSettingsModal
-        open={settingsOpen}
-        onClose={() => setSettingsOpen(false)}
-        activeVoice={editor.activeVoice}
-        setVoice={editor.setActiveVoice}
+        open={settingsOpen} onClose={() => setSettingsOpen(false)}
+        activeVoice={editor.activeVoice} setVoice={editor.setActiveVoice}
         initialSection={settingsSection}
-        prefs={editor.prefs}
-        setPrefs={editor.setPrefs}
+        prefs={editor.prefs} setPrefs={editor.setPrefs}
         userEmail={user?.email}
+      />
+
+      <CorrectionModal
+        open={correctionOpen}
+        onClose={() => setCorrectionOpen(false)}
+        onApplied={(content) => { editor.setDocContent(content); editor.manualSave(); }}
+      />
+
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".txt,.md,.docx,.pdf,.mp3,.wav,.m4a,.jpg,.jpeg,.png"
+        style={{ display: 'none' }}
+        onChange={handleFileInput}
       />
     </div>
   );

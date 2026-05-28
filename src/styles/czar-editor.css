@@ -886,3 +886,257 @@
 .cz-imported[data-status="uploading"] { border-color: var(--primary-dim); }
 .cz-imported[data-status="error"] { border-color: hsl(0 50% 40%); }
 .cz-imported[data-status="error"] .cz-imported-icon { color: hsl(0 60% 65%); }
+
+/* ── CzWritePanel — Instruction panel ── */
+.cz-write-panel {
+  background: var(--paper-2); border-top: 2px solid var(--primary);
+  flex-shrink: 0; overflow: hidden;
+}
+.cz-write-panel-header {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 8px;
+  padding: 9px 16px 8px; border-bottom: 1px solid var(--rule-soft);
+}
+.cz-write-panel-selects { display: flex; flex-wrap: wrap; gap: 5px; flex: 1; min-width: 0; align-items: center; }
+.cz-write-panel-toggles { display: flex; gap: 4px; flex-shrink: 0; align-items: center; }
+.cz-write-panel-body {
+  display: flex; align-items: flex-end; gap: 10px; padding: 10px 16px 12px;
+}
+.cz-write-panel-ta {
+  flex: 1; font-family: var(--f-display); font-size: 14px; font-style: italic;
+  line-height: 1.5; color: var(--ink); background: transparent;
+  border: none; outline: none; resize: none; min-height: 40px;
+  field-sizing: content; padding: 0;
+}
+.cz-write-panel-ta::placeholder { color: var(--ink-faint); }
+.cz-write-panel-submit {
+  font-family: var(--f-display); font-style: italic; font-weight: 700;
+  font-size: 14px; background: var(--primary); color: var(--primary-ink);
+  border: 0; border-radius: 6px; padding: 8px 16px; cursor: pointer;
+  white-space: nowrap; flex-shrink: 0;
+}
+.cz-write-panel-submit:hover { background: var(--primary-dark); }
+.cz-write-panel-submit:disabled { opacity: 0.45; cursor: default; }
+.cz-write-panel-sel {
+  font-family: var(--f-body); font-size: 11.5px; height: 24px;
+  padding: 0 22px 0 8px; background: var(--paper);
+  border: 1px solid var(--rule); color: var(--ink); border-radius: 5px;
+  cursor: pointer; appearance: none; -webkit-appearance: none;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--ink-faint) 50%),
+    linear-gradient(-45deg, transparent 50%, var(--ink-faint) 50%);
+  background-position: calc(100% - 10px) 50%, calc(100% - 6px) 50%;
+  background-size: 4px 4px, 4px 4px; background-repeat: no-repeat;
+}
+.cz-write-panel-tog {
+  font-family: var(--f-mono); font-size: 9px; letter-spacing: 0.14em;
+  text-transform: uppercase; height: 24px; padding: 0 10px;
+  background: transparent; border: 1px solid var(--rule);
+  color: var(--ink-faint); border-radius: 999px; cursor: pointer;
+}
+.cz-write-panel-tog[data-active="true"] {
+  background: var(--primary-pale); border-color: var(--primary-dim); color: var(--primary);
+}
+
+/* ── Download dropdown ── */
+.cz-dl-wrap { position: relative; display: inline-flex; }
+.cz-dl-menu {
+  position: absolute; top: calc(100% + 6px); right: 0;
+  background: var(--paper-2); border: 1px solid var(--rule);
+  border-radius: 8px; padding: 4px; min-width: 168px; z-index: 50;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+  animation: cz-pop-in 140ms ease-out;
+}
+.cz-dl-item {
+  display: flex; align-items: center; gap: 10px; padding: 8px 10px;
+  border-radius: 5px; font-family: var(--f-body); font-size: 12.5px;
+  color: var(--ink); cursor: pointer; font-weight: 500;
+}
+.cz-dl-item:hover { background: var(--hover); }
+.cz-dl-item-glyph {
+  font-family: var(--f-display); font-style: italic; color: var(--primary);
+  width: 18px; text-align: center; font-size: 15px; flex-shrink: 0;
+}
+.cz-dl-item-sub { font-size: 10.5px; color: var(--ink-faint); font-weight: 400; margin-top: 1px; }
+
+/* ── Welcome canvas ── */
+.cz-welcome {
+  display: flex; flex-direction: column; align-items: center;
+  padding: 48px 24px 24px; gap: 20px;
+}
+.cz-welcome-eyebrow {
+  font-family: var(--f-mono); font-size: 9px; letter-spacing: 0.22em;
+  text-transform: uppercase; color: var(--sheet-faint);
+}
+.cz-welcome-h {
+  font-family: var(--f-display); font-style: italic; font-weight: 600;
+  font-size: 20px; color: var(--sheet-ink); letter-spacing: -0.01em;
+  margin: 0; text-align: center; text-wrap: balance;
+}
+.cz-welcome-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+  width: 100%; max-width: 420px;
+}
+.cz-welcome-card {
+  background: var(--paper); border: 1px solid var(--rule);
+  border-radius: 10px; padding: 16px; cursor: pointer;
+  transition: border-color 120ms, background 120ms;
+  display: flex; flex-direction: column; gap: 5px;
+}
+.cz-welcome-card:hover { border-color: var(--ink-ghost); background: var(--hover); }
+.cz-welcome-card-icon {
+  font-family: var(--f-display); font-style: italic; font-weight: 700;
+  font-size: 20px; color: var(--primary); line-height: 1;
+}
+.cz-welcome-card-title {
+  font-family: var(--f-display); font-style: italic; font-weight: 600;
+  font-size: 13.5px; color: var(--sheet-ink);
+}
+.cz-welcome-card-desc {
+  font-family: var(--f-body); font-size: 11px; color: var(--sheet-faint);
+  line-height: 1.35;
+}
+
+/* ── Agent step ribbon ── */
+.cz-agent-step {
+  display: flex; align-items: center; gap: 8px; padding: 6px 10px;
+  margin-bottom: 12px; background: var(--primary-pale);
+  border: 1px solid var(--primary-dim); border-radius: 6px;
+  animation: cz-pop-in 200ms ease-out;
+}
+.cz-agent-step-dot {
+  width: 8px; height: 8px; border-radius: 50%; background: var(--primary);
+  flex-shrink: 0; animation: cz-pulse 1.4s ease-out infinite;
+}
+.cz-agent-step-label {
+  font-family: var(--f-mono); font-size: 9px; letter-spacing: 0.16em;
+  text-transform: uppercase; color: var(--primary);
+}
+
+/* ── Selection toolbar ── */
+.cz-sel-toolbar {
+  position: fixed; z-index: 40;
+  background: var(--paper); border: 1px solid var(--rule);
+  border-radius: 8px; padding: 4px 6px; display: flex; gap: 2px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.32);
+  animation: cz-pop-in 100ms ease-out;
+}
+.cz-sel-toolbar button {
+  font-family: var(--f-body); font-size: 11.5px; font-weight: 500;
+  background: transparent; border: 0; color: var(--ink-soft);
+  padding: 5px 9px; border-radius: 5px; cursor: pointer;
+}
+.cz-sel-toolbar button:hover { background: var(--hover); color: var(--ink); }
+
+/* ── Voice / read-aloud player bar ── */
+.cz-voice-player {
+  padding: 9px 16px; border-top: 1px solid var(--rule-soft);
+  background: var(--paper-2); display: flex; align-items: center;
+  gap: 10px; flex-shrink: 0;
+}
+.cz-voice-player-label {
+  font-family: var(--f-mono); font-size: 9px; letter-spacing: 0.2em;
+  text-transform: uppercase; color: var(--ink-faint);
+}
+.cz-voice-player-rates { display: flex; gap: 4px; }
+.cz-voice-player-rate {
+  font-family: var(--f-mono); font-size: 9.5px; letter-spacing: 0.08em;
+  background: transparent; border: 1px solid var(--rule);
+  color: var(--ink-faint); border-radius: 4px; padding: 4px 7px; cursor: pointer;
+}
+.cz-voice-player-rate[data-active="true"] {
+  background: var(--ink); color: var(--paper); border-color: var(--ink);
+}
+
+/* ── Mobile font & layout fixes ── */
+.cz-m-voice-tag { font-size: 13px !important; }
+.cz-m-status { font-size: 13px !important; min-height: 36px; }
+.cz-m-status span { font-size: 13px !important; }
+.cz-m-tool { height: 46px !important; font-size: 15px !important; min-width: 42px; }
+.cz-m-sheet-h span { font-size: 15px; }
+.cz-m-pref-label { font-size: 12px !important; }
+
+/* ── Academic settings pane ── */
+.cz-academic-segctl { display: flex; flex-wrap: wrap; gap: 5px; }
+.cz-academic-segctl button {
+  font-family: var(--f-mono); font-size: 9px; letter-spacing: 0.12em;
+  text-transform: uppercase; background: transparent; border: 1px solid var(--rule);
+  color: var(--ink-faint); padding: 5px 11px; border-radius: 999px;
+  cursor: pointer; font-weight: 500;
+}
+.cz-academic-segctl button[data-active="true"] {
+  background: var(--primary-pale); border-color: var(--primary-dim); color: var(--primary);
+}
+
+/* ── Toggle rows (writing rules pane) ── */
+.cz-toggle-group-h {
+  font-family: var(--f-mono); font-size: 9px; letter-spacing: 0.2em;
+  text-transform: uppercase; color: var(--primary); padding: 12px 0 6px;
+  border-bottom: 1px solid var(--rule-soft); margin-bottom: 4px;
+}
+.cz-toggle-row {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 16px; padding: 9px 0; border-bottom: 1px solid var(--rule-soft);
+}
+.cz-toggle-row:last-child { border-bottom: 0; }
+.cz-toggle-info { flex: 1; min-width: 0; }
+.cz-toggle-row-label { font-family: var(--f-body); font-size: 13px; font-weight: 500; color: var(--ink); }
+.cz-toggle-row-desc {
+  font-family: var(--f-body); font-size: 11px; color: var(--ink-faint);
+  margin-top: 2px; line-height: 1.35;
+}
+.cz-toggle-switch {
+  width: 38px; height: 22px; border-radius: 999px; flex-shrink: 0;
+  background: var(--rule); border: 0; cursor: pointer; position: relative;
+  transition: background 160ms;
+}
+.cz-toggle-switch::after {
+  content: ""; position: absolute; top: 3px; left: 3px;
+  width: 16px; height: 16px; border-radius: 50%; background: #fff;
+  transition: left 160ms; box-shadow: 0 1px 3px rgba(0,0,0,0.25);
+}
+.cz-toggle-switch[data-active="true"] { background: var(--primary); }
+.cz-toggle-switch[data-active="true"]::after { left: calc(100% - 19px); }
+
+/* ── Mobile write panel sheet ── */
+.cz-m-write-panel { padding: 4px 0 8px; }
+.cz-m-write-ta {
+  font-family: var(--f-display); font-style: italic; font-size: 15px;
+  line-height: 1.5; color: var(--ink); background: var(--paper);
+  border: 1px solid var(--rule); border-radius: 8px; outline: none;
+  resize: none; width: 100%; box-sizing: border-box;
+  padding: 12px 14px; margin: 10px 0; min-height: 72px; field-sizing: content;
+}
+.cz-m-write-ta::placeholder { color: var(--ink-faint); }
+.cz-m-write-selrow {
+  display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px;
+}
+.cz-m-write-sel {
+  font-family: var(--f-body); font-size: 12px; height: 30px;
+  padding: 0 22px 0 9px; background: var(--paper);
+  border: 1px solid var(--rule); color: var(--ink); border-radius: 6px;
+  cursor: pointer; appearance: none; -webkit-appearance: none;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--ink-faint) 50%),
+    linear-gradient(-45deg, transparent 50%, var(--ink-faint) 50%);
+  background-position: calc(100% - 10px) 50%, calc(100% - 6px) 50%;
+  background-size: 4px 4px, 4px 4px; background-repeat: no-repeat;
+  flex: 1; min-width: 100px;
+}
+.cz-m-write-submit {
+  width: 100%; height: 48px; background: var(--primary); color: var(--primary-ink);
+  border: 0; border-radius: 10px; cursor: pointer;
+  font-family: var(--f-display); font-style: italic; font-weight: 700; font-size: 16px;
+}
+.cz-m-write-submit:disabled { opacity: 0.45; cursor: default; }
+
+/* ── Leaf render table support ── */
+.cz-leaf-render table { border-collapse: collapse; width: 100%; margin: 1em 0; font-size: 14px; }
+.cz-leaf-render th, .cz-leaf-render td {
+  border: 1px solid var(--sheet-rule); padding: 6px 10px; text-align: left;
+}
+.cz-leaf-render th { background: hsl(40 14% 91%); font-weight: 600; }
+.cz-leaf-render blockquote {
+  border-left: 3px solid var(--primary); margin: 1em 0; padding: 4px 16px;
+  color: var(--sheet-ink); font-style: italic;
+}
+.cz-leaf-render code { font-family: var(--f-mono); font-size: 0.88em; background: hsl(40 14% 91%); padding: 2px 5px; border-radius: 3px; }
