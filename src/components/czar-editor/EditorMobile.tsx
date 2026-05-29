@@ -582,10 +582,9 @@ export function CzarMobile() {
             />
           </div>
 
-          {/* RIGHT: menu + settings */}
+          {/* RIGHT: menu */}
           <div className="flex items-center gap-0.5 flex-shrink-0">
             <button className="w-9 h-9 flex items-center justify-center text-zinc-900 text-[20px] font-bold hover:bg-zinc-100 rounded-lg" onClick={() => setPiecesSheet(true)}>≡</button>
-            <button className="w-9 h-9 flex items-center justify-center text-zinc-900 text-[17px] hover:bg-zinc-100 rounded-lg" onClick={() => { setSettingsTab('academic'); setSettingsSheet(true); }}>⚙</button>
           </div>
         </div>
       </div>
