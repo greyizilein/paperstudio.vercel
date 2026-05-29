@@ -231,6 +231,8 @@ export interface UseCzarEditorReturn {
   streamOp: StreamOp;
   streamingDoc: boolean;
   currentAgent: string | null;
+  contentMode: CzarMode | null;
+  isDownloadable: boolean;
   tighten: () => void;
   continueDoc: () => void;
   writeFromPrompt: (instruction: string, panelSettings: CzPanelSettings) => void;
@@ -287,11 +289,14 @@ function mapCorrectionKind(type: string): CzSuggestion['kind'] {
   return 'voice';
 }
 
-// Image request detection — mirrors czar-chat's isImageRequest()
-const IMAGE_ACTIONS = /\b(generate|create|make|draw|produce|show me|give me|render|build|design)\b/i;
-const IMAGE_SUBJECTS = /\b(diagram|chart|flowchart|graph|table|timeline|mindmap|image|photo|picture|figure|visualization|infographic)\b/i;
+// Image request detection — matches czar-chat's isImageRequest() exactly
+// 'table', 'chart', 'graph' are excluded — CZAR renders those as markdown, not images
+const IMAGE_ACTIONS = /\b(generate|create|make|draw|produce|show me|render|design|visualize|visualise)\b/i;
+const IMAGE_SUBJECTS = /\b(diagram|flowchart|timeline|mindmap|image|photo|picture|figure|visualization|visualisation|infographic|bar chart|pie chart|line graph|scatter plot|histogram)\b/i;
+const DOC_OVERRIDE = /\b(table|chart|graph|summary|outline|analysis|overview|comparison|list|section|paragraph)\b/i;
 
 function isImageRequest(text: string): boolean {
+  if (DOC_OVERRIDE.test(text)) return false;
   return IMAGE_ACTIONS.test(text) && IMAGE_SUBJECTS.test(text);
 }
 
@@ -515,16 +520,34 @@ export function useCzarEditor(): UseCzarEditorReturn {
   const [streamOp, setStreamOp] = useState<StreamOp>(null);
   const [streamingDoc, setStreamingDoc] = useState(false);
   const [currentAgent, setCurrentAgent] = useState<string | null>(null);
+  const [contentMode, setContentMode] = useState<CzarMode | null>(null);
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const streamTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const startStreamTimeout = useCallback((ctrl: AbortController) => {
+    if (streamTimeoutRef.current) clearTimeout(streamTimeoutRef.current);
+    streamTimeoutRef.current = setTimeout(() => {
+      ctrl.abort();
+      setStreamingDoc(false);
+      setStreamOp(null);
+      setCurrentAgent(null);
+      setError('Request timed out. Please try again — this can happen with very long documents.');
+    }, 240_000); // 4 minutes
+  }, []);
+
+  const clearStreamTimeout = useCallback(() => {
+    if (streamTimeoutRef.current) { clearTimeout(streamTimeoutRef.current); streamTimeoutRef.current = null; }
+  }, []);
 
   const stopStream = useCallback(() => {
     abortRef.current?.abort();
+    clearStreamTimeout();
     setStreamingDoc(false);
     setStreamOp(null);
     setCurrentAgent(null);
     setSuggestionsLoading(false);
-  }, []);
+  }, [clearStreamTimeout]);
 
   const triggerSuggest = useCallback(() => {
     if (!activePieceId || wordCount < 50 || streamingDoc) return;
@@ -580,6 +603,7 @@ export function useCzarEditor(): UseCzarEditorReturn {
     abortRef.current = ctrl;
     setStreamingDoc(true);
     setStreamOp('tighten');
+    startStreamTimeout(ctrl);
     let buffer = '';
 
     streamCzar(
@@ -590,16 +614,18 @@ export function useCzarEditor(): UseCzarEditorReturn {
         settings: buildCzarSettings(prefs, activeVoice, audience, targetLength),
       },
       {
-        onAgentStep: (agent: string) => setCurrentAgent(agent),
+        onAgent: (e) => setCurrentAgent(e.name),
         onDelta: (text) => { buffer += text; setDocContentRaw(buffer); },
         onReplace: (e) => { buffer = e.content; setDocContentRaw(buffer); },
         onDone: () => {
+          clearStreamTimeout();
           setStreamingDoc(false);
           setStreamOp(null);
           setCurrentAgent(null);
           persistContent(buffer);
         },
         onError: (msg) => {
+          clearStreamTimeout();
           setStreamingDoc(false);
           setStreamOp(null);
           setCurrentAgent(null);
@@ -608,7 +634,7 @@ export function useCzarEditor(): UseCzarEditorReturn {
       },
       ctrl.signal,
     );
-  }, [activePieceId, docContent, streamingDoc, prefs, activeVoice, audience, targetLength, persistContent]);
+  }, [activePieceId, docContent, streamingDoc, prefs, activeVoice, audience, targetLength, persistContent, startStreamTimeout, clearStreamTimeout]);
 
   const continueDoc = useCallback(() => {
     if (!activePieceId || streamingDoc) return;
@@ -616,6 +642,8 @@ export function useCzarEditor(): UseCzarEditorReturn {
     abortRef.current = ctrl;
     setStreamingDoc(true);
     setStreamOp('continue');
+    setContentMode('write');
+    startStreamTimeout(ctrl);
     const base = docContent;
     let appended = '';
 
@@ -627,18 +655,20 @@ export function useCzarEditor(): UseCzarEditorReturn {
         settings: buildCzarSettings(prefs, activeVoice, audience, targetLength),
       },
       {
-        onAgentStep: (agent: string) => setCurrentAgent(agent),
+        onAgent: (e) => setCurrentAgent(e.name),
         onDelta: (text) => {
           appended += text;
           setDocContentRaw(base + (appended ? '\n\n' + appended : ''));
         },
         onDone: () => {
+          clearStreamTimeout();
           setStreamingDoc(false);
           setStreamOp(null);
           setCurrentAgent(null);
           persistContent(base + '\n\n' + appended);
         },
         onError: (msg) => {
+          clearStreamTimeout();
           setStreamingDoc(false);
           setStreamOp(null);
           setCurrentAgent(null);
@@ -647,7 +677,7 @@ export function useCzarEditor(): UseCzarEditorReturn {
       },
       ctrl.signal,
     );
-  }, [activePieceId, docContent, streamingDoc, prefs, activeVoice, audience, targetLength, persistContent]);
+  }, [activePieceId, docContent, streamingDoc, prefs, activeVoice, audience, targetLength, persistContent, startStreamTimeout, clearStreamTimeout]);
 
   const writeFromPrompt = useCallback((instruction: string, panelSettings: CzPanelSettings) => {
     if (!activePieceId || streamingDoc || !instruction.trim()) return;
@@ -655,9 +685,11 @@ export function useCzarEditor(): UseCzarEditorReturn {
     abortRef.current = ctrl;
     setStreamingDoc(true);
     setStreamOp('write');
+    startStreamTimeout(ctrl);
 
     // Auto-detect image requests and route to chat mode
     const effectiveMode = isImageRequest(instruction) ? 'chat' : panelSettings.mode;
+    setContentMode(effectiveMode as CzarMode);
     const base = docContent;
     let appended = '';
 
@@ -669,7 +701,7 @@ export function useCzarEditor(): UseCzarEditorReturn {
         settings: buildCzarSettings(prefs, activeVoice, audience, targetLength, panelSettings),
       },
       {
-        onAgentStep: (agent: string) => setCurrentAgent(agent),
+        onAgent: (e) => setCurrentAgent(e.name),
         onDelta: (text) => {
           appended += text;
           setDocContentRaw(base + (appended ? (base ? '\n\n' : '') + appended : ''));
@@ -678,13 +710,24 @@ export function useCzarEditor(): UseCzarEditorReturn {
           appended = e.content;
           setDocContentRaw(base + (base ? '\n\n' : '') + appended);
         },
-        onDone: () => {
+        onDone: (ev) => {
+          clearStreamTimeout();
           setStreamingDoc(false);
           setStreamOp(null);
           setCurrentAgent(null);
-          persistContent(base + (base && appended ? '\n\n' : '') + appended);
+          const finalContent = base + (base && appended ? '\n\n' : '') + appended;
+          persistContent(finalContent);
+          // Auto-infer title from first H1 or first 6 words of instruction
+          if (docTitle === 'Untitled' || !docTitle) {
+            const h1 = finalContent.match(/^# (.+)/m);
+            const inferred = h1
+              ? h1[1].trim().slice(0, 80)
+              : instruction.trim().split(/\s+/).slice(0, 6).join(' ') + (instruction.trim().split(/\s+/).length > 6 ? '…' : '');
+            if (inferred) setDocTitle(inferred);
+          }
         },
         onError: (msg) => {
+          clearStreamTimeout();
           setStreamingDoc(false);
           setStreamOp(null);
           setCurrentAgent(null);
@@ -693,7 +736,7 @@ export function useCzarEditor(): UseCzarEditorReturn {
       },
       ctrl.signal,
     );
-  }, [activePieceId, docContent, streamingDoc, prefs, activeVoice, audience, targetLength, persistContent]);
+  }, [activePieceId, docContent, docTitle, streamingDoc, prefs, activeVoice, audience, targetLength, persistContent, setDocTitle, startStreamTimeout, clearStreamTimeout]);
 
   const importFile = useCallback((attachment: any) => {
     if (!activePieceId) return;
@@ -701,6 +744,8 @@ export function useCzarEditor(): UseCzarEditorReturn {
     abortRef.current = ctrl;
     setStreamingDoc(true);
     setStreamOp('continue');
+    setContentMode('chat');
+    startStreamTimeout(ctrl);
     const base = docContent;
     let appended = '';
 
@@ -713,18 +758,20 @@ export function useCzarEditor(): UseCzarEditorReturn {
         settings: buildCzarSettings(prefs, activeVoice, audience, targetLength),
       },
       {
-        onAgentStep: (agent: string) => setCurrentAgent(agent),
+        onAgent: (e) => setCurrentAgent(e.name),
         onDelta: (text) => {
           appended += text;
           setDocContentRaw((base ? base + '\n\n' : '') + appended);
         },
         onDone: () => {
+          clearStreamTimeout();
           setStreamingDoc(false);
           setStreamOp(null);
           setCurrentAgent(null);
           persistContent((base ? base + '\n\n' : '') + appended);
         },
         onError: (msg) => {
+          clearStreamTimeout();
           setStreamingDoc(false);
           setStreamOp(null);
           setCurrentAgent(null);
@@ -733,7 +780,7 @@ export function useCzarEditor(): UseCzarEditorReturn {
       },
       ctrl.signal,
     );
-  }, [activePieceId, docContent, streamingDoc, prefs, activeVoice, audience, targetLength, persistContent]);
+  }, [activePieceId, docContent, streamingDoc, prefs, activeVoice, audience, targetLength, persistContent, startStreamTimeout, clearStreamTimeout]);
 
   // ── Piece operations ─────────────────────────────────────────────────────
   const selectPiece = useCallback((id: string) => {
@@ -794,7 +841,9 @@ export function useCzarEditor(): UseCzarEditorReturn {
     activeVoice, setActiveVoice, audience, setAudience, targetLength, setTargetLength,
     saveStatus, manualSave,
     suggestions, suggestionsLoading, acceptSuggestion, dismissSuggestion, triggerSuggest,
-    streamOp, streamingDoc, currentAgent, tighten, continueDoc, writeFromPrompt, stopStream, importFile,
+    streamOp, streamingDoc, currentAgent, contentMode,
+    isDownloadable: contentMode !== null && contentMode !== 'chat' && wordCount > 80,
+    tighten, continueDoc, writeFromPrompt, stopStream, importFile,
     prefs, setPrefs,
     error, clearError: () => setError(null),
   };

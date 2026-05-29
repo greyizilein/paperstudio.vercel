@@ -347,15 +347,49 @@ function buildReferencesSection(sources: VerifiedSource[], fullText: string): st
 }
 
 const BANNED_REPLACEMENTS: Array<[RegExp, string]> = [
+  // Single word substitutions
   [/\bdelve(?:s|d|ing)?\b/gi, "examine"],
   [/\btapestry\b/gi, "range"],
   [/\bseamlessly\b/gi, "effectively"],
+  [/\bgroundbreaking\b/gi, "significant"],
+  [/\bcutting[- ]edge\b/gi, "advanced"],
+  [/\bgame[- ]changing\b/gi, "significant"],
+  [/\bsynergy\b/gi, "coordination"],
+  [/\bparadigm[- ]shift\b/gi, "fundamental change"],
+  [/\bholistic\b/gi, "comprehensive"],
+  [/\bvibrant\b/gi, "active"],
+  [/\bshowcase(?:s|d|ing)?\b/gi, "demonstrate"],
+  [/\bunderscore(?:s|d|ing)?\b(?=\s+(?:the|this|that|a|an|how|why|its)\b)/gi, "highlight"],
+  [/\beverag(?:e|es|ed|ing)\b(?!\s+(?:ratio|buyout|point|effect|factor))/gi, "use"],
+  [/\bempowe?r(?:s|ed|ing)?\b(?!\s+(?:women|communities|marginalised|oppressed|workers))/gi, "enable"],
+  // Filler phrase openers — delete entirely
+  [/\bIt is (?:important|worth(?:while)?) to (?:note|remember|consider)[,.]?\s+/gi, ""],
+  [/\bIt (?:goes|should go) without saying[,.]?\s+/gi, ""],
+  [/\bNeedless to say[,.]?\s+/gi, ""],
+  [/\bIt (?:cannot|can't) be overstated[,.]?\s+/gi, ""],
+  [/\bIn today's (?:fast-paced|rapidly changing|modern|complex|digital) (?:world|society|landscape|environment|era)[,.]?\s*/gi, ""],
+  [/\bAs (?:we|one) can see[,.]?\s+/gi, ""],
+  [/\bAs (?:mentioned|stated|discussed|noted) (?:above|previously|earlier|before)[,.]?\s+/gi, ""],
+  [/\bThis (?:essay|paper|report|study) (?:will|aims? to|seeks to|intends to) (?:explore|examine|discuss|analyse|consider|investigate)\b[^.]*\.\s*/gi, ""],
+  // Transition word sentence-starters (keep mid-sentence)
+  [/^Furthermore[,:]?\s+/gim, ""],
+  [/^Moreover[,:]?\s+/gim, ""],
+  [/^Additionally[,:]?\s+/gim, ""],
+  // AI fingerprint multi-word phrases
+  [/\bIn the realm of\b/gi, "In"],
+  [/\bNavigat(?:e|es|ing|ed) the (?:complex )?landscape\b/gi, "address"],
+  [/\bPlays? a (?:crucial|pivotal|vital|important|significant|key) role\b/gi, "is important"],
+  [/\bAt the (?:forefront|cutting edge|vanguard)\b/gi, "leading"],
 ];
 
 function stripBannedPhrases(text: string): string {
   let result = text;
-  for (const [pattern, replacement] of BANNED_REPLACEMENTS) result = result.replace(pattern, replacement);
-  return result.replace(/  +/g, " ").replace(/\n{3,}/g, "\n\n");
+  for (const [pattern, replacement] of BANNED_REPLACEMENTS) {
+    result = result.replace(pattern, replacement);
+  }
+  // Re-capitalise sentence starts left lowercase after phrase deletion
+  result = result.replace(/([.!?]\s+)([a-z])/g, (_, punct, letter) => punct + letter.toUpperCase());
+  return result.replace(/  +/g, " ").replace(/\n{3,}/g, "\n\n").trim();
 }
 
 export interface OrchestratorOptions {
@@ -445,7 +479,11 @@ export async function runOrchestrator(opts: OrchestratorOptions): Promise<string
       if (workspace.criticQuality === "low" || hasHighSeverityIssues) {
         write("agent", { id: "revision", name: "Revision", status: "starting", action: "Applying critical fixes" });
 
-        const revisionSystem = `Fix the following critical issues in the provided draft. Issues: ${JSON.stringify(workspace.criticIssues.filter((i) => i.severity === "high"))}. Output ONLY the fixed draft.`;
+        const highIssues = workspace.criticIssues.filter((i) => i.severity === "high");
+        const revisionSystem = `You are revising a draft to fix critical quality issues while honouring the original plan.
+Original plan: ${JSON.stringify(plan)}
+Issues to fix: ${JSON.stringify(highIssues)}
+Preserve the document's structure, thesis, and all section headings. Output ONLY the corrected full draft — no preamble, no explanation.`;
         const revisedDraft = await callGeminiSync(revisionSystem, workspace.draft, signal);
 
         if (!revisedDraft || revisedDraft.length < workspace.draft.length * 0.5) {

@@ -13,7 +13,9 @@ import { supabase } from '@/integrations/supabase/client';
 import type { CzPanelSettings } from './useCzarEditor';
 
 const LANG_MAP: Record<string, string> = {
-  'en-us': 'en-US', 'en-gb': 'en-GB', 'es': 'es-ES', 'fr': 'fr-FR',
+  british: 'en-GB', american: 'en-US', australian: 'en-AU', canadian: 'en-CA',
+  'en-us': 'en-US', 'en-gb': 'en-GB', 'en-au': 'en-AU', 'en-ca': 'en-CA',
+  'es': 'es-ES', 'fr': 'fr-FR',
 };
 
 async function downloadAsWord(content: string) {
@@ -527,10 +529,14 @@ export function CzarMobile() {
 
           <div className="flex flex-col items-center flex-1 min-w-0 px-2">
             <div className="font-serif italic font-bold text-[16px] text-[#e85d3f]">czar<span className="text-zinc-900 dark:text-white">.</span></div>
-            <span className="font-mono text-[9px] tracking-[0.15em] uppercase text-zinc-500 mt-0.5 truncate w-full text-center"
-                  contentEditable suppressContentEditableWarning onBlur={(e) => { const t = e.currentTarget.textContent?.trim(); if (t && t !== editor.docTitle) editor.setDocTitle(t); }}>
-              {editor.docTitle}
-            </span>
+            <input
+              type="text"
+              maxLength={120}
+              className="font-mono text-[9px] tracking-[0.15em] uppercase text-zinc-500 mt-0.5 truncate w-full text-center bg-transparent border-none outline-none"
+              defaultValue={editor.docTitle}
+              key={editor.docTitle}
+              onBlur={(e) => { const t = e.target.value.trim(); if (t && t !== editor.docTitle) editor.setDocTitle(t); }}
+            />
             {/* Voice chip — tap to open Settings → Voices */}
             <button
               className="font-mono text-[8px] tracking-widest uppercase text-[#e85d3f]/60 hover:text-[#e85d3f] mt-0.5"
@@ -540,7 +546,9 @@ export function CzarMobile() {
           </div>
 
           <div className="flex items-center gap-1">
-            <button className="w-9 h-9 flex items-center justify-center text-lg text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-900 rounded-lg" onClick={() => setDownloadSheet(true)}>↓</button>
+            {editor.isDownloadable && (
+              <button className="w-9 h-9 flex items-center justify-center text-lg text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-900 rounded-lg" onClick={() => setDownloadSheet(true)}>↓</button>
+            )}
             <button className="w-9 h-9 flex items-center justify-center text-lg text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-900 rounded-lg" onClick={() => { setSettingsTab('academic'); setSettingsSheet(true); }}>⚙</button>
           </div>
         </div>

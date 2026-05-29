@@ -63,13 +63,31 @@ const TOGGLE_RULES: Record<string, string> = {
   show_outline_first: "Before writing the body, present the outline as a bulleted list and write '--- BEGIN DRAFT ---' before the first paragraph.",
 };
 
+const LENGTH_SPEC: Record<string, string> = {
+  short: "600–1,000 words",
+  medium: "1,400–2,200 words",
+  long: "3,000–5,000 words",
+  epic: "7,000–12,000 words (structured, multi-section document)",
+};
+
+const LEVEL_SPEC: Record<string, string> = {
+  gcse: "GCSE / secondary school — clear explanations, concrete examples, accessible prose",
+  alevel: "A-Level — analytical depth, some theory, structured argument",
+  undergrad: "undergraduate — academic register, critical engagement with literature, full citations",
+  grad: "graduate / masters — advanced theoretical engagement, original synthesis",
+  phd: "doctoral — expert-level analysis, methodological rigour, contribution to field",
+  professional: "professional / industry — formal but practical, jargon-appropriate to the field",
+};
+
 const PICKER_RULES: Record<string, (val: string) => string> = {
-  language: (v) => `Language variant: ${v === "US" ? "US English" : "UK English"}.`,
+  language: (v) => `Language variant: ${v === "US" ? "US English" : v === "AU" ? "Australian English" : v === "CA" ? "Canadian English" : "UK English"}.`,
   citation_style: (v) =>
     v === "none"
       ? "Citations: omit unless explicitly requested."
       : `Citation style: ${v}. Use ${v} formatting for every in-text citation and the References section.`,
   tone: (v) => `Tone & register: ${v.replace(/-/g, " ")}.`,
+  target_length: (v) => `Target length: ${LENGTH_SPEC[v] ?? "1,400–2,200 words"}. This is a minimum — deliver within 5% of the stated count.`,
+  writing_level: (v) => `Writing level: ${LEVEL_SPEC[v] ?? "undergraduate"}. Calibrate vocabulary, argument depth, and citation density to this level.`,
 };
 
 function buildSettingsManifest(settings: Record<string, any>): string {
@@ -497,9 +515,9 @@ function isImageRequest(message: string): boolean {
       lower,
     );
 
-  // Academic/scientific visualization requests (these should generate actual images, NOT Python code)
+  // Explicit image/diagram terms — excludes 'table', 'chart', 'graph' which CZAR renders as markdown
   const diagramWord =
-    /\b(diagram|chart|flowchart|graph|table|timeline|mindmap|svg|figure|visualization|visualisation|plot|bar chart|pie chart|line graph|scatter plot|histogram|infographic)\b/.test(
+    /\b(diagram|flowchart|timeline|mindmap|svg|figure|visualization|visualisation|infographic|bar chart|pie chart|line graph|scatter plot|histogram)\b/.test(
       lower,
     );
 

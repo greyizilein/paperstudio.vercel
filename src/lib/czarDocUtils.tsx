@@ -2,7 +2,7 @@ import { useState } from "react";
 import {
   Document, Paragraph, TextRun, HeadingLevel, AlignmentType,
   Table, TableRow, TableCell, WidthType,
-  Footer, PageNumber,
+  Footer, PageNumber, ImageRun,
 } from "docx";
 import { Copy, Check, X, Download, Code2, ExternalLink, ZoomIn, Play, Square, AlertCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -167,14 +167,43 @@ function stripYAMLFrontmatter(markdown: string): string {
   return markdown.slice(end + 4).trimStart();
 }
 
+// Decode a base64 image into a docx ImageRun, or return a fallback italic caption paragraph.
+function buildImageParagraph(alt: string, dataUrl: string): Paragraph {
+  try {
+    const m = dataUrl.match(/^data:image\/(png|jpeg|jpg|gif|webp);base64,([A-Za-z0-9+/=]+)$/);
+    if (m) {
+      const ext = m[1] === "jpg" ? "jpeg" : m[1];
+      const binary = atob(m[2]);
+      const buffer = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) buffer[i] = binary.charCodeAt(i);
+      return new Paragraph({
+        alignment: AlignmentType.CENTER,
+        spacing: { before: 240, after: 120 },
+        children: [
+          new ImageRun({
+            data: buffer,
+            transformation: { width: 500, height: 320 },
+            type: ext as "png" | "jpeg" | "gif",
+          }),
+          new TextRun({ break: 1 }),
+          ...(alt ? [new TextRun({ text: `Figure: ${alt}`, italics: true, size: 18, color: "666666" })] : []),
+        ],
+      });
+    }
+  } catch {
+    // Fall through to caption placeholder
+  }
+  return new Paragraph({
+    children: [new TextRun({ text: `[Figure${alt ? `: ${alt}` : ""}]`, italics: true, color: "666666" })],
+    alignment: AlignmentType.CENTER,
+    spacing: { before: 120, after: 120 },
+  });
+}
+
 export function buildDocx(markdown: string): Document {
-  // Strip YAML frontmatter if present (Pandoc-style --- blocks)
   const withoutYAML = stripYAMLFrontmatter(markdown);
-  // Strip base64-embedded images — replace with italic figure caption
-  const cleaned = withoutYAML.replace(
-    /!\[([^\]]*)\]\(data:[^)]+\)/g,
-    (_, alt) => `\n*[Figure${alt ? `: ${alt}` : ""}]*\n`
-  );
+  // We handle base64 images inline during the line-by-line parse below — do NOT strip them here
+  const cleaned = withoutYAML;
 
   const rawLines = cleaned.split("\n");
   const blocks: (Paragraph | Table)[] = [];
@@ -233,6 +262,16 @@ export function buildDocx(markdown: string): Document {
         blocks.push(new Paragraph({ text: "", spacing: { before: 40, after: 120 } }));
       }
       continue;
+    }
+
+    // ── Inline image (base64) ─────────────────────────────────────
+    if (/^!\[.*?\]\(data:image\//.test(trimmed)) {
+      const imgMatch = trimmed.match(/^!\[([^\]]*)\]\((data:image\/[^)]+)\)/);
+      if (imgMatch) {
+        blocks.push(buildImageParagraph(imgMatch[1], imgMatch[2]));
+        i++;
+        continue;
+      }
     }
 
     // ── Headings ─────────────────────────────────────────────────
