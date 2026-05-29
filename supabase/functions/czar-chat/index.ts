@@ -621,7 +621,7 @@ async function processAcademicImageMarkers(
   write("agent", { id: "figures", name: "Figure Generation", status: "working", action: `Generating ${markers.length} figure(s) via Gemini…` });
 
   async function callGeminiImage(prompt: string): Promise<string | null> {
-    for (const model of ["gemini-2.0-flash-preview-image-generation", "gemini-2.0-flash-exp"]) {
+    for (const model of ["gemini-2.5-flash-image"]) {
       if (signal.aborted) return null;
       try {
         const resp = await fetch(

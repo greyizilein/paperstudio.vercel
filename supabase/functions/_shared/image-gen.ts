@@ -4,8 +4,7 @@
 // Uses Google AI's Gemini image generation API directly.
 
 const IMAGE_MODELS = [
-  "gemini-2.0-flash-preview-image-generation",
-  "gemini-2.0-flash-exp",
+  "gemini-2.5-flash-image",
 ];
 
 const MODEL_TIMEOUT_MS = 45_000;
