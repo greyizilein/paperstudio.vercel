@@ -206,14 +206,21 @@ function detectMode(message: string, hasFiles: boolean, requestedMode?: CzarMode
     return "legal";
   }
 
-  // For non-specialist modes, respect what the user selected in the UI
-  if (requestedMode) return requestedMode;
+  // Respect an explicit non-chat mode from the frontend.
+  // "chat" is the frontend default — treat it as "no override" so we can upgrade
+  // to a better mode when the message is clearly a writing task.
+  if (requestedMode && requestedMode !== "chat") return requestedMode;
 
-  // Auto-detect when no explicit mode was sent
+  // Task detection from message content — runs whether mode was "chat" or unset
   if (/\b(correct|fix|improve|proofread|edit)\b/.test(lower) && hasFiles) return "correct";
-  if (/\b(research|find sources|bibliography)\b/.test(lower)) return "research";
-  if (/\b(plan|outline|structure)\b/.test(lower)) return "plan";
-  if (!hasFiles && message.length > 300 && /\b(write|draft|essay|report|paper)\b/.test(lower)) return "write";
+  if (/\b(research|find sources|bibliography|references)\b/.test(lower)) return "research";
+  if (/\b(plan|outline|structure|section breakdown)\b/.test(lower)) return "plan";
+  // Academic task signals — any of these upgrades to write mode for better model routing
+  if (
+    /\b(write|draft|essay|report|paper|analyse|critically|discuss|evaluate|examine|compare|review|assess|explain|describe|summarise|summarize|literature review|methodology|findings|conclusion|introduction|abstract)\b/.test(lower)
+  ) {
+    return "write";
+  }
 
   return "chat";
 }
@@ -583,6 +590,84 @@ async function generateImage(
   }
 
   return null;
+}
+
+// ---------------------------------------------------------------------------
+// Document detection
+// ---------------------------------------------------------------------------
+
+function detectIsDocument(content: string, wc: number): boolean {
+  const hasHeadings = /^#{1,3}\s+.+/m.test(content);
+  const substantialParagraphs = content.split(/\n\n+/).filter((p) => p.trim().split(/\s+/).length > 40).length;
+  return wc >= 200 && (hasHeadings || substantialParagraphs >= 3);
+}
+
+// ---------------------------------------------------------------------------
+// Academic figure generation — replaces [IMAGE: description] markers
+// ---------------------------------------------------------------------------
+
+async function processAcademicImageMarkers(
+  content: string,
+  write: WriteFunction,
+  signal: AbortSignal,
+): Promise<string> {
+  const apiKey = Deno.env.get("GOOGLE_AI_API_KEY");
+  if (!apiKey) return content;
+
+  const markerRe = /\[IMAGE:\s*([^\]]+)\]/gi;
+  const markers = [...content.matchAll(markerRe)];
+  if (markers.length === 0) return content;
+
+  write("agent", { id: "figures", name: "Figure Generation", status: "working", action: `Generating ${markers.length} figure(s) via Gemini…` });
+
+  async function callGeminiImage(prompt: string): Promise<string | null> {
+    for (const model of ["gemini-2.0-flash-preview-image-generation", "gemini-2.0-flash-exp"]) {
+      if (signal.aborted) return null;
+      try {
+        const resp = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: prompt }] }],
+              generationConfig: { responseModalities: ["TEXT", "IMAGE"] },
+            }),
+            signal: AbortSignal.timeout(45_000),
+          },
+        );
+        if (!resp.ok) continue;
+        const data = await resp.json();
+        const parts = data?.candidates?.[0]?.content?.parts ?? [];
+        const img = parts.find((p: { inlineData?: { data?: string; mimeType?: string } }) => p.inlineData?.data);
+        if (img?.inlineData) {
+          return `data:${img.inlineData.mimeType ?? "image/png"};base64,${img.inlineData.data}`;
+        }
+      } catch { /* try next model */ }
+    }
+    return null;
+  }
+
+  let updated = content;
+  for (const match of markers) {
+    if (signal.aborted) break;
+    const description = match[1].trim();
+    const prompt = `Create a professional academic figure for a scholarly paper. Subject: ${description}. Style: clean white background, scientific illustration, high contrast, no decorative elements, professional typography, suitable for a peer-reviewed journal or doctoral dissertation.`;
+    const dataUri = await callGeminiImage(prompt);
+    if (dataUri) {
+      updated = updated.replace(match[0], `\n\n![${description}](${dataUri})\n\n`);
+    } else {
+      updated = updated.replace(match[0], `\n*[Figure: ${description}]*\n`);
+    }
+  }
+
+  write("agent", { id: "figures", name: "Figure Generation", status: "done", action: "Figures complete" });
+
+  if (updated !== content) {
+    write("replace", { content: updated });
+  }
+
+  return updated;
 }
 
 // ---------------------------------------------------------------------------
@@ -1875,6 +1960,12 @@ Rules:
       });
     }
 
+    // ── 12b. Process academic image markers + detect document ────────────
+    if (fullResponse.length > 100) {
+      fullResponse = await processAcademicImageMarkers(fullResponse, write, signal);
+    }
+    const isDocument = detectIsDocument(fullResponse, countWords(fullResponse));
+
     // ── 13. Persist response ──────────────────────────────────────────────
     const wordCount = countWords(fullResponse);
 
@@ -1929,6 +2020,7 @@ Rules:
       conversation_id: conversationId,
       assistant_id: assistantId ?? "",
       words: wordCount,
+      is_document: isDocument,
     });
   } catch (err: any) {
     const isAbort = err?.name === "AbortError";
