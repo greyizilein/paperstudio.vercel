@@ -78,6 +78,8 @@ const DOC_MODES: CzarMode[] = [
   "write", "correct", "research", "literature_review", "legal", "screenplay",
 ];
 
+const WRITER_MODES: CzarMode[] = ["write", "correct", "research", "literature_review", "legal", "screenplay"];
+
 const MODES: { mode: CzarMode; label: string; desc: string; num: number }[] = [
   { num: 1, mode: "chat",             label: "Chat",       desc: "Ask anything, get direct answers" },
   { num: 2, mode: "write",            label: "Write",      desc: "Generate essays, reports, stories, scripts" },
@@ -200,6 +202,11 @@ export default function CzarPage() {
   const [wordBalance, setWordBalance] = useState<number | null>(null);
   const [mobileDashboardOpen, setMobileDashboardOpen] = useState(false);
 
+  // Two-tab view state
+  const [activeView, setActiveView] = useState<'chat' | 'writer'>('chat');
+  const [writerContent, setWriterContent] = useState('');
+  const [writerStreaming, setWriterStreaming] = useState(false);
+
   // User info
   const [userName, setUserName] = useState("");
   const [userInitials, setUserInitials] = useState("U");
@@ -213,6 +220,8 @@ export default function CzarPage() {
   const modeRef = useRef<CzarMode>("chat");
   const agentsRef = useRef<LiveAgent[]>([]);
   const threadEndRef = useRef<HTMLDivElement>(null);
+  const writerEndRef = useRef<HTMLDivElement>(null);
+  const routeToWriterRef = useRef(false);
 
   useEffect(() => { modeRef.current = mode; }, [mode]);
   useEffect(() => { agentsRef.current = agents; }, [agents]);
@@ -269,6 +278,8 @@ export default function CzarPage() {
     if (agentClearRef.current) clearTimeout(agentClearRef.current);
     setStreaming(false);
     setAgents([]);
+    setWriterStreaming(false);
+    routeToWriterRef.current = false;
   }, []);
 
   const newConv = useCallback(() => {
@@ -432,12 +443,22 @@ export default function CzarPage() {
                 .filter((t, i, arr) => arr.indexOf(t) === i)
             );
             if (e.mode) {
+              const detectedMode = e.mode as CzarMode;
               setMessages((prev) =>
                 prev.map((m) =>
-                  m.id === assistantMsgId ? { ...m, mode: e.mode as string } : m
+                  m.id === assistantMsgId ? { ...m, mode: detectedMode } : m
                 )
               );
-              setMode((prev) => (prev === "chat" ? (e.mode as CzarMode) : prev));
+              setMode((prev) => (prev === "chat" ? detectedMode : prev));
+              if (WRITER_MODES.includes(detectedMode)) {
+                routeToWriterRef.current = true;
+                setActiveView('writer');
+                setWriterContent('');
+                setWriterStreaming(true);
+                setTimeout(() => {
+                  writerEndRef.current?.scrollIntoView({ behavior: "instant" as ScrollBehavior });
+                }, 50);
+              }
             }
           },
           onAgent: (e: CzarAgentEvent) => {
@@ -458,6 +479,9 @@ export default function CzarPage() {
                 m.id === assistantMsgId ? { ...m, content: accText } : m
               )
             );
+            if (routeToWriterRef.current) {
+              setWriterContent(accText);
+            }
           },
           onTool: (_e: CzarToolEvent) => {},
           onStatus: (e) => {
@@ -480,6 +504,8 @@ export default function CzarPage() {
               )
             );
             setStreaming(false);
+            setWriterStreaming(false);
+            routeToWriterRef.current = false;
           },
           onBilling: (reason: string) => {
             setUpgradeReason(reason);
@@ -505,6 +531,9 @@ export default function CzarPage() {
                 m.id === assistantMsgId ? { ...m, content: e.content } : m
               )
             );
+            if (routeToWriterRef.current) {
+              setWriterContent(e.content);
+            }
           },
           onDone: (e) => {
             const agentSnapshot = agentsRef.current.filter((a) => a.name);
@@ -516,6 +545,8 @@ export default function CzarPage() {
               )
             );
             setStreaming(false);
+            setWriterStreaming(false);
+            routeToWriterRef.current = false;
             setAgents((prev) =>
               prev.map((a) => (a.status === "working" ? { ...a, status: "done" } : a))
             );
@@ -562,6 +593,8 @@ export default function CzarPage() {
   const stopStream = useCallback(() => {
     abortRef.current?.abort();
     setStreaming(false);
+    setWriterStreaming(false);
+    routeToWriterRef.current = false;
     setMessages((prev) => prev.map((m) => (m.streaming ? { ...m, streaming: false } : m)));
     setAgents((prev) => prev.map((a) => (a.status === "working" ? { ...a, status: "done" } : a)));
   }, []);
@@ -705,56 +738,45 @@ export default function CzarPage() {
                 : "radial-gradient(ellipse at 30% 40%, rgba(134,239,172,.35) 0%, transparent 60%), radial-gradient(ellipse at 75% 70%, rgba(187,247,208,.25) 0%, transparent 55%), #f8fdf9",
             }}
           >
-            {/* Tab bar — Obsidian style */}
+            {/* Tab bar — Chat / Writer */}
             <div
-              className="flex-shrink-0 flex items-stretch border-b border-border/60 bg-background/30 overflow-x-auto"
+              className="flex-shrink-0 flex items-stretch border-b border-border/60 bg-background/30"
               style={{ height: 35 }}
             >
-              {openTabs.map((id) => {
-                const isActive = id === convId || (id === null && convId === null);
-                const title = getTabTitle(id);
-                return (
-                  <div
-                    key={id ?? "__new__"}
-                    onClick={() => {
-                      if (isActive) return;
-                      if (id === null) {
-                        resetStream();
-                        setConvId(null);
-                        setMessages([]);
-                      } else {
-                        selectConv(id);
-                      }
-                    }}
-                    className={[
-                      "group/tab flex items-center gap-1.5 px-3 cursor-pointer flex-shrink-0 max-w-[180px] min-w-0 border-r border-border/40 relative select-none transition-colors",
-                      isActive
-                        ? "bg-background/60 text-foreground"
-                        : "text-muted-foreground/60 hover:text-muted-foreground hover:bg-secondary/40",
-                    ].join(" ")}
-                  >
-                    {isActive && (
-                      <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-primary" />
-                    )}
-                    <FileText size={10} className="flex-shrink-0 opacity-50" />
-                    <span className="text-[11.5px] font-medium truncate">{title}</span>
-                    <button
-                      type="button"
-                      onClick={(e) => closeTab(id, e)}
-                      className="flex-shrink-0 ml-auto p-0.5 rounded opacity-0 group-hover/tab:opacity-60 hover:!opacity-100 hover:bg-secondary transition-all"
-                    >
-                      <X size={9} />
-                    </button>
-                  </div>
-                );
-              })}
               <button
                 type="button"
-                onClick={newConv}
-                className="flex-shrink-0 flex items-center justify-center w-8 text-muted-foreground/50 hover:text-muted-foreground hover:bg-secondary/40 transition-colors"
-                title="New conversation"
+                onClick={() => setActiveView('chat')}
+                className={[
+                  "flex items-center gap-1.5 px-4 text-[11.5px] font-medium border-r border-border/40 relative transition-colors select-none",
+                  activeView === 'chat'
+                    ? "bg-background/60 text-foreground"
+                    : "text-muted-foreground/60 hover:text-muted-foreground hover:bg-secondary/40",
+                ].join(" ")}
               >
-                <Plus size={12} />
+                {activeView === 'chat' && (
+                  <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-primary" />
+                )}
+                <Bot size={10} className="flex-shrink-0 opacity-60" />
+                Chat
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveView('writer')}
+                className={[
+                  "flex items-center gap-1.5 px-4 text-[11.5px] font-medium border-r border-border/40 relative transition-colors select-none",
+                  activeView === 'writer'
+                    ? "bg-background/60 text-foreground"
+                    : "text-muted-foreground/60 hover:text-muted-foreground hover:bg-secondary/40",
+                ].join(" ")}
+              >
+                {activeView === 'writer' && (
+                  <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-primary" />
+                )}
+                <Pen size={10} className="flex-shrink-0 opacity-60" />
+                Writer
+                {writerStreaming && (
+                  <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse ml-0.5" />
+                )}
               </button>
             </div>
 
@@ -770,65 +792,89 @@ export default function CzarPage() {
                   {sidebarOpen ? <PanelLeftClose size={15} /> : <PanelLeftOpen size={15} />}
                 </button>
 
-                {/* Mode picker */}
-                <div className="relative">
-                  <button
-                    onClick={() => setPcModeOpen((o) => !o)}
-                    className="flex items-center gap-1.5 px-2 py-1 rounded text-[12px] text-muted-foreground hover:text-foreground hover:bg-secondary/70 transition-colors"
-                  >
-                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${MODE_COLOURS[mode]}`}>
-                      {modeLabel(mode)}
-                    </span>
-                    <ChevronDown size={10} className="text-muted-foreground/40" />
-                  </button>
+                {activeView === 'chat' ? (
+                  /* Mode picker — Chat view only */
+                  <div className="relative">
+                    <button
+                      onClick={() => setPcModeOpen((o) => !o)}
+                      className="flex items-center gap-1.5 px-2 py-1 rounded text-[12px] text-muted-foreground hover:text-foreground hover:bg-secondary/70 transition-colors"
+                    >
+                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${MODE_COLOURS[mode]}`}>
+                        {modeLabel(mode)}
+                      </span>
+                      <ChevronDown size={10} className="text-muted-foreground/40" />
+                    </button>
 
-                  {pcModeOpen && (
-                    <>
-                      <div className="fixed inset-0 z-[80]" onClick={() => setPcModeOpen(false)} />
-                      <div className="absolute top-full left-0 mt-1 z-[90] w-[280px] bg-background border border-border rounded-xl shadow-2xl overflow-hidden">
-                        {MODES.map((opt) => (
-                          <button
-                            key={opt.mode}
-                            onClick={() => {
-                              setMode(opt.mode);
-                              setPcModeOpen(false);
-                              if (opt.mode === "correct") {
-                                setTimeout(() => setCorrectionModalOpen(true), 150);
-                              }
-                            }}
-                            className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${
-                              mode === opt.mode ? "bg-primary/5" : "hover:bg-secondary/50"
-                            }`}
-                          >
-                            <span
-                              className="w-5 h-5 rounded flex items-center justify-center text-[10px] font-bold flex-shrink-0 border transition-colors"
-                              style={
-                                mode === opt.mode
-                                  ? {
-                                      background: "hsl(var(--primary))",
-                                      borderColor: "hsl(var(--primary))",
-                                      color: "hsl(var(--primary-foreground))",
-                                    }
-                                  : {
-                                      background: "hsl(var(--secondary))",
-                                      borderColor: "hsl(var(--border))",
-                                      color: "hsl(var(--muted-foreground))",
-                                    }
-                              }
+                    {pcModeOpen && (
+                      <>
+                        <div className="fixed inset-0 z-[80]" onClick={() => setPcModeOpen(false)} />
+                        <div className="absolute top-full left-0 mt-1 z-[90] w-[280px] bg-background border border-border rounded-xl shadow-2xl overflow-hidden">
+                          {MODES.map((opt) => (
+                            <button
+                              key={opt.mode}
+                              onClick={() => {
+                                setMode(opt.mode);
+                                setPcModeOpen(false);
+                                if (opt.mode === "correct") {
+                                  setTimeout(() => setCorrectionModalOpen(true), 150);
+                                }
+                              }}
+                              className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${
+                                mode === opt.mode ? "bg-primary/5" : "hover:bg-secondary/50"
+                              }`}
                             >
-                              {opt.num}
-                            </span>
-                            <div className="flex-1 min-w-0">
-                              <div className="text-[12.5px] font-semibold text-foreground">{opt.label}</div>
-                              <div className="text-[10.5px] text-muted-foreground truncate">{opt.desc}</div>
-                            </div>
-                            {mode === opt.mode && <Check size={12} className="text-primary flex-shrink-0" />}
-                          </button>
-                        ))}
-                      </div>
-                    </>
-                  )}
-                </div>
+                              <span
+                                className="w-5 h-5 rounded flex items-center justify-center text-[10px] font-bold flex-shrink-0 border transition-colors"
+                                style={
+                                  mode === opt.mode
+                                    ? {
+                                        background: "hsl(var(--primary))",
+                                        borderColor: "hsl(var(--primary))",
+                                        color: "hsl(var(--primary-foreground))",
+                                      }
+                                    : {
+                                        background: "hsl(var(--secondary))",
+                                        borderColor: "hsl(var(--border))",
+                                        color: "hsl(var(--muted-foreground))",
+                                      }
+                                }
+                              >
+                                {opt.num}
+                              </span>
+                              <div className="flex-1 min-w-0">
+                                <div className="text-[12.5px] font-semibold text-foreground">{opt.label}</div>
+                                <div className="text-[10.5px] text-muted-foreground truncate">{opt.desc}</div>
+                              </div>
+                              {mode === opt.mode && <Check size={12} className="text-primary flex-shrink-0" />}
+                            </button>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                ) : (
+                  /* Writer view toolbar actions */
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => setCorrectionModalOpen(true)}
+                      disabled={!writerContent.trim() || writerStreaming}
+                      className="flex items-center gap-1.5 px-2.5 py-1 rounded text-[12px] text-muted-foreground hover:text-foreground hover:bg-secondary/70 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                      title="Correct document"
+                    >
+                      <Edit3 size={13} />
+                      <span>Correct</span>
+                    </button>
+                    <button
+                      onClick={() => downloadContent(writerContent)}
+                      disabled={!writerContent.trim() || writerStreaming}
+                      className="flex items-center gap-1.5 px-2.5 py-1 rounded text-[12px] text-muted-foreground hover:text-foreground hover:bg-secondary/70 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                      title="Download as Word document"
+                    >
+                      <Download size={13} />
+                      <span>Download</span>
+                    </button>
+                  </div>
+                )}
               </div>
 
               <div className="flex items-center gap-0.5">
@@ -843,35 +889,65 @@ export default function CzarPage() {
               </div>
             </div>
 
-            {/* Thread */}
-            <div className="flex-1 relative min-h-0 overflow-y-auto">
-              {messages.length === 0 && <WelcomeAurora />}
-              <WritingGlow visible={streaming || messages.length > 0} />
-              {messages.length === 0 ? (
-                <WelcomeScreen
-                  userName={userName}
-                  userInitials={userInitials}
-                  avatarUrl={avatarUrl}
-                />
-              ) : (
-                <div className="relative max-w-3xl mx-auto px-4 py-6 pb-10 space-y-8">
-                  {messages.map((msg) => (
-                    <CzarMessage
-                      key={msg.id}
-                      msg={msg}
-                      currentAgents={agents}
-                      userInitials={userInitials}
-                      onContentChange={handleMessageContentChange}
-                      onSelectionAction={handleSelectionAction}
-                      onDismissDiff={handleDismissDiff}
-                      onClarificationAnswer={(answer) => sendMessage(answer, [])}
-                      onDeleteMessage={handleDeleteMessage}
-                    />
-                  ))}
-                  <div ref={threadEndRef} />
-                </div>
-              )}
-            </div>
+            {/* Thread / Writer canvas */}
+            {activeView === 'chat' ? (
+              <div className="flex-1 relative min-h-0 overflow-y-auto">
+                {messages.length === 0 && <WelcomeAurora />}
+                <WritingGlow visible={streaming || messages.length > 0} />
+                {messages.length === 0 ? (
+                  <WelcomeScreen
+                    userName={userName}
+                    userInitials={userInitials}
+                    avatarUrl={avatarUrl}
+                  />
+                ) : (
+                  <div className="relative max-w-3xl mx-auto px-4 py-6 pb-10 space-y-8">
+                    {messages.map((msg) => (
+                      <CzarMessage
+                        key={msg.id}
+                        msg={msg}
+                        currentAgents={agents}
+                        userInitials={userInitials}
+                        onContentChange={handleMessageContentChange}
+                        onSelectionAction={handleSelectionAction}
+                        onDismissDiff={handleDismissDiff}
+                        onClarificationAnswer={(answer) => sendMessage(answer, [])}
+                        onDeleteMessage={handleDeleteMessage}
+                      />
+                    ))}
+                    <div ref={threadEndRef} />
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="flex-1 relative min-h-0 overflow-y-auto">
+                <WritingGlow visible={writerStreaming} />
+                {writerContent.trim() ? (
+                  <div className="relative max-w-3xl mx-auto px-8 py-8 pb-16">
+                    <div className="prose prose-sm dark:prose-invert max-w-none leading-relaxed">
+                      <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+                        {writerContent}
+                      </ReactMarkdown>
+                    </div>
+                    {writerStreaming && (
+                      <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground mt-4">
+                        <Loader2 size={11} className="animate-spin" />
+                        Writing…
+                      </span>
+                    )}
+                    <div ref={writerEndRef} />
+                  </div>
+                ) : (
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <div className="text-center text-muted-foreground/40">
+                      <Pen size={32} className="mx-auto mb-3 opacity-30" />
+                      <p className="text-[13px]">Documents will appear here</p>
+                      <p className="text-[11px] mt-1">Ask CZAR to write, research, or analyse</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Input dock */}
             <div className="flex-shrink-0 bg-background/80 backdrop-blur-sm border-t border-border/40">
