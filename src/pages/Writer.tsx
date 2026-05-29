@@ -2163,7 +2163,7 @@ ${thesisArea}`);
       <div className="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden">
 
       {/* ── MOBILE NAV — CZAR style ── */}
-      <div className="sm:hidden flex items-center h-14 px-4 border-b border-zinc-100 bg-background flex-shrink-0">
+      <div className="sm:hidden flex items-center h-14 px-4 bg-background flex-shrink-0">
         {/* LEFT: paperstudio. */}
         <div className="flex-shrink-0">
           <div className="font-serif italic font-bold text-[20px] leading-none text-primary">ps<span className="text-foreground">.</span></div>
