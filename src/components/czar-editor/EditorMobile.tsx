@@ -1,6 +1,6 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { SlidersHorizontal } from 'lucide-react';
-import ReactMarkdown from 'react-markdown';
+import ReactMarkdown, { defaultUrlTransform } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { Components } from 'react-markdown';
 import { CZ_VOICES } from './editorData';
@@ -13,6 +13,20 @@ import { buildDocx, docxFilename } from '@/lib/czarDocUtils';
 import { Packer } from 'docx';
 import { supabase } from '@/integrations/supabase/client';
 import type { CzPanelSettings } from './useCzarEditor';
+
+// react-markdown strips data: URIs and unknown schemes by default (XSS guard),
+// which blanks the src of inline generated images and our loading/error
+// sentinels. Whitelist them so inline figures actually render.
+const czarUrlTransform = (url: string): string => {
+  if (
+    url.startsWith('data:image/') ||
+    url.startsWith('czar-loading://') ||
+    url.startsWith('czar-error://')
+  ) {
+    return url;
+  }
+  return defaultUrlTransform(url);
+};
 
 // Custom image renderer — handles czar-loading:// and czar-error:// markers
 const czarImgComponents: Components = {
@@ -253,7 +267,7 @@ function CzarChatMessage({ content, isStreaming, imageUrl }: { content: string; 
           <>
             {content && (
               <div className="prose prose-zinc max-w-none prose-p:font-serif prose-p:text-[16px] prose-p:leading-[1.75] prose-headings:font-serif prose-headings:font-bold prose-h1:text-2xl prose-h2:text-xl prose-h3:text-lg">
-                <ReactMarkdown remarkPlugins={[remarkGfm]} components={czarImgComponents}>{content}</ReactMarkdown>
+                <ReactMarkdown remarkPlugins={[remarkGfm]} urlTransform={czarUrlTransform} components={czarImgComponents}>{content}</ReactMarkdown>
                 {isStreaming && <span className="inline-block w-0.5 h-4 bg-[#e85d3f] ml-0.5 animate-pulse align-middle" />}
               </div>
             )}
@@ -303,7 +317,7 @@ function CzarDocumentCard({
           className={`px-4 py-3 bg-white overflow-hidden transition-all duration-300 ${!expanded && !message.isStreaming ? 'max-h-52' : ''}`}
           style={!expanded && !message.isStreaming ? { maskImage: 'linear-gradient(to bottom, black 60%, transparent 100%)' } : {}}>
           <div className="prose prose-zinc prose-sm max-w-none prose-p:font-serif prose-p:text-[15px] prose-p:leading-[1.7] prose-headings:font-serif prose-headings:font-bold prose-h1:text-xl prose-h2:text-lg prose-h3:text-base [&_table]:text-xs [&_table]:w-full [&_th]:bg-zinc-100 [&_th]:px-2 [&_th]:py-1 [&_th]:border [&_th]:border-zinc-300 [&_td]:px-2 [&_td]:py-1 [&_td]:border [&_td]:border-zinc-200">
-            <ReactMarkdown remarkPlugins={[remarkGfm]} components={czarImgComponents}>{message.content}</ReactMarkdown>
+            <ReactMarkdown remarkPlugins={[remarkGfm]} urlTransform={czarUrlTransform} components={czarImgComponents}>{message.content}</ReactMarkdown>
             {message.isStreaming && <span className="inline-block w-0.5 h-4 bg-[#e85d3f] ml-0.5 animate-pulse align-middle" />}
           </div>
         </div>
@@ -635,7 +649,7 @@ export function CzarMobile() {
         <div ref={writerScrollRef} className="flex-1 overflow-y-auto px-5 pt-6 pb-10" {...drop.handlers}>
           {writerContent ? (
             <div className="prose prose-zinc max-w-none prose-p:font-serif prose-p:text-[16px] prose-p:leading-[1.8] prose-headings:font-serif prose-headings:font-bold prose-h1:text-2xl prose-h2:text-xl prose-h3:text-[17px] [&_table]:text-sm [&_table]:w-full [&_th]:bg-zinc-100 [&_th]:px-2 [&_th]:py-1 [&_th]:border [&_th]:border-zinc-300 [&_td]:px-2 [&_td]:py-1 [&_td]:border [&_td]:border-zinc-200">
-              <ReactMarkdown remarkPlugins={[remarkGfm]} components={czarImgComponents}>{writerContent}</ReactMarkdown>
+              <ReactMarkdown remarkPlugins={[remarkGfm]} urlTransform={czarUrlTransform} components={czarImgComponents}>{writerContent}</ReactMarkdown>
               {writerStreaming && <span className="inline-block w-0.5 h-4 bg-[#e85d3f] ml-0.5 animate-pulse align-middle" />}
             </div>
           ) : (

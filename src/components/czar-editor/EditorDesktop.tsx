@@ -1,6 +1,10 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import ReactMarkdown from 'react-markdown';
+import ReactMarkdown, { defaultUrlTransform } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+
+// react-markdown strips data: URIs by default — allow inline base64 images.
+const czarUrlTransform = (url: string): string =>
+  url.startsWith('data:image/') ? url : defaultUrlTransform(url);
 import { CZ_VOICES } from './editorData';
 import { useCzarEditor, type CzPiece, type CzOutlineItem, type CzSuggestion, type CzPanelSettings } from './useCzarEditor';
 import { useCzDictation, useCzDropZone } from './editorHooks';
@@ -418,7 +422,7 @@ function CzLeaf({
         {!docLoading && !showWelcome && mode !== 'edit' && (
           <div className="cz-leaf-render">
             {content && (
-              <ReactMarkdown remarkPlugins={[remarkGfm]} components={{
+              <ReactMarkdown remarkPlugins={[remarkGfm]} urlTransform={czarUrlTransform} components={{
                 img: ({ node, ...props }: any) => (
                   <img {...props} style={{ maxWidth: '100%', borderRadius: 4, display: 'block', margin: '16px 0' }} />
                 ),
