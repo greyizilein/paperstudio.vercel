@@ -16,7 +16,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { usePsTheme } from "@/contexts/PsThemeContext";
 import { PsThemeToggle } from "@/components/ps/PsThemeToggle";
 import {
-  streamCzar, loadMessages,
+  streamCzar, callCzarImage, loadMessages,
   type CzarRequest, type CzarMode, type CzarHandlers,
   type CzarMetaEvent, type CzarAgentEvent, type CzarToolEvent,
   type CzarClarificationEvent, type CorrectionSummaryEvent, type CorrectionChangeEvent,
@@ -24,6 +24,7 @@ import {
 } from "@/lib/czarStream";
 import {
   buildDocx, docxFilename, stripMarkdown, markdownComponents, chatMarkdownComponents,
+  ImageViewer,
 } from "@/lib/czarDocUtils.tsx";
 import { computeParaDiff, type DiffParagraph } from "@/lib/diffUtils";
 import { ConvSidebar } from "@/components/czar/ConvSidebar";
@@ -61,6 +62,7 @@ interface UIMessage {
   correctionOriginalText?: string;
   clarificationQuestions?: string[];
   clarificationTitle?: string;
+  imageUrl?: string;
 }
 
 interface CzarSettings {
@@ -423,6 +425,45 @@ export default function CzarPage() {
       if (agentClearRef.current) {
         clearTimeout(agentClearRef.current);
         agentClearRef.current = null;
+      }
+
+      // ── Image generation shortcut — direct fetch, no SSE ────────────────────
+      if (extraSettings.generateImage === true) {
+        const userMsgId = `u_${Date.now()}`;
+        const assistantMsgId = `a_${Date.now()}`;
+        setMessages((prev) => [
+          ...prev,
+          { id: userMsgId, role: "user", content: text, mode: "chat" },
+          { id: assistantMsgId, role: "assistant", content: "Drawing that for you…", mode: "chat", streaming: true },
+        ]);
+        setStreaming(true);
+        setAgents([{ id: "illustrator", name: "Illustrator", status: "working", action: "Generating image…" }]);
+        const ctrl = new AbortController();
+        abortRef.current = ctrl;
+        try {
+          const { imageUrl, text: caption } = await callCzarImage(text, ctrl.signal);
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === assistantMsgId
+                ? { ...m, content: caption || "", imageUrl: imageUrl ?? undefined, streaming: false }
+                : m
+            )
+          );
+        } catch (e: unknown) {
+          if (e instanceof Error && e.name !== "AbortError") {
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === assistantMsgId
+                  ? { ...m, content: e.message || "Couldn't generate that image.", error: true, streaming: false }
+                  : m
+              )
+            );
+          }
+        } finally {
+          setStreaming(false);
+          setAgents([]);
+        }
+        return;
       }
 
       const userMsgId = `u_${Date.now()}`;
@@ -1798,6 +1839,11 @@ function CzarMessage({
                 <span className="inline-block w-0.5 h-4 bg-current ml-0.5 align-middle animate-pulse" />
               )}
             </div>
+            {msg.imageUrl && !msg.streaming && (
+              <div className="mt-3">
+                <ImageViewer src={msg.imageUrl} alt="Generated image" />
+              </div>
+            )}
             {!msg.streaming && !msg.error && msg.content && (
               <AssistantActions content={msg.content} />
             )}

@@ -360,3 +360,25 @@ export async function loadMessages(conversationId: string): Promise<CzarMessage[
   if (error) throw new Error(error.message);
   return (data ?? []) as CzarMessage[];
 }
+
+// ---------------------------------------------------------------------------
+// Direct image generation (bypasses SSE — returns JSON)
+// ---------------------------------------------------------------------------
+
+export async function callCzarImage(
+  prompt: string,
+  signal?: AbortSignal,
+): Promise<{ imageUrl: string | null; text: string }> {
+  const headers = await getAuthHeaders();
+  const resp = await fetch(`${FUNCTIONS_BASE}/czar-image`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ prompt }),
+    signal,
+  });
+  if (!resp.ok) {
+    const j = await resp.json().catch(() => ({ error: "Image generation failed" }));
+    throw new Error((j as any).error ?? "Image generation failed");
+  }
+  return resp.json();
+}
