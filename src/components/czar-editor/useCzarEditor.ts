@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import {
-  streamCzar, loadConversations, loadMessages,
+  streamCzar, callCzarImage, loadConversations, loadMessages,
   type CzarRequest,
 } from '@/lib/czarStream';
 import type { CzVoice } from './editorData';
@@ -45,6 +45,7 @@ export interface ChatMessage {
   mode: string | null;
   isStreaming?: boolean;
   isDocument?: boolean;
+  imageUrl?: string;
 }
 
 export interface CzEditorPrefs {
@@ -320,6 +321,28 @@ function isImageRequest(text: string): boolean {
   return IMAGE_ACTIONS.test(text) && IMAGE_SUBJECTS.test(text);
 }
 
+// Image-intent detection for the chat thread (Kore-style). A natural request
+// like "add an image of granite" routes to the czar-image endpoint and renders
+// a real <img>. Tuned to avoid hijacking writing tasks or figurative verbs.
+const IMAGE_NOUNS = 'image|picture|photo|photograph|illustration|drawing|sketch|painting|portrait|artwork|visual|render(?:ing)?';
+function detectImageIntent(text: string): boolean {
+  const t = text.toLowerCase().trim();
+  if (/\b(essay|report|paper|article|chapter|section|paragraph|dissertation|thesis|story|script|screenplay|poem|summary|outline|analysis|review|letter|email|abstract|bibliography)\b/.test(t)) {
+    return false;
+  }
+  if (new RegExp(`\\b(${IMAGE_NOUNS})\\s+of\\b`).test(t)) return true;
+  if (new RegExp(`\\b(add|draw|sketch|illustrate|paint|render|generate|create|make|show me|give me|produce|visuali[sz]e)\\b.{0,30}\\b(${IMAGE_NOUNS})\\b`).test(t)) return true;
+  if (/^(draw|sketch|illustrate|paint)\b/.test(t) && !/\b(conclusion|comparison|parallel|distinction|attention|inference|on|from|upon)\b/.test(t)) return true;
+  return false;
+}
+
+// Internal markers czar-chat persists as message content but which must never
+// render to the user (corrections live in the modal; images render as <img>).
+function isInternalPlaceholder(content: string): boolean {
+  const t = (content ?? '').trim();
+  return /^\[Correction analysis:\s*\d+\s*changes?\]$/i.test(t) || t === '[Image generated]';
+}
+
 
 // ── Main hook ─────────────────────────────────────────────────────────────────
 
@@ -444,7 +467,10 @@ export function useCzarEditor(): UseCzarEditorReturn {
     setDocError(null);
     activeMessageIdRef.current = null;
     try {
-      const msgs = await loadMessages(convId);
+      const rawMsgs = await loadMessages(convId);
+      // Drop internal placeholders so correction/image markers never resurface
+      // as chat bubbles or get loaded into the document.
+      const msgs = rawMsgs.filter((m: any) => m.content && !isInternalPlaceholder(m.content));
       const lastAssistant = [...msgs].reverse().find((m: any) => m.role === 'assistant');
       setDocContentRaw(lastAssistant?.content ?? '');
       if (lastAssistant) activeMessageIdRef.current = lastAssistant.id;
@@ -827,6 +853,43 @@ export function useCzarEditor(): UseCzarEditorReturn {
 
   const sendMessage = useCallback((text: string, panelSettings?: Partial<CzPanelSettings>) => {
     if (!activePieceId || streamingDoc || !text.trim()) return;
+
+    // ── Image generation (Kore-style) ──────────────────────────────────────
+    // Explicit flag, or a natural image request with no doc-mode override:
+    // fetch directly from czar-image and render an <img> inline in chat.
+    const wantsImage = (panelSettings as any)?.generateImage === true
+      || (!panelSettings?.mode && detectImageIntent(text));
+    if (wantsImage) {
+      const ctrl = new AbortController();
+      abortRef.current = ctrl;
+      setStreamingDoc(true);
+      setCurrentAgent('Illustrator');
+      const uId = 'user_' + Date.now();
+      const aId = 'ast_' + Date.now();
+      setMessages(prev => [
+        ...prev,
+        { id: uId, role: 'user', content: text, mode: null },
+        { id: aId, role: 'assistant', content: 'Drawing that for you…', mode: 'chat', isStreaming: true },
+      ]);
+      callCzarImage(text, ctrl.signal)
+        .then(({ imageUrl, text: caption }) => {
+          setMessages(prev => prev.map(m => m.id === aId
+            ? { ...m, content: imageUrl ? '' : (caption || 'Couldn’t generate that image.'), imageUrl: imageUrl ?? undefined, isStreaming: false }
+            : m));
+        })
+        .catch((e: any) => {
+          if (e?.name === 'AbortError') return;
+          setMessages(prev => prev.map(m => m.id === aId
+            ? { ...m, content: e?.message || 'Couldn’t generate that image.', isStreaming: false }
+            : m));
+        })
+        .finally(() => {
+          setStreamingDoc(false);
+          setCurrentAgent(null);
+        });
+      return;
+    }
+
     const ctrl = new AbortController();
     abortRef.current = ctrl;
     startStreamTimeout(ctrl);
