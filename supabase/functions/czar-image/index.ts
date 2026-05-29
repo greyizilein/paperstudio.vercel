@@ -1,6 +1,6 @@
 const CORS = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
 const SYSTEM_PROMPT = `You are CZAR's visual assistant. Create clear, well-composed images to accompany writing. For academic or educational content: clean white background, clear labels, professional style suitable for a dissertation or report. For creative content: editorial quality, considered composition. No logos unless explicitly requested.`;
