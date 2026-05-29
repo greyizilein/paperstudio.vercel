@@ -2,13 +2,14 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Moon, Sun, Settings, Plus, X, Mic, Loader2, Check, Copy, ChevronRight,
+  Pen, Download, Edit3,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { PsAvatar } from "@/components/ps/PsAvatar";
 import { usePsTheme } from "@/contexts/PsThemeContext";
 import { supabase } from "@/integrations/supabase/client";
-import { chatMarkdownComponents } from "@/lib/czarDocUtils.tsx";
+import { chatMarkdownComponents, markdownComponents } from "@/lib/czarDocUtils.tsx";
 import type { CzarMode } from "@/lib/czarStream";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -95,6 +96,12 @@ interface Props {
   onNewConv: () => void;
   onSelectConv: (id: string) => void;
   onCorrect?: () => void;
+  // Two-tab props
+  activeView: 'chat' | 'writer';
+  writerContent: string;
+  writerStreaming: boolean;
+  onViewChange: (view: 'chat' | 'writer') => void;
+  onDownload: () => void;
 }
 
 // ── Main component ─────────────────────────────────────────────────────────────
@@ -103,11 +110,14 @@ export function CzarMobileLayout({
   messages, streaming, convId, mode, onModeChange,
   userName, userInitials, avatarUrl,
   onSend, onStop, onNewConv, onSelectConv, onCorrect,
+  activeView, writerContent, writerStreaming, onViewChange, onDownload,
 }: Props) {
   const navigate = useNavigate();
   const { mode: themeMode, toggleMode } = usePsTheme();
   const isDark = themeMode === "dark";
   const threadRef = useRef<HTMLDivElement>(null);
+  const writerRef = useRef<HTMLDivElement>(null);
+  const writerEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -168,6 +178,15 @@ export function CzarMobileLayout({
       if (threadRef.current) threadRef.current.scrollTop = threadRef.current.scrollHeight;
     });
   }, [messages]);
+
+  // Scroll writer panel as content streams in
+  useEffect(() => {
+    if (activeView === 'writer' && writerContent) {
+      requestAnimationFrame(() => {
+        writerEndRef.current?.scrollIntoView({ behavior: "instant" as ScrollBehavior });
+      });
+    }
+  }, [writerContent, activeView]);
 
   const updateSettings = useCallback((patch: Partial<CzarMobileSettings>) => {
     setSettings(prev => { const next = { ...prev, ...patch }; persistSettings(next); return next; });
@@ -281,28 +300,128 @@ export function CzarMobileLayout({
         </div>
       </div>
 
-      {/* ── WELCOME SCREEN — only when no messages ── */}
-      {!hasMessages && (
-        <div className="flex-1 flex flex-col px-5 pt-4 overflow-hidden">
-          <p className="text-[14px] text-muted-foreground mb-2">
-            Hi {userName.split(" ")[0] || "there"}
-          </p>
-          <h1 className="text-[30px] font-extrabold leading-tight text-foreground max-w-[280px]">
-            What's been on your mind lately?
-          </h1>
-        </div>
+      {/* ── TAB BAR — Chat / Writer ── */}
+      <div className="flex-shrink-0 flex border-b border-border/60 bg-background/20 px-1">
+        <button
+          type="button"
+          onClick={() => onViewChange('chat')}
+          className={[
+            "h-10 flex items-center gap-1.5 px-5 text-[13px] font-semibold relative transition-colors",
+            activeView === 'chat'
+              ? "text-foreground"
+              : "text-muted-foreground/60",
+          ].join(" ")}
+        >
+          {activeView === 'chat' && (
+            <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-primary rounded-t-full" />
+          )}
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="opacity-70">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+          </svg>
+          Chat
+        </button>
+        <button
+          type="button"
+          onClick={() => onViewChange('writer')}
+          className={[
+            "h-10 flex items-center gap-1.5 px-5 text-[13px] font-semibold relative transition-colors",
+            activeView === 'writer'
+              ? "text-foreground"
+              : "text-muted-foreground/60",
+          ].join(" ")}
+        >
+          {activeView === 'writer' && (
+            <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-primary rounded-t-full" />
+          )}
+          <Pen size={13} className="opacity-70" />
+          Writer
+          {writerStreaming && (
+            <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse ml-0.5" />
+          )}
+        </button>
+
+        {/* Writer toolbar — download + correct, right-aligned */}
+        {activeView === 'writer' && (
+          <div className="ml-auto flex items-center gap-0.5 pr-2">
+            <button
+              onClick={() => onCorrect?.()}
+              disabled={!writerContent.trim() || writerStreaming}
+              className="h-8 flex items-center gap-1 px-2.5 rounded-lg text-[12px] text-muted-foreground disabled:opacity-30 active:bg-secondary/60 transition-colors"
+            >
+              <Edit3 size={13} />
+              Correct
+            </button>
+            <button
+              onClick={onDownload}
+              disabled={!writerContent.trim() || writerStreaming}
+              className="h-8 flex items-center gap-1 px-2.5 rounded-lg text-[12px] text-muted-foreground disabled:opacity-30 active:bg-secondary/60 transition-colors"
+            >
+              <Download size={13} />
+              .docx
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* ── CHAT VIEW ── */}
+      {activeView === 'chat' && (
+        <>
+          {/* Welcome screen — only when no messages */}
+          {!hasMessages && (
+            <div className="flex-1 flex flex-col px-5 pt-4 overflow-hidden">
+              <p className="text-[14px] text-muted-foreground mb-2">
+                Hi {userName.split(" ")[0] || "there"}
+              </p>
+              <h1 className="text-[30px] font-extrabold leading-tight text-foreground max-w-[280px]">
+                What's been on your mind lately?
+              </h1>
+            </div>
+          )}
+
+          {/* Thread */}
+          {hasMessages && (
+            <div
+              ref={threadRef}
+              className="flex-1 overflow-y-auto overflow-x-hidden px-4 pb-2"
+              style={{ WebkitOverflowScrolling: "touch" as any }}
+            >
+              {messages.map(msg => (
+                <MobileMessage key={msg.id} msg={msg} userInitials={userInitials} streaming={streaming} />
+              ))}
+            </div>
+          )}
+        </>
       )}
 
-      {/* ── THREAD ── */}
-      {hasMessages && (
+      {/* ── WRITER VIEW ── */}
+      {activeView === 'writer' && (
         <div
-          ref={threadRef}
-          className="flex-1 overflow-y-auto overflow-x-hidden px-4 pb-2"
+          ref={writerRef}
+          className="flex-1 overflow-y-auto overflow-x-hidden"
           style={{ WebkitOverflowScrolling: "touch" as any }}
         >
-          {messages.map(msg => (
-            <MobileMessage key={msg.id} msg={msg} userInitials={userInitials} streaming={streaming} />
-          ))}
+          {writerContent.trim() ? (
+            <div className="px-5 py-6 pb-10">
+              <div className="prose prose-sm dark:prose-invert max-w-none leading-relaxed text-[15px]">
+                <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents as any}>
+                  {writerContent}
+                </ReactMarkdown>
+              </div>
+              {writerStreaming && (
+                <div className="flex items-center gap-1.5 mt-4 text-[12px] text-muted-foreground">
+                  <Loader2 size={12} className="animate-spin" />
+                  Writing…
+                </div>
+              )}
+              <div ref={writerEndRef} />
+            </div>
+          ) : (
+            <div className="flex-1 flex flex-col items-center justify-center py-20 px-8 text-center">
+              <Pen size={36} className="text-muted-foreground/20 mb-4" />
+              <p className="text-[14px] text-muted-foreground">Documents appear here</p>
+              <p className="text-[12px] text-muted-foreground/60 mt-1">Ask CZAR to write, research, or analyse</p>
+            </div>
+          )}
         </div>
       )}
 
