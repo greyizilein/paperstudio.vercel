@@ -332,10 +332,10 @@ function CzarDocumentCard({
 // ─── CHAT INPUT ───────────────────────────────────────────────────────────────
 
 function CzChatInput({
-  value, onChange, onSend, onStop, onUpload, onMic, dictLive, streaming, disabled,
+  value, onChange, onSend, onStop, onUpload, onMic, onCorrect, dictLive, streaming, disabled,
 }: {
   value: string; onChange: (v: string) => void; onSend: () => void; onStop: () => void;
-  onUpload: () => void; onMic: () => void; dictLive: boolean; streaming: boolean; disabled?: boolean;
+  onUpload: () => void; onMic: () => void; onCorrect: () => void; dictLive: boolean; streaming: boolean; disabled?: boolean;
 }) {
   const taRef = useRef<HTMLTextAreaElement>(null);
 
@@ -376,6 +376,13 @@ function CzChatInput({
             onPointerDown={(e) => e.preventDefault()}
             onClick={onMic}>
             {dictLive ? '◉' : '◎'}
+          </button>
+          <button
+            className="w-10 h-10 flex items-center justify-center rounded-full text-zinc-800 hover:bg-zinc-100 text-[15px] transition-colors"
+            onPointerDown={(e) => e.preventDefault()}
+            onClick={onCorrect}
+            title="Correct a draft">
+            ✦
           </button>
           <div className="flex-1" />
           {streaming ? (
@@ -608,6 +615,7 @@ export function CzarMobile() {
           onStop={editor.stopStream}
           onUpload={() => fileInputRef.current?.click()}
           onMic={() => dict.live ? dict.stop() : dict.start()}
+          onCorrect={() => setCorrectionOpen(true)}
           dictLive={dict.live}
           streaming={editor.streamingDoc}
         />
