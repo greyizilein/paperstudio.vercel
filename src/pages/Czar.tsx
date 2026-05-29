@@ -173,6 +173,27 @@ function isDownloadIntent(text: string): boolean {
   return hasDocRef && core.split(/\s+/).filter(Boolean).length <= 10;
 }
 
+// Client-side image-intent detection — mirrors Kore's detectDrawIntent so a
+// natural request ("add an image of granite") routes to the image endpoint
+// without needing the explicit /image command. Tuned to avoid hijacking
+// writing tasks ("write an essay … with a diagram").
+const IMAGE_NOUNS = "image|picture|photo|photograph|illustration|drawing|sketch|painting|portrait|artwork|visual|render(?:ing)?";
+function detectImageIntent(text: string): boolean {
+  const t = text.toLowerCase().trim();
+  // Never hijack an explicit writing/document task.
+  if (/\b(essay|report|paper|article|chapter|section|paragraph|dissertation|thesis|story|script|screenplay|poem|summary|outline|analysis|review|letter|email|abstract|bibliography)\b/.test(t)) {
+    return false;
+  }
+  // "… image/picture/photo … of …" — strongest signal.
+  if (new RegExp(`\\b(${IMAGE_NOUNS})\\s+of\\b`).test(t)) return true;
+  // "add/draw/generate/create/make/show me … a(n) image/picture/…"
+  if (new RegExp(`\\b(add|draw|sketch|illustrate|paint|render|generate|create|make|show me|give me|produce|visuali[sz]e)\\b.{0,30}\\b(${IMAGE_NOUNS})\\b`).test(t)) return true;
+  // Bare imperative "draw/sketch/illustrate/paint …" — but not figurative
+  // uses like "draw conclusions" or "draw on prior work".
+  if (/^(draw|sketch|illustrate|paint)\b/.test(t) && !/\b(conclusion|comparison|parallel|distinction|attention|inference|on|from|upon)\b/.test(t)) return true;
+  return false;
+}
+
 // ── Main page ──────────────────────────────────────────────────────────────────
 
 export default function CzarPage() {
@@ -658,9 +679,18 @@ export default function CzarPage() {
         handleDownloadLast();
         return;
       }
-      sendMessage(text, files, { ...buildSettingsMeta(), ...(meta ?? {}) });
+      // Image intent: explicit /image toggle (meta.generateImage) OR a natural
+      // request detected client-side while in chat mode.
+      const wantsImage =
+        meta?.generateImage === true ||
+        (mode === "chat" && files.length === 0 && detectImageIntent(text));
+      sendMessage(text, files, {
+        ...buildSettingsMeta(),
+        ...(meta ?? {}),
+        ...(wantsImage ? { generateImage: true } : {}),
+      });
     },
-    [sendMessage, handleDownloadLast, buildSettingsMeta]
+    [sendMessage, handleDownloadLast, buildSettingsMeta, mode]
   );
 
   // ── Selection / content change handlers ──────────────────────────────────────
