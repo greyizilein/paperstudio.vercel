@@ -215,20 +215,31 @@ function UserBubble({ content }: { content: string }) {
   );
 }
 
-function CzarChatMessage({ content, isStreaming }: { content: string; isStreaming?: boolean }) {
+function CzarChatMessage({ content, isStreaming, imageUrl }: { content: string; isStreaming?: boolean; imageUrl?: string }) {
   return (
-    <div className="flex items-start gap-2.5 mb-4">
-      <span className="font-serif italic font-bold text-[#e85d3f] text-[14px] mt-1 flex-shrink-0 w-5 text-center">§</span>
-      <div className="flex-1 min-w-0">
-        {isStreaming && !content ? (
+    <div className="mb-5">
+      {/* Brand mark sits above the message so content spans the full width */}
+      <span className="block font-serif italic font-bold text-[#e85d3f] text-[15px] mb-1.5 leading-none">§</span>
+      <div className="min-w-0">
+        {isStreaming && !content && !imageUrl ? (
           <div className="flex gap-1 pt-1">
             {[0, 1, 2].map(i => <span key={i} className="w-2 h-2 rounded-full bg-[#e85d3f]/40" style={{ animation: `pulse 1s ease-in-out ${i * 0.2}s infinite` }} />)}
           </div>
         ) : (
-          <div className="prose prose-zinc max-w-none prose-p:font-serif prose-p:text-[16px] prose-p:leading-[1.75] prose-headings:font-serif prose-headings:font-bold prose-h1:text-2xl prose-h2:text-xl prose-h3:text-lg">
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
-            {isStreaming && <span className="inline-block w-0.5 h-4 bg-[#e85d3f] ml-0.5 animate-pulse align-middle" />}
-          </div>
+          <>
+            {content && (
+              <div className="prose prose-zinc max-w-none prose-p:font-serif prose-p:text-[16px] prose-p:leading-[1.75] prose-headings:font-serif prose-headings:font-bold prose-h1:text-2xl prose-h2:text-xl prose-h3:text-lg">
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
+                {isStreaming && <span className="inline-block w-0.5 h-4 bg-[#e85d3f] ml-0.5 animate-pulse align-middle" />}
+              </div>
+            )}
+            {imageUrl && (
+              <div className="mt-1">
+                <img src={imageUrl} alt="Generated image" className="w-full rounded-xl border border-zinc-200 shadow-sm" />
+                <a href={imageUrl} download="czar-image.png" className="inline-block mt-2 font-mono text-[10px] tracking-widest uppercase text-zinc-400 hover:text-[#e85d3f] transition-colors">↓ Download</a>
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>
@@ -627,7 +638,7 @@ export function CzarMobile() {
               )}
               {editor.messages.map((msg) => {
                 if (msg.role === 'user') return <UserBubble key={msg.id} content={msg.content} />;
-                return <CzarChatMessage key={msg.id} content={msg.content} isStreaming={msg.isStreaming} />;
+                return <CzarChatMessage key={msg.id} content={msg.content} isStreaming={msg.isStreaming} imageUrl={msg.imageUrl} />;
               })}
 
               {editor.streamingDoc && editor.currentAgent && (
