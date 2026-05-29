@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { CZ_VOICES } from './editorData';
 import type { CzEditorPrefs, CzPanelSettings } from './useCzarEditor';
 import type { ImportedFile } from './editorHooks';
@@ -613,19 +613,161 @@ export function CzSettingsModal({ open, onClose, activeVoice, setVoice, initialS
   );
 }
 
+// ── Rubric pane (mobile) ──────────────────────────────────────
+function CzRubricPane({
+  rubricCriteria, setRubricCriteria,
+}: {
+  rubricCriteria: any[] | null;
+  setRubricCriteria: (c: any[] | null) => Promise<void>;
+}) {
+  const [text, setText] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const fileRef = React.useRef<HTMLInputElement>(null);
+
+  const extract = async (payload: { text?: string; file_base64?: string; filename?: string; mime?: string }) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const { supabase } = await import('@/integrations/supabase/client');
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      const resp = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/czar-rubric-extract`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token ?? import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+            apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+          },
+          body: JSON.stringify(payload),
+        },
+      );
+      const data = await resp.json();
+      if (!resp.ok || data.error) throw new Error(data.error ?? 'Extraction failed');
+      if (!Array.isArray(data.criteria) || data.criteria.length === 0) throw new Error('No criteria found in the document');
+      await setRubricCriteria(data.criteria);
+      setText('');
+    } catch (e: any) {
+      setError(e?.message ?? 'Failed to extract criteria');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleFile = async (f: File) => {
+    const mime = f.type || 'application/octet-stream';
+    const arrayBuffer = await f.arrayBuffer();
+    const bytes = new Uint8Array(arrayBuffer);
+    let binary = '';
+    for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+    const base64 = btoa(binary);
+    await extract({ file_base64: base64, filename: f.name, mime });
+  };
+
+  if (rubricCriteria && rubricCriteria.length > 0) {
+    return (
+      <div style={{ paddingBottom: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+          <div style={{ fontFamily: 'var(--f-body)', fontSize: 13, fontWeight: 600, color: 'var(--ink)' }}>
+            {rubricCriteria.length} criteria active
+          </div>
+          <button
+            onClick={() => setRubricCriteria(null)}
+            style={{ fontFamily: 'var(--f-mono)', fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#e85d3f', background: 'none', border: 'none', cursor: 'pointer', padding: '4px 8px' }}>
+            Clear
+          </button>
+        </div>
+        {rubricCriteria.map((c: any, i: number) => (
+          <div key={i} style={{ padding: '10px 0', borderBottom: '1px solid var(--rule-soft)' }}>
+            <div style={{ fontFamily: 'var(--f-body)', fontSize: 13, fontWeight: 600, color: 'var(--ink)', marginBottom: 3 }}>
+              {c.category}
+              {c.weight_percent != null && (
+                <span style={{ marginLeft: 6, fontWeight: 400, fontSize: 11, color: '#e85d3f' }}>{c.weight_percent}%</span>
+              )}
+            </div>
+            {c.description && (
+              <div style={{ fontFamily: 'var(--f-body)', fontSize: 11, color: 'var(--ink-faint)', lineHeight: 1.5 }}>{c.description}</div>
+            )}
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ paddingBottom: 8 }}>
+      <p style={{ fontFamily: 'var(--f-body)', fontSize: 12, color: 'var(--ink-faint)', marginBottom: 14, lineHeight: 1.5 }}>
+        Upload your assignment brief or marking rubric. CZAR will extract the criteria and use them to guide every piece of writing for this conversation.
+      </p>
+
+      <button
+        onClick={() => fileRef.current?.click()}
+        disabled={loading}
+        style={{
+          width: '100%', padding: '12px 16px', marginBottom: 10,
+          background: 'var(--paper-2)', border: '1px dashed var(--rule)',
+          borderRadius: 10, cursor: 'pointer', fontFamily: 'var(--f-body)',
+          fontSize: 13, color: 'var(--ink)', textAlign: 'center' as const,
+          opacity: loading ? 0.5 : 1,
+        }}>
+        {loading ? 'Extracting criteria…' : '↑ Upload rubric (PDF, DOCX, image)'}
+      </button>
+      <input ref={fileRef} type="file" accept=".pdf,.docx,.txt,.md,.jpg,.jpeg,.png" className="hidden"
+        onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) handleFile(f); }} />
+
+      <div style={{ fontFamily: 'var(--f-mono)', fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--ink-faint)', marginBottom: 6 }}>
+        or paste the rubric text
+      </div>
+      <textarea
+        value={text} onChange={(e) => setText(e.target.value)}
+        placeholder="Paste your marking criteria, assessment brief, or rubric here…"
+        rows={5} disabled={loading}
+        style={{
+          width: '100%', padding: '10px 12px', background: 'var(--paper-2)',
+          border: '1px solid var(--rule)', borderRadius: 8, resize: 'vertical' as const,
+          fontFamily: 'var(--f-body)', fontSize: 13, color: 'var(--ink)',
+          outline: 'none', boxSizing: 'border-box' as const,
+        }}
+      />
+      {text.trim() && (
+        <button
+          onClick={() => extract({ text: text.trim() })}
+          disabled={loading}
+          style={{
+            marginTop: 8, width: '100%', padding: '11px 16px',
+            background: '#e85d3f', color: '#fff', border: 'none',
+            borderRadius: 8, fontFamily: 'var(--f-body)', fontSize: 14,
+            fontWeight: 600, cursor: 'pointer', opacity: loading ? 0.5 : 1,
+          }}>
+          {loading ? 'Extracting…' : 'Extract criteria →'}
+        </button>
+      )}
+      {error && (
+        <div style={{ marginTop: 8, padding: '8px 12px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 6, fontFamily: 'var(--f-body)', fontSize: 12, color: '#dc2626' }}>
+          {error}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Mobile settings sheet ─────────────────────────────────────
 interface MobileSettingsProps {
   open: boolean; onClose: () => void;
   activeVoice: string; setVoice: (id: string) => void;
   prefs: CzEditorPrefs; setPrefs: (patch: Partial<CzEditorPrefs>) => void;
-  initialTab?: 'voices' | 'academic' | 'rules';
+  initialTab?: 'voices' | 'academic' | 'rules' | 'rubric';
+  rubricCriteria?: any[] | null;
+  setRubricCriteria?: (c: any[] | null) => Promise<void>;
 }
 
-export function CzMobileSettings({ open, onClose, initialTab, activeVoice, setVoice, prefs, setPrefs }: MobileSettingsProps) {
-  const [tab, setTab] = useState<'voices' | 'academic' | 'rules'>(initialTab ?? 'voices');
+export function CzMobileSettings({ open, onClose, initialTab, activeVoice, setVoice, prefs, setPrefs, rubricCriteria, setRubricCriteria }: MobileSettingsProps) {
+  const [tab, setTab] = useState<'voices' | 'academic' | 'rules' | 'rubric'>(initialTab ?? 'voices');
 
   useEffect(() => {
-    if (open && initialTab) setTab(initialTab);
+    if (open && initialTab) setTab(initialTab as any);
   }, [open, initialTab]);
 
   if (!open) return null;
@@ -653,9 +795,10 @@ export function CzMobileSettings({ open, onClose, initialTab, activeVoice, setVo
           <button className="cz-m-sheet-close" onClick={onClose}>Done</button>
         </div>
         <div className="cz-m-sheet-tabs">
-          {(['voices', 'academic', 'rules'] as const).map((v) => (
-            <button key={v} data-active={tab === v ? 'true' : undefined} onClick={() => setTab(v)}>
-              {v.charAt(0).toUpperCase() + v.slice(1)}
+          {(['voices', 'academic', 'rules', 'rubric'] as const).map((v) => (
+            <button key={v} data-active={tab === v ? 'true' : undefined} onClick={() => setTab(v as any)}
+              style={v === 'rubric' && rubricCriteria && rubricCriteria.length > 0 ? { color: '#e85d3f' } : undefined}>
+              {v === 'rubric' ? (rubricCriteria && rubricCriteria.length > 0 ? `Rubric ✓` : 'Rubric') : v.charAt(0).toUpperCase() + v.slice(1)}
             </button>
           ))}
         </div>
@@ -753,6 +896,15 @@ export function CzMobileSettings({ open, onClose, initialTab, activeVoice, setVo
               </div>
             ))}
           </div>
+        )}
+
+        {tab === 'rubric' && setRubricCriteria && (
+          <CzRubricPane rubricCriteria={rubricCriteria ?? null} setRubricCriteria={setRubricCriteria} />
+        )}
+        {tab === 'rubric' && !setRubricCriteria && (
+          <p style={{ fontFamily: 'var(--f-body)', fontSize: 12, color: 'var(--ink-faint)', padding: '8px 4px' }}>
+            Open a conversation first to attach a rubric.
+          </p>
         )}
       </div>
     </div>

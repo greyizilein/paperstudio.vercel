@@ -168,6 +168,7 @@ function buildCzarSettings(
   audience: string,
   targetLength: string,
   override?: Partial<CzPanelSettings>,
+  rubricCriteria?: any[] | null,
 ): Record<string, unknown> {
   const activeToggles: Record<string, boolean> = {};
   for (const [prefKey, ruleKey] of Object.entries(TOGGLE_MAP)) {
@@ -188,6 +189,7 @@ function buildCzarSettings(
     ...(prefs.toggle_online_lookup || override?.online_lookup ? { online_lookup: true } : {}),
     ...(prefs.toggle_auto_detect_domain ? { auto_detect_domain: true } : {}),
     ...(prefs.toggle_save_checkpoints ? { save_checkpoints: true } : {}),
+    ...(rubricCriteria && rubricCriteria.length > 0 ? { rubric_criteria: rubricCriteria } : {}),
   };
 }
 
@@ -258,6 +260,10 @@ export interface UseCzarEditorReturn {
   // Prefs
   prefs: CzEditorPrefs;
   setPrefs: (patch: Partial<CzEditorPrefs>) => void;
+
+  // Rubric (per-conversation marking criteria)
+  rubricCriteria: any[] | null;
+  setRubricCriteria: (criteria: any[] | null) => Promise<void>;
 
   // Global error
   error: string | null;
@@ -375,6 +381,7 @@ export function useCzarEditor(): UseCzarEditorReturn {
   const [activeVoice, setActiveVoiceRaw] = useState('newsletter');
   const [audience, setAudienceRaw] = useState('');
   const [targetLength, setTargetLengthRaw] = useState<'short' | 'medium' | 'long' | 'epic'>('medium');
+  const [rubricCriteria, setRubricCriteriaRaw] = useState<any[] | null>(null);
 
   const activeMessageIdRef = useRef<string | null>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -455,7 +462,7 @@ export function useCzarEditor(): UseCzarEditorReturn {
 
       const { data: conv } = await supabase
         .from('czar_conversations')
-        .select('title, checkpoint_data')
+        .select('title, checkpoint_data, rubric_criteria')
         .eq('id', convId)
         .single();
       if (conv) {
@@ -464,6 +471,7 @@ export function useCzarEditor(): UseCzarEditorReturn {
         if (meta.voice_id) setActiveVoiceRaw(meta.voice_id);
         if (meta.audience) setAudienceRaw(meta.audience);
         if (meta.length) setTargetLengthRaw(meta.length);
+        setRubricCriteriaRaw((conv as any).rubric_criteria ?? null);
       }
       setSaveStatus('saved');
     } catch (e: any) {
@@ -514,6 +522,14 @@ export function useCzarEditor(): UseCzarEditorReturn {
         .then(() => {});
     }
   }, [activePieceId, activeVoice, audience]);
+
+  const setRubricCriteria = useCallback(async (criteria: any[] | null) => {
+    setRubricCriteriaRaw(criteria);
+    if (!activePieceId) return;
+    await supabase.from('czar_conversations')
+      .update({ rubric_criteria: criteria })
+      .eq('id', activePieceId);
+  }, [activePieceId]);
 
   // ── Derived ──────────────────────────────────────────────────────────────
   const wordCount = useMemo(() => countWords(docContent), [docContent]);
@@ -589,7 +605,7 @@ export function useCzarEditor(): UseCzarEditorReturn {
         conversation_id: activePieceId,
         user_message: docContent,
         mode: 'correct',
-        settings: buildCzarSettings(prefs, activeVoice, audience, targetLength),
+        settings: buildCzarSettings(prefs, activeVoice, audience, targetLength, undefined, rubricCriteria),
       },
       {
         onCorrectionChange: (e) => {
@@ -638,7 +654,7 @@ export function useCzarEditor(): UseCzarEditorReturn {
         conversation_id: activePieceId,
         user_message: `Tighten this document. Maintain the voice and meaning — cut unnecessary words, improve sentence rhythm, sharpen the prose:\n\n${docContent}`,
         mode: 'write',
-        settings: buildCzarSettings(prefs, activeVoice, audience, targetLength),
+        settings: buildCzarSettings(prefs, activeVoice, audience, targetLength, undefined, rubricCriteria),
       },
       {
         onAgent: (e) => setCurrentAgent(e.name),
@@ -679,7 +695,7 @@ export function useCzarEditor(): UseCzarEditorReturn {
         conversation_id: activePieceId,
         user_message: `Continue this document from where it ends. Match the established voice and style:\n\n${base}`,
         mode: 'write',
-        settings: buildCzarSettings(prefs, activeVoice, audience, targetLength),
+        settings: buildCzarSettings(prefs, activeVoice, audience, targetLength, undefined, rubricCriteria),
       },
       {
         onAgent: (e) => setCurrentAgent(e.name),
@@ -725,7 +741,7 @@ export function useCzarEditor(): UseCzarEditorReturn {
         conversation_id: activePieceId,
         user_message: instruction,
         mode: effectiveMode as any,
-        settings: buildCzarSettings(prefs, activeVoice, audience, targetLength, panelSettings),
+        settings: buildCzarSettings(prefs, activeVoice, audience, targetLength, panelSettings, rubricCriteria),
       },
       {
         onAgent: (e) => setCurrentAgent(e.name),
@@ -782,7 +798,7 @@ export function useCzarEditor(): UseCzarEditorReturn {
         user_message: 'I have uploaded a document for you to read. Please read it carefully, tell me what you understand from it, and ask me what you would like to do with it.',
         attachments: [attachment],
         mode: 'chat',
-        settings: buildCzarSettings(prefs, activeVoice, audience, targetLength),
+        settings: buildCzarSettings(prefs, activeVoice, audience, targetLength, undefined, rubricCriteria),
       },
       {
         onAgent: (e) => setCurrentAgent(e.name),
@@ -837,7 +853,7 @@ export function useCzarEditor(): UseCzarEditorReturn {
         conversation_id: activePieceId,
         user_message: text,
         mode: effectiveMode as any,
-        settings: buildCzarSettings(prefs, activeVoice, audience, targetLength, panelSettings as any),
+        settings: buildCzarSettings(prefs, activeVoice, audience, targetLength, panelSettings as any, rubricCriteria),
       },
       {
         onAgent: (e) => setCurrentAgent(e.name),
@@ -911,7 +927,7 @@ export function useCzarEditor(): UseCzarEditorReturn {
         conversation_id: activePieceId,
         user_message: `Tighten this document. Maintain voice and meaning — cut unnecessary words, improve sentence rhythm, sharpen the prose:\n\n${content}`,
         mode: 'write',
-        settings: buildCzarSettings(prefs, activeVoice, audience, targetLength),
+        settings: buildCzarSettings(prefs, activeVoice, audience, targetLength, undefined, rubricCriteria),
       },
       {
         onAgent: (e) => setCurrentAgent(e.name),
@@ -1011,6 +1027,7 @@ export function useCzarEditor(): UseCzarEditorReturn {
     tighten, continueDoc, writeFromPrompt, stopStream, importFile,
     messages, sendMessage, tightenMessage,
     prefs, setPrefs,
+    rubricCriteria, setRubricCriteria,
     error, clearError: () => setError(null),
   };
 }

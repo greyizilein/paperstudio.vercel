@@ -1529,6 +1529,44 @@ async function runMain(
       // non-fatal
     }
 
+    // ── 9b. Project context — inject sibling document summaries ──────────────
+    let projectContextBlock = "";
+    try {
+      const { data: conv } = await svc
+        .from("czar_conversations")
+        .select("project_id")
+        .eq("id", conversationId)
+        .maybeSingle();
+      const projectId = conv?.project_id;
+      if (projectId) {
+        const { data: projectDocs } = await svc
+          .from("czar_project_documents")
+          .select("document_type, summary, czar_conversations(title)")
+          .eq("project_id", projectId)
+          .neq("conversation_id", conversationId)
+          .not("summary", "is", null)
+          .limit(6);
+        if (projectDocs && projectDocs.length > 0) {
+          const lines = [
+            "\n\n## PROJECT CONTEXT — RELATED DOCUMENTS",
+            "This conversation is part of a multi-document project. The following documents have already been written:",
+            "",
+          ];
+          for (const d of projectDocs) {
+            const title = (d.czar_conversations as any)?.title ?? "Untitled";
+            const type = d.document_type ?? "document";
+            lines.push(`**${title}** (${type})`);
+            if (d.summary) lines.push(d.summary.slice(0, 300));
+            lines.push("");
+          }
+          lines.push("Maintain consistency with the above: terminology, argument positions, citation style, and voice.");
+          projectContextBlock = lines.join("\n");
+        }
+      }
+    } catch {
+      // non-fatal — project context is additive
+    }
+
     // ── 10. Build system prompt ───────────────────────────────────────────
     const settingsBlock = req.settings ? buildSettingsManifest(req.settings) : "";
     const directive = modeDirective(mode, hasFiles);
@@ -1570,7 +1608,34 @@ async function runMain(
     // Load checkpoint for the active mode and inject into system prompt
     const modeCheckpointBlock = await loadModeCheckpoint(userId, mode, svc);
 
+    // Rubric-aware writing block — injected with HIGHEST priority after the brain prompt
+    let rubricBlock = "";
+    const rubricCriteria = req.settings?.rubric_criteria;
+    if (Array.isArray(rubricCriteria) && rubricCriteria.length > 0) {
+      const lines: string[] = [
+        "\n\n## MARKING RUBRIC — MANDATORY COMPLIANCE",
+        "The user has provided their assignment's official marking criteria.",
+        "You MUST satisfy these criteria in every written output.",
+        "Before finishing any draft, mentally check each criterion below.\n",
+      ];
+      for (const c of rubricCriteria as any[]) {
+        const weight = c.weight_percent != null ? ` (${c.weight_percent}% of marks)` : "";
+        lines.push(`### ${c.category}${weight}`);
+        if (c.description) lines.push(c.description);
+        if (c.distinction) lines.push(`• **Distinction**: ${c.distinction}`);
+        if (c.merit) lines.push(`• **Merit**: ${c.merit}`);
+        if (c.pass) lines.push(`• **Pass threshold**: ${c.pass}`);
+        if (c.fail) lines.push(`• **Avoid (fail criteria)**: ${c.fail}`);
+        lines.push("");
+      }
+      const rubricNotes = req.settings?.rubric_notes as string | undefined;
+      if (rubricNotes) lines.push(`**Additional requirements:** ${rubricNotes}`);
+      rubricBlock = lines.join("\n");
+    }
+
     const systemParts = [CZAR_BRAIN_SYSTEM_PROMPT];
+    if (rubricBlock) systemParts.push(rubricBlock);
+    if (projectContextBlock) systemParts.push(projectContextBlock);
     if (memoryBlock) systemParts.push(memoryBlock);
     if (settingsBlock) systemParts.push(settingsBlock);
     if (modeCheckpointBlock) systemParts.push(modeCheckpointBlock);
@@ -2002,6 +2067,52 @@ Rules:
         .eq("id", conversationId);
     } catch {
       // non-fatal
+    }
+
+    // ── 13b. Auto-generate project document summary (non-blocking) ──────────
+    if (isDocument && wordCount > 200) {
+      (async () => {
+        try {
+          const { data: convRow } = await svc
+            .from("czar_conversations")
+            .select("project_id, title")
+            .eq("id", conversationId)
+            .maybeSingle();
+          if (!convRow?.project_id) return;
+
+          const GOOGLE_KEY = Deno.env.get("GEMINI_API_KEY") || Deno.env.get("GOOGLE_API_KEY");
+          if (!GOOGLE_KEY) return;
+          const summaryResp = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=${GOOGLE_KEY}`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                contents: [{
+                  role: "user",
+                  parts: [{ text: `Summarise this document in 2–3 sentences for cross-document context. Be specific: cover the main argument, key terms defined, and any positions taken that future documents must remain consistent with.\n\nTitle: ${convRow.title ?? "Untitled"}\n\n${fullResponse.slice(0, 6000)}` }],
+                }],
+                generationConfig: { temperature: 0.2, maxOutputTokens: 256 },
+              }),
+            },
+          );
+          const summaryData = await summaryResp.json();
+          const summary = summaryData?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+          if (!summary) return;
+
+          await svc.from("czar_project_documents").upsert(
+            {
+              project_id: convRow.project_id,
+              conversation_id: conversationId,
+              document_type: mode === "literature_review" ? "literature_review" : mode === "research" ? "research" : "chapter",
+              summary: summary.trim(),
+            },
+            { onConflict: "project_id,conversation_id" },
+          );
+        } catch {
+          // non-fatal
+        }
+      })();
     }
 
     // ── 14. Deduct words ──────────────────────────────────────────────────
