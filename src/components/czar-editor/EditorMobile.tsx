@@ -1,4 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
+import { SlidersHorizontal } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { CZ_VOICES } from './editorData';
@@ -332,10 +333,10 @@ function CzarDocumentCard({
 // ─── CHAT INPUT ───────────────────────────────────────────────────────────────
 
 function CzChatInput({
-  value, onChange, onSend, onStop, onUpload, onMic, onCorrect, dictLive, streaming, disabled,
+  value, onChange, onSend, onStop, onUpload, onMic, onCorrect, onSettings, dictLive, streaming, disabled,
 }: {
   value: string; onChange: (v: string) => void; onSend: () => void; onStop: () => void;
-  onUpload: () => void; onMic: () => void; onCorrect: () => void; dictLive: boolean; streaming: boolean; disabled?: boolean;
+  onUpload: () => void; onMic: () => void; onCorrect: () => void; onSettings: () => void; dictLive: boolean; streaming: boolean; disabled?: boolean;
 }) {
   const taRef = useRef<HTMLTextAreaElement>(null);
 
@@ -383,6 +384,13 @@ function CzChatInput({
             onClick={onCorrect}
             title="Correct a draft">
             ✓
+          </button>
+          <button
+            className="w-10 h-10 flex items-center justify-center rounded-full text-zinc-800 hover:bg-zinc-100 transition-colors"
+            onPointerDown={(e) => e.preventDefault()}
+            onClick={onSettings}
+            title="Settings">
+            <SlidersHorizontal size={17} strokeWidth={1.8} />
           </button>
           <div className="flex-1" />
           {streaming ? (
@@ -665,6 +673,7 @@ export function CzarMobile() {
           onUpload={() => fileInputRef.current?.click()}
           onMic={() => dict.live ? dict.stop() : dict.start()}
           onCorrect={() => setCorrectionOpen(true)}
+          onSettings={() => { setSettingsTab('academic'); setSettingsSheet(true); }}
           dictLive={dict.live}
           streaming={editor.streamingDoc}
         />
