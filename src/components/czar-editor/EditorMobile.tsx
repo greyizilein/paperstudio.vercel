@@ -315,6 +315,7 @@ function CzChatInput({
   onUpload: () => void; onMic: () => void; dictLive: boolean; streaming: boolean; disabled?: boolean;
 }) {
   const taRef = useRef<HTMLTextAreaElement>(null);
+  const [focused, setFocused] = useState(false);
 
   useEffect(() => {
     const ta = taRef.current;
@@ -323,49 +324,57 @@ function CzChatInput({
     ta.style.height = Math.min(ta.scrollHeight, 128) + 'px';
   }, [value]);
 
+  const showTools = focused || !!value || streaming || dictLive;
+
   return (
     <div className="px-3 py-2.5" style={{ paddingBottom: 'max(0.625rem, env(safe-area-inset-bottom))' }}>
-      <div className="flex items-end gap-2 bg-zinc-50 border border-zinc-200 rounded-2xl px-3 py-2.5 shadow-sm">
-        {/* Upload */}
-        <button
-          className="w-8 h-8 flex items-center justify-center text-zinc-400 hover:text-[#e85d3f] flex-shrink-0 mb-0.5 text-[16px]"
-          onClick={onUpload}>
-          ↑
-        </button>
+      <div className="bg-zinc-50 border border-zinc-200 rounded-2xl shadow-sm overflow-hidden">
+        {/* Main input row */}
+        <div className="flex items-end px-3 py-2.5 gap-2">
+          <textarea
+            ref={taRef}
+            className="flex-1 bg-transparent border-none outline-none font-sans text-[15px] leading-[1.5] resize-none min-h-[24px] max-h-[128px] text-zinc-900 placeholder:text-zinc-400"
+            placeholder="Message Czar…"
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            onFocus={() => setFocused(true)}
+            onBlur={() => setFocused(false)}
+            onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); onSend(); } }}
+            rows={1}
+            disabled={disabled}
+          />
+          {streaming ? (
+            <button
+              className="w-9 h-9 flex items-center justify-center bg-[#e85d3f]/10 text-[#e85d3f] rounded-full flex-shrink-0 mb-0.5 text-[12px] font-bold"
+              onClick={onStop}>
+              ◼
+            </button>
+          ) : (
+            <button
+              className="w-9 h-9 flex items-center justify-center bg-[#e85d3f] text-white rounded-full flex-shrink-0 mb-0.5 font-serif italic font-bold text-[16px] disabled:opacity-30 transition-opacity"
+              onClick={onSend}
+              disabled={!value.trim()}>
+              §
+            </button>
+          )}
+        </div>
 
-        {/* Text area */}
-        <textarea
-          ref={taRef}
-          className="flex-1 bg-transparent border-none outline-none font-sans text-[15px] leading-[1.5] resize-none min-h-[24px] max-h-[128px] text-zinc-900 placeholder:text-zinc-400"
-          placeholder="Message Czar…"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); onSend(); } }}
-          rows={1}
-          disabled={disabled}
-        />
-
-        {/* Mic */}
-        <button
-          className={`w-8 h-8 flex items-center justify-center flex-shrink-0 mb-0.5 rounded-full text-[13px] transition-colors ${dictLive ? 'text-red-500 animate-pulse' : 'text-zinc-400 hover:text-[#e85d3f]'}`}
-          onClick={onMic}>
-          {dictLive ? '◉' : '◎'}
-        </button>
-
-        {/* Send / Stop */}
-        {streaming ? (
-          <button
-            className="w-9 h-9 flex items-center justify-center bg-[#e85d3f]/10 text-[#e85d3f] rounded-full flex-shrink-0 mb-0.5 text-[12px] font-bold"
-            onClick={onStop}>
-            ◼
-          </button>
-        ) : (
-          <button
-            className="w-9 h-9 flex items-center justify-center bg-[#e85d3f] text-white rounded-full flex-shrink-0 mb-0.5 font-serif italic font-bold text-[16px] disabled:opacity-30 transition-opacity"
-            onClick={onSend}
-            disabled={!value.trim()}>
-            §
-          </button>
+        {/* Tool strip — appears on focus / activity */}
+        {showTools && (
+          <div className="flex items-center gap-0.5 px-2 pb-2 pt-0.5 border-t border-zinc-100">
+            <button
+              className="w-9 h-9 flex items-center justify-center text-zinc-400 hover:text-[#e85d3f] rounded-lg text-[15px] transition-colors"
+              onPointerDown={(e) => e.preventDefault()}
+              onClick={onUpload}>
+              ↑
+            </button>
+            <button
+              className={`w-9 h-9 flex items-center justify-center rounded-lg text-[14px] transition-colors ${dictLive ? 'text-red-500 animate-pulse' : 'text-zinc-400 hover:text-[#e85d3f]'}`}
+              onPointerDown={(e) => e.preventDefault()}
+              onClick={onMic}>
+              {dictLive ? '◉' : '◎'}
+            </button>
+          </div>
         )}
       </div>
     </div>
@@ -374,30 +383,8 @@ function CzChatInput({
 
 // ─── EMPTY STATE ──────────────────────────────────────────────────────────────
 
-function CzEmptyState({ onSuggestion }: { onSuggestion: (text: string) => void }) {
-  const SUGGESTIONS = [
-    'Write a 2,000-word essay on the ethics of artificial intelligence',
-    'Summarise the key findings on climate tipping points',
-    'Draft a literature review on cognitive behavioural therapy',
-    'Write a legal brief using IRAC on vicarious liability',
-  ];
-
-  return (
-    <div className="flex flex-col items-center justify-center flex-1 px-6 py-12 text-center">
-      <div className="font-serif italic font-bold text-[32px] text-[#e85d3f] mb-1">czar.</div>
-      <p className="font-mono text-[9px] tracking-[0.25em] uppercase text-zinc-400 mb-8">What would you like to write?</p>
-      <div className="flex flex-col gap-2 w-full max-w-sm">
-        {SUGGESTIONS.map((s) => (
-          <button
-            key={s}
-            className="text-left px-4 py-3 bg-zinc-50 hover:bg-[#e85d3f]/5 border border-zinc-200 hover:border-[#e85d3f]/30 rounded-xl font-sans text-[13px] text-zinc-600 transition-colors leading-snug"
-            onClick={() => onSuggestion(s)}>
-            {s}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
+function CzEmptyState() {
+  return null;
 }
 
 // ─── MAIN COMPONENT ───────────────────────────────────────────────────────────
@@ -460,10 +447,6 @@ export function CzarMobile() {
     editor.sendMessage(input.trim());
     setInput('');
   }, [input, editor]);
-
-  const handleSuggestion = useCallback((text: string) => {
-    editor.sendMessage(text);
-  }, [editor]);
 
   const handleFileInput = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
@@ -542,7 +525,7 @@ export function CzarMobile() {
       {/* ── MESSAGE AREA ── */}
       <div className="flex-1 overflow-y-auto overflow-x-hidden" {...drop.handlers}>
         {editor.messages.length === 0 && !editor.docLoading ? (
-          <CzEmptyState onSuggestion={handleSuggestion} />
+          <CzEmptyState />
         ) : (
           <div className="px-4 pt-4 pb-2">
             {editor.docLoading && (
