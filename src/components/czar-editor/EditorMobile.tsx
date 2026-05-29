@@ -112,32 +112,16 @@ const BottomSheet = ({ open, onClose, title, actionText, onAction, children }: a
 function CzMobilePiecesSheet({ open, onClose, pieces, activePieceId, onSelectPiece, onCreatePiece, onDeletePiece, onRenamePiece }: any) {
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
-  const [swipedLeftId, setSwipedLeftId] = useState<string | null>(null);
-  const touchStart = useRef<{ x: number; y: number; id: string } | null>(null);
   const cancellingRef = useRef(false);
 
-  const startSwipe = (e: React.TouchEvent, id: string) => { touchStart.current = { x: e.touches[0].clientX, y: e.touches[0].clientY, id }; };
-  const endSwipe = (e: React.TouchEvent, id: string) => {
-    if (!touchStart.current || touchStart.current.id !== id) return;
-    const dx = e.changedTouches[0].clientX - touchStart.current.x;
-    const dy = Math.abs(e.changedTouches[0].clientY - touchStart.current.y);
-    touchStart.current = null;
-    if (dy > 30) return;
-    if (dx < -40) { setSwipedLeftId(id); setRenamingId(null); }
-    else if (dx > 40) { const p = pieces.find((p: any) => p.id === id); if (p) { setRenamingId(id); setRenameValue(p.name); setSwipedLeftId(null); } }
-    else if (swipedLeftId === id) setSwipedLeftId(null);
-  };
   const commitRename = (id: string) => { if (renameValue.trim()) onRenamePiece(id, renameValue.trim()); setRenamingId(null); setRenameValue(''); };
-  const handleClose = () => { setSwipedLeftId(null); setRenamingId(null); onClose(); };
+  const handleClose = () => { setRenamingId(null); onClose(); };
 
   return (
     <BottomSheet open={open} onClose={handleClose} title="Conversations" actionText="+ New" onAction={() => { onCreatePiece(); handleClose(); }}>
       {pieces.length === 0 && <p className="text-[13px] text-zinc-500 py-2">No conversations yet.</p>}
       {pieces.map((p: any) => (
-        <div key={p.id} className="relative mb-1 overflow-hidden rounded-lg">
-          <div className="absolute inset-y-0 right-0 flex">
-            <button className="h-full px-5 bg-red-500 text-white text-[12px] font-bold rounded-r-lg" onClick={() => { onDeletePiece(p.id); setSwipedLeftId(null); if (p.id === activePieceId) handleClose(); }}>Delete</button>
-          </div>
+        <div key={p.id} className="mb-1">
           {renamingId === p.id ? (
             <div className={`flex items-center gap-2 p-3 rounded-lg border ${p.id === activePieceId ? 'border-[#e85d3f]/40 bg-[#e85d3f]/5' : 'border-zinc-200 bg-white'}`}>
               <input autoFocus className="flex-1 bg-transparent border-none outline-none font-sans text-[13px] text-zinc-900 min-w-0" value={renameValue} onChange={(e) => setRenameValue(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); commitRename(p.id); } }} onBlur={() => { if (!cancellingRef.current) commitRename(p.id); cancellingRef.current = false; }} />
@@ -146,23 +130,20 @@ function CzMobilePiecesSheet({ open, onClose, pieces, activePieceId, onSelectPie
             </div>
           ) : (
             <div
-              style={{ transform: swipedLeftId === p.id ? 'translateX(-80px)' : 'translateX(0)', transition: 'transform 0.22s ease', touchAction: 'pan-y' }}
               className={`flex items-center gap-2.5 p-3 rounded-lg cursor-pointer ${p.id === activePieceId ? 'bg-[#e85d3f]/10' : 'bg-white hover:bg-zinc-50'}`}
-              onClick={() => { if (swipedLeftId) { setSwipedLeftId(null); return; } if (!p.isPending) { onSelectPiece(p.id); handleClose(); } }}
-              onTouchStart={(e) => startSwipe(e, p.id)} onTouchEnd={(e) => endSwipe(e, p.id)}
+              onClick={() => { if (!p.isPending) { onSelectPiece(p.id); handleClose(); } }}
             >
               <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${p.id === activePieceId ? 'bg-[#e85d3f]' : 'bg-zinc-300'}`} />
               <span className="font-sans text-[13px] font-medium text-zinc-900 flex-1 truncate">{p.name}</span>
               <span className="font-mono text-[9px] tracking-widest uppercase text-zinc-500 mr-1">{p.meta}</span>
               <div className="flex items-center gap-0.5" onClick={(e) => e.stopPropagation()}>
-                <button className="w-9 h-9 flex items-center justify-center text-zinc-400 hover:text-[#e85d3f] rounded text-[14px]" onClick={() => { setRenamingId(p.id); setRenameValue(p.name); setSwipedLeftId(null); }}>✎</button>
+                <button className="w-9 h-9 flex items-center justify-center text-zinc-400 hover:text-[#e85d3f] rounded text-[14px]" onClick={() => { setRenamingId(p.id); setRenameValue(p.name); }}>✎</button>
                 <button className="w-9 h-9 flex items-center justify-center text-zinc-400 hover:text-red-500 rounded text-[13px]" onClick={() => { onDeletePiece(p.id); if (p.id === activePieceId) handleClose(); }}>✕</button>
               </div>
             </div>
           )}
         </div>
       ))}
-      <p className="font-mono text-[9px] text-zinc-400 text-center mt-3 tracking-widest uppercase">← swipe left to delete · swipe right to rename →</p>
     </BottomSheet>
   );
 }
