@@ -2530,7 +2530,7 @@ ${thesisArea}`);
           {/* Chapter strip — compact numbered dots + guide button at far right */}
           <div className="h-10 flex items-center flex-shrink-0 bg-background">
             {/* Scrollable dots */}
-            <div className="flex items-center px-3 gap-2 overflow-x-auto flex-1 min-w-0 scrollbar-hide">
+            <div className="flex items-center px-3 gap-2 overflow-x-auto flex-1 min-w-0 no-scrollbar">
               {(() => {
                 const sorted = project.chapters.slice().sort((a, b) => a.order_index - b.order_index);
                 const nonAbstract = sorted.filter(c => c.type !== "abstract");
