@@ -1909,11 +1909,15 @@ Rules:
         }
       }
     } else {
-      // ── Image generation — explicit /image command works in any mode; natural requests only in chat ──
-      if (
-        (req.settings?.generateImage === true || (mode === "chat" && isImageRequest(req.user_message))) &&
-        !signal.aborted
-      ) {
+      // ── Image generation ──
+      // The web client now handles all image requests directly via the
+      // `czar-image` function (returns JSON { imageUrl } and renders an <img>),
+      // so it never streams an image request here. This server-side branch is
+      // a fallback for non-web callers only and is gated on an explicit
+      // generateImage flag — we no longer auto-detect natural-language image
+      // requests here (that produced an inline base64-over-SSE payload the
+      // chat renderer couldn't display).
+      if (req.settings?.generateImage === true && !signal.aborted) {
         write("agent", {
           id: "illustrator",
           name: "Illustrator",
