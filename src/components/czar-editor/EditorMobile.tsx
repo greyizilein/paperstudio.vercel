@@ -489,8 +489,13 @@ export function CzarMobile() {
 
   // Insert dictation transcript into input field
   const prevFinalRef = useRef('');
+  const wasLiveRef = useRef(false);
   useEffect(() => {
-    if (!dict.live) { prevFinalRef.current = ''; return; }
+    // Reset on session start (live false→true), not on end
+    if (dict.live && !wasLiveRef.current) prevFinalRef.current = '';
+    wasLiveRef.current = dict.live;
+
+    if (!dict.live) return;
     const newText = dict.final.slice(prevFinalRef.current.length).trim();
     if (newText) {
       setInput(prev => (prev ? prev + ' ' : '') + newText);

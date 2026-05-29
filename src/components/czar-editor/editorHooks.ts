@@ -44,6 +44,7 @@ export function useCzDictation(lang = 'en-US'): DictationState {
   // Real Speech API refs
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const lastFinalIndexRef = useRef(-1);
 
   // Fake fallback state
   const [step, setStep] = useState(0);
@@ -64,6 +65,7 @@ export function useCzDictation(lang = 'en-US'): DictationState {
     setSeconds(0);
     setStep(0);
     setPhase('interim');
+    lastFinalIndexRef.current = -1;
     setLive(true);
   }, []);
 
@@ -82,7 +84,11 @@ export function useCzDictation(lang = 'en-US'): DictationState {
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const result = event.results[i];
         if (result.isFinal) {
-          setFinalText(prev => (prev ? prev + ' ' : '') + result[0].transcript.trim());
+          // Guard against the same result index being re-fired (mobile browser quirk)
+          if (i > lastFinalIndexRef.current) {
+            lastFinalIndexRef.current = i;
+            setFinalText(prev => (prev ? prev + ' ' : '') + result[0].transcript.trim());
+          }
         } else {
           int = result[0].transcript;
         }
@@ -98,6 +104,9 @@ export function useCzDictation(lang = 'en-US'): DictationState {
     tickRef.current = setInterval(() => setSeconds(s => s + 1), 1000);
 
     return () => {
+      recognition.onresult = null;
+      recognition.onend = null;
+      recognition.onerror = null;
       recognition.stop();
       if (tickRef.current) clearInterval(tickRef.current);
     };
