@@ -863,7 +863,7 @@ async function processImageMarkers(
 
   write("agent", { id: "images", name: "Figure Generation", status: "working", action: `Generating ${markers.length} figure(s)…` });
 
-  const IMAGE_MODELS = ["gemini-2.0-flash-preview-image-generation", "gemini-2.0-flash-exp"];
+  const IMAGE_MODELS = ["gemini-2.5-flash-image"];
 
   async function callGeminiImage(prompt: string): Promise<string | null> {
     for (const model of IMAGE_MODELS) {

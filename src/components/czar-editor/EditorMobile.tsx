@@ -2,6 +2,7 @@ import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { SlidersHorizontal } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import type { Components } from 'react-markdown';
 import { CZ_VOICES } from './editorData';
 import { useCzarEditor, type ChatMessage } from './useCzarEditor';
 import { useCzDictation, useCzDropZone } from './editorHooks';
@@ -13,41 +14,37 @@ import { Packer } from 'docx';
 import { supabase } from '@/integrations/supabase/client';
 import type { CzPanelSettings } from './useCzarEditor';
 
+// Custom image renderer — handles czar-loading:// and czar-error:// markers
+const czarImgComponents: Components = {
+  img: ({ src, alt }) => {
+    if (src?.startsWith('czar-loading://')) {
+      return (
+        <div className="my-6 flex flex-col items-center justify-center py-10 rounded-2xl border border-zinc-200 bg-zinc-50 gap-2">
+          <span className="font-serif italic font-bold text-[#e85d3f] text-5xl animate-pulse leading-none select-none">Ц</span>
+          <span className="font-mono text-[9px] uppercase tracking-widest text-zinc-400 mt-1">Drawing…</span>
+          {alt && <span className="text-[11px] text-zinc-400 text-center px-6 max-w-xs leading-relaxed italic">{alt}</span>}
+        </div>
+      );
+    }
+    if (src?.startsWith('czar-error://')) {
+      return (
+        <div className="my-4 flex items-center justify-center py-6 rounded-xl border border-zinc-200 bg-zinc-50">
+          <span className="text-[11px] text-zinc-400 italic">Image could not be generated</span>
+        </div>
+      );
+    }
+    return <img src={src} alt={alt} className="w-full rounded-xl border border-zinc-200 shadow-sm my-4 block" />;
+  },
+};
+
 const LANG_MAP: Record<string, string> = {
   british: 'en-GB', american: 'en-US', australian: 'en-AU', canadian: 'en-CA',
   'en-us': 'en-US', 'en-gb': 'en-GB', 'en-au': 'en-AU', 'en-ca': 'en-CA',
   'es': 'es-ES', 'fr': 'fr-FR',
 };
 
-// buildDocx only embeds base64 images, but generated figures are now public
-// URLs. Fetch each remote image and inline it as base64 before building the doc
-// so figures appear in the downloaded Word file. Unresolved [IMAGE:] markers and
-// failed fetches are dropped so they don't litter the export.
-async function inlineRemoteImages(md: string): Promise<string> {
-  let out = md.replace(/\[IMAGE:\s*[^\]]+\]/gi, '');
-  const matches = [...out.matchAll(/!\[([^\]]*)\]\((https?:\/\/[^)]+)\)/g)];
-  for (const m of matches) {
-    try {
-      const resp = await fetch(m[2]);
-      if (!resp.ok) { out = out.replace(m[0], ''); continue; }
-      const blob = await resp.blob();
-      const dataUrl: string = await new Promise((resolve, reject) => {
-        const r = new FileReader();
-        r.onloadend = () => resolve(r.result as string);
-        r.onerror = reject;
-        r.readAsDataURL(blob);
-      });
-      out = out.replace(m[0], `![${m[1]}](${dataUrl})`);
-    } catch {
-      out = out.replace(m[0], '');
-    }
-  }
-  return out;
-}
-
 async function downloadAsWord(content: string) {
-  const prepared = await inlineRemoteImages(content);
-  const doc = buildDocx(prepared);
+  const doc = buildDocx(content);
   const blob = await Packer.toBlob(doc);
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -69,35 +66,6 @@ function downloadMarkdown(title: string, content: string) {
 function countWords(text: string) {
   return text.trim().split(/\s+/).filter(Boolean).length;
 }
-
-// Turn unresolved [IMAGE: description] markers into a sentinel image whose src
-// the custom renderer recognises as "still generating" — so the reader sees a
-// loading figure exactly where it will land, and prose flows around it.
-function prepareImageMarkers(md: string): string {
-  return md.replace(/\[IMAGE:\s*([^\]]+)\]/gi, (_m, desc: string) =>
-    `\n\n![](czar-figure-loading#${encodeURIComponent(desc.trim())})\n\n`);
-}
-
-// Custom markdown renderers: figures render as captioned images; pending
-// markers render as an animated loading card with the distinctive § glyph.
-const mdComponents = {
-  img: ({ src, alt }: { src?: string; alt?: string }) => {
-    if (typeof src === 'string' && src.startsWith('czar-figure-loading')) {
-      const desc = decodeURIComponent(src.split('#')[1] || '');
-      return (
-        <span className="block my-4 rounded-xl border border-[#e85d3f]/20 bg-[#e85d3f]/[0.04] px-5 py-6 text-center">
-          <span className="inline-block font-serif italic font-bold text-[#e85d3f] text-2xl animate-spin-slow" style={{ animation: 'cz-spin 1.4s linear infinite' }}>§</span>
-          <span className="block font-mono text-[10px] tracking-[0.15em] uppercase text-[#e85d3f]/80 mt-2">Generating figure</span>
-          {desc && <span className="block font-sans text-[12px] text-zinc-500 mt-1 max-w-sm mx-auto leading-snug">{desc}</span>}
-        </span>
-      );
-    }
-    return (
-      <img src={src} alt={alt || ''} loading="lazy"
-        className="block my-4 w-full rounded-xl border border-zinc-200 shadow-sm" />
-    );
-  },
-};
 
 function getGreeting(userName: string): [string, string, string] {
   const hour = new Date().getHours();
@@ -271,20 +239,31 @@ function UserBubble({ content }: { content: string }) {
   );
 }
 
-function CzarChatMessage({ content, isStreaming }: { content: string; isStreaming?: boolean }) {
+function CzarChatMessage({ content, isStreaming, imageUrl }: { content: string; isStreaming?: boolean; imageUrl?: string }) {
   return (
-    <div className="flex items-start gap-2.5 mb-4">
-      <span className="font-serif italic font-bold text-[#e85d3f] text-[14px] mt-1 flex-shrink-0 w-5 text-center">§</span>
-      <div className="flex-1 min-w-0">
-        {isStreaming && !content ? (
+    <div className="mb-5">
+      {/* Brand mark sits above the message so content spans the full width */}
+      <span className="block font-serif italic font-bold text-[#e85d3f] text-[15px] mb-1.5 leading-none">Ц</span>
+      <div className="min-w-0">
+        {isStreaming && !content && !imageUrl ? (
           <div className="flex gap-1 pt-1">
             {[0, 1, 2].map(i => <span key={i} className="w-2 h-2 rounded-full bg-[#e85d3f]/40" style={{ animation: `pulse 1s ease-in-out ${i * 0.2}s infinite` }} />)}
           </div>
         ) : (
-          <div className="prose prose-zinc max-w-none prose-p:font-serif prose-p:text-[16px] prose-p:leading-[1.75] prose-headings:font-serif prose-headings:font-bold prose-h1:text-2xl prose-h2:text-xl prose-h3:text-lg">
-            <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>{prepareImageMarkers(content)}</ReactMarkdown>
-            {isStreaming && <span className="inline-block w-0.5 h-4 bg-[#e85d3f] ml-0.5 animate-pulse align-middle" />}
-          </div>
+          <>
+            {content && (
+              <div className="prose prose-zinc max-w-none prose-p:font-serif prose-p:text-[16px] prose-p:leading-[1.75] prose-headings:font-serif prose-headings:font-bold prose-h1:text-2xl prose-h2:text-xl prose-h3:text-lg">
+                <ReactMarkdown remarkPlugins={[remarkGfm]} components={czarImgComponents}>{content}</ReactMarkdown>
+                {isStreaming && <span className="inline-block w-0.5 h-4 bg-[#e85d3f] ml-0.5 animate-pulse align-middle" />}
+              </div>
+            )}
+            {imageUrl && (
+              <div className="mt-1">
+                <img src={imageUrl} alt="Generated image" className="w-full rounded-xl border border-zinc-200 shadow-sm" />
+                <a href={imageUrl} download="czar-image.png" className="inline-block mt-2 font-mono text-[10px] tracking-widest uppercase text-zinc-400 hover:text-[#e85d3f] transition-colors">↓ Download</a>
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>
@@ -307,7 +286,7 @@ function CzarDocumentCard({
 
   return (
     <div className="flex items-start gap-2.5 mb-4">
-      <span className="font-serif italic font-bold text-[#e85d3f] text-[14px] mt-1 flex-shrink-0 w-5 text-center">§</span>
+      <span className="font-serif italic font-bold text-[#e85d3f] text-[14px] mt-1 flex-shrink-0 w-5 text-center">Ц</span>
       <div className="flex-1 min-w-0 border border-zinc-200 rounded-2xl overflow-hidden shadow-sm">
         {/* Card header */}
         <div className="flex items-center justify-between px-4 py-2.5 bg-zinc-50 border-b border-zinc-200">
@@ -324,7 +303,7 @@ function CzarDocumentCard({
           className={`px-4 py-3 bg-white overflow-hidden transition-all duration-300 ${!expanded && !message.isStreaming ? 'max-h-52' : ''}`}
           style={!expanded && !message.isStreaming ? { maskImage: 'linear-gradient(to bottom, black 60%, transparent 100%)' } : {}}>
           <div className="prose prose-zinc prose-sm max-w-none prose-p:font-serif prose-p:text-[15px] prose-p:leading-[1.7] prose-headings:font-serif prose-headings:font-bold prose-h1:text-xl prose-h2:text-lg prose-h3:text-base [&_table]:text-xs [&_table]:w-full [&_th]:bg-zinc-100 [&_th]:px-2 [&_th]:py-1 [&_th]:border [&_th]:border-zinc-300 [&_td]:px-2 [&_td]:py-1 [&_td]:border [&_td]:border-zinc-200">
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
+            <ReactMarkdown remarkPlugins={[remarkGfm]} components={czarImgComponents}>{message.content}</ReactMarkdown>
             {message.isStreaming && <span className="inline-block w-0.5 h-4 bg-[#e85d3f] ml-0.5 animate-pulse align-middle" />}
           </div>
         </div>
@@ -342,7 +321,7 @@ function CzarDocumentCard({
             <div className="flex items-center gap-0 border-t border-zinc-100">
               {[
                 { icon: '✎', label: 'Edit', onClick: onExpand },
-                { icon: '§', label: 'Tighten', onClick: onTighten },
+                { icon: 'Ц', label: 'Tighten', onClick: onTighten },
                 { icon: '✓', label: 'Correct', onClick: onCorrect },
                 { icon: '↓', label: 'Word', onClick: onDownloadDocx },
               ].map(({ icon, label, onClick }) => (
@@ -441,7 +420,7 @@ function CzChatInput({
               className="w-10 h-10 bg-zinc-900 text-white rounded-full flex items-center justify-center font-serif italic font-bold text-[18px] disabled:opacity-30 transition-opacity"
               onClick={onSend}
               disabled={!value.trim()}>
-              §
+              Ц
             </button>
           )}
         </div>
@@ -656,12 +635,12 @@ export function CzarMobile() {
         <div ref={writerScrollRef} className="flex-1 overflow-y-auto px-5 pt-6 pb-10" {...drop.handlers}>
           {writerContent ? (
             <div className="prose prose-zinc max-w-none prose-p:font-serif prose-p:text-[16px] prose-p:leading-[1.8] prose-headings:font-serif prose-headings:font-bold prose-h1:text-2xl prose-h2:text-xl prose-h3:text-[17px] [&_table]:text-sm [&_table]:w-full [&_th]:bg-zinc-100 [&_th]:px-2 [&_th]:py-1 [&_th]:border [&_th]:border-zinc-300 [&_td]:px-2 [&_td]:py-1 [&_td]:border [&_td]:border-zinc-200">
-              <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>{prepareImageMarkers(writerContent)}</ReactMarkdown>
+              <ReactMarkdown remarkPlugins={[remarkGfm]} components={czarImgComponents}>{writerContent}</ReactMarkdown>
               {writerStreaming && <span className="inline-block w-0.5 h-4 bg-[#e85d3f] ml-0.5 animate-pulse align-middle" />}
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center h-full gap-3 opacity-30">
-              <span className="font-serif italic text-[#e85d3f] text-6xl leading-none">§</span>
+              <span className="font-serif italic text-[#e85d3f] text-6xl leading-none">Ц</span>
               <span className="font-mono text-[10px] tracking-widest uppercase text-zinc-500">No document yet</span>
             </div>
           )}
@@ -683,7 +662,7 @@ export function CzarMobile() {
               )}
               {editor.messages.map((msg) => {
                 if (msg.role === 'user') return <UserBubble key={msg.id} content={msg.content} />;
-                return <CzarChatMessage key={msg.id} content={msg.content} isStreaming={msg.isStreaming} />;
+                return <CzarChatMessage key={msg.id} content={msg.content} isStreaming={msg.isStreaming} imageUrl={msg.imageUrl} />;
               })}
 
               {editor.streamingDoc && editor.currentAgent && (

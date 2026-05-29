@@ -6,7 +6,7 @@ const COST_MAP: Record<string, { input: number; output: number }> = {
   "gemini-2.0-flash-lite": { input: 0.00005, output: 0.0002 },
   "gemini-2.5-pro": { input: 0.00125, output: 0.005 },
   "gemini-2.0-flash": { input: 0.0001, output: 0.0004 },
-  "gemini-2.0-flash-preview-image-generation": { input: 0.0001, output: 0.0004 },
+  "gemini-2.5-flash-image": { input: 0.0001, output: 0.0004 },
   "qwen3.6-plus": { input: 0.0008, output: 0.002 },
   "anthropic/claude-sonnet-4-5": { input: 0.003, output: 0.015 },
   "claude-sonnet-4-5": { input: 0.003, output: 0.015 },

@@ -263,7 +263,6 @@
   vertical-align: text-bottom; margin-left: 1px; animation: cz-blink 1.1s steps(2) infinite;
 }
 @keyframes cz-blink { 50% { opacity: 0; } }
-@keyframes cz-spin { to { transform: rotate(360deg); } }
 .cz-margin-note {
   position: absolute; right: -244px; width: 204px;
   background: var(--paper-2); border: 1px solid var(--rule);

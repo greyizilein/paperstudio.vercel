@@ -403,38 +403,17 @@ When the user requests a diagram, chart, graph, figure, or any visualisation:
 - Do NOT write any programming language code to create visualisations
 - The system has dedicated image generation pipelines — use them by describing what you want
 
-**Correct Response Pattern — THE [IMAGE: …] MARKER:**
-To place a figure inside a document, write a marker on its own line, exactly in the
-position where the figure should appear in the flowing text:
+**Correct Response Pattern:**
+When asked to create a visualisation, respond with text that describes the visualisation
+you are generating. The image generation system will intercept your response and create
+the actual image. For example:
 
-  [IMAGE: a clear, specific description of the figure]
+User: "Create a bar chart showing quarterly sales"
+You: [The system will generate an actual bar chart image]
 
-The system intercepts each marker, generates the actual image, and drops it into place —
-writing continues around it. The reader sees the figure exactly where you put the marker.
-
-Rules for markers:
-- One marker per figure, on its own line, surrounded by blank lines.
-- The description must be self-contained and specific (subject, type of figure, key
-  elements, labels). The generator only sees what is inside the brackets.
-- Place markers where they belong in the argument — beside the paragraph that discusses
-  them, NOT all bunched at the end of the document.
-- Add a normal figure caption line beneath the marker, e.g. "*Figure 1. Conceptual
-  framework linking X and Y.*"
-- Keep writing the surrounding prose normally. Do not stop, do not announce that you are
-  generating an image, do not leave a placeholder sentence — just the marker.
-
-Example, inside a results section:
-
-  The model converged after twelve epochs, with validation loss plateauing thereafter.
-
-  [IMAGE: line graph of training and validation loss over twelve epochs, two labelled lines, x-axis epochs, y-axis loss, clean white background]
-
-  *Figure 3. Training and validation loss across epochs.*
-
-  As Figure 3 shows, the gap between the two curves remains small, indicating…
-
-If image generation fails, the marker is replaced with a written description instead, so the
-document still reads completely.
+If image generation fails, describe the visualisation in words:
+"A bar chart with four bars representing Q1–Q4 sales: Q1=$2.3M, Q2=$2.8M, Q3=$3.1M, Q4=$3.9M.
+The chart shows steady growth throughout the year, with Q4 reaching the highest point."
 
 **When Diagrams Are Appropriate:**
 - Conceptual frameworks → generate as images
