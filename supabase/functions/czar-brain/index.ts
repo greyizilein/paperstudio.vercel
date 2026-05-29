@@ -79,6 +79,7 @@ interface CzarBrainRequest {
   override_domain?: DomainType;
   override_style?: StyleOverlay;
   settings?: Record<string, unknown>;
+  mode?: string; // Frontend mode hint — accepted for compatibility, not used for routing
 }
 
 // ---------------------------------------------------------------------------
@@ -184,7 +185,12 @@ function routeRequest(
     if (priorDomain && priorDomain !== "chat") {
       return { domain: priorDomain, style: DEFAULT_DOMAIN_STYLES[priorDomain], confidence: 0.5 };
     }
-    return { domain: "chat", style: "direct_expert", confidence: 0.6 };
+    // CZAR is an academic tool — default to academic unless clearly conversational
+    const isClearlyCasual = message.trim().length < 80 &&
+      /^(hi|hello|hey|thanks|thank you|ok|okay|got it|sure|yes|no|what is|what's|who is|who's|how do|can you explain|what does|tell me about)\b/i.test(message.trim());
+    return isClearlyCasual
+      ? { domain: "chat", style: "direct_expert", confidence: 0.6 }
+      : { domain: "academic", style: overrideStyle ?? DEFAULT_DOMAIN_STYLES["academic"], confidence: 0.5 };
   }
 
   const winner = (Object.entries(scores) as [DomainType, number][]).sort((a, b) => b[1] - a[1])[0][0];
@@ -205,14 +211,19 @@ function routeRequest(
 const DOMAIN_CORE_ADDITIONS: Record<DomainType, string> = {
   academic: `
 ACTIVE COGNITIVE CORE: ACADEMIC
-You are now operating as a domain-sovereign academic intelligence.
+You are now operating as a domain-sovereign academic intelligence. CZAR is an academic tool — this is your primary operating mode.
 - Semantic hierarchy: thesis → first-order claims → evidence → qualifications. This is not visual structure; it is logical structure.
 - Every empirical claim carries a citation. No floating assertions.
 - Hedge with precision: "suggests", "indicates", "appears to" — never "proves" unless the evidence warrants it.
 - Synthesis over summary: position each source within the web of related evidence.
 - Paragraph discipline: 150–300 words per paragraph, one organising claim per paragraph.
 - No bullet lists in academic body prose.
-- Reference section at the end: complete, alphabetised, matching every in-text citation.`,
+- Reference section at the end: complete, alphabetised, matching every in-text citation.
+- Default citation style: Harvard. Switch only when the user specifies APA, Chicago, MLA, OSCOLA, Vancouver, or IEEE.
+
+FIGURES: When a diagram, conceptual framework, research model, or data visualisation would genuinely strengthen the argument, output this marker on its own line:
+[IMAGE: concise description of what the figure should show — e.g. "bar chart comparing mean scores across four experimental conditions" or "conceptual framework showing the relationship between burnout, autonomy, and job satisfaction"]
+The system will generate the figure using Gemini and embed it inline. Use at most 2 figures per document. Only include a figure when it adds analytical value that prose cannot convey equally well.`,
 
   fiction: `
 ACTIVE COGNITIVE CORE: FICTION
@@ -825,6 +836,86 @@ Return JSON: { "narrativePosition": { "sceneSummary", "activeCharacters", "povCh
 }
 
 // ---------------------------------------------------------------------------
+// Document detection
+// ---------------------------------------------------------------------------
+
+function detectIsDocument(content: string, wc: number): boolean {
+  const hasHeadings = /^#{1,3}\s+.+/m.test(content);
+  const substantialParagraphs = content.split(/\n\n+/).filter((p) => p.trim().split(/\s+/).length > 40).length;
+  return wc >= 200 && (hasHeadings || substantialParagraphs >= 3);
+}
+
+// ---------------------------------------------------------------------------
+// Inline image generation — replaces [IMAGE: description] markers with Gemini images
+// ---------------------------------------------------------------------------
+
+async function processImageMarkers(
+  content: string,
+  write: WriteFunction,
+  signal: AbortSignal,
+): Promise<string> {
+  const apiKey = Deno.env.get("GOOGLE_AI_API_KEY");
+  if (!apiKey) return content;
+
+  const markerRe = /\[IMAGE:\s*([^\]]+)\]/gi;
+  const markers = [...content.matchAll(markerRe)];
+  if (markers.length === 0) return content;
+
+  write("agent", { id: "images", name: "Figure Generation", status: "working", action: `Generating ${markers.length} figure(s)…` });
+
+  const IMAGE_MODELS = ["gemini-2.0-flash-preview-image-generation", "gemini-2.0-flash-exp"];
+
+  async function callGeminiImage(prompt: string): Promise<string | null> {
+    for (const model of IMAGE_MODELS) {
+      if (signal.aborted) return null;
+      try {
+        const resp = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: prompt }] }],
+              generationConfig: { responseModalities: ["TEXT", "IMAGE"] },
+            }),
+            signal: AbortSignal.timeout(45_000),
+          },
+        );
+        if (!resp.ok) continue;
+        const data = await resp.json();
+        const parts = data?.candidates?.[0]?.content?.parts ?? [];
+        const img = parts.find((p: { inlineData?: { data?: string; mimeType?: string } }) => p.inlineData?.data);
+        if (img?.inlineData) {
+          return `data:${img.inlineData.mimeType ?? "image/png"};base64,${img.inlineData.data}`;
+        }
+      } catch { /* try next model */ }
+    }
+    return null;
+  }
+
+  let updated = content;
+  for (const match of markers) {
+    if (signal.aborted) break;
+    const description = match[1].trim();
+    const prompt = `Create a professional academic figure for a scholarly paper. Subject: ${description}. Style: clean white background, scientific illustration, high contrast, no decorative elements, professional typography, suitable for a peer-reviewed journal or doctoral dissertation.`;
+    const dataUri = await callGeminiImage(prompt);
+    if (dataUri) {
+      updated = updated.replace(match[0], `\n\n![${description}](${dataUri})\n\n`);
+    } else {
+      updated = updated.replace(match[0], `\n*[Figure: ${description}]*\n`);
+    }
+  }
+
+  write("agent", { id: "images", name: "Figure Generation", status: "done", action: "Figures complete" });
+
+  if (updated !== content) {
+    write("replace", { content: updated });
+  }
+
+  return updated;
+}
+
+// ---------------------------------------------------------------------------
 // Main request handler
 // ---------------------------------------------------------------------------
 
@@ -997,6 +1088,10 @@ async function runMain(
       }
     }
 
+    // 10b. Process image markers + detect document
+    fullResponse = await processImageMarkers(fullResponse, write, signal);
+    const isDocument = detectIsDocument(fullResponse, wordCount(fullResponse));
+
     // 11. Build checkpoint (fast heuristic + async deep extraction)
     let checkpoint = createCheckpointFromContent(domain, style, fullResponse, req.user_message, priorCheckpoint, turnCount);
 
@@ -1046,6 +1141,7 @@ async function runMain(
       style,
       checkpoint_id: checkpoint.id,
       session_turn: checkpoint.sessionTurnCount,
+      is_document: isDocument,
     });
   } catch (err: unknown) {
     const e = err as Error;

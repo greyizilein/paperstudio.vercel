@@ -526,7 +526,7 @@ export default function CzarPage() {
             if (e.conversation_id && e.conversation_id !== convId) {
               setConvId(e.conversation_id);
             }
-            if (extraSettings.autoDownload && accText.trim()) {
+            if ((extraSettings.autoDownload || e.is_document) && accText.trim()) {
               downloadContent(accText);
             }
           },

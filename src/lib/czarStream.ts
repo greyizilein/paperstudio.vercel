@@ -90,6 +90,7 @@ export interface CzarDoneEvent {
   conversation_id: string;
   assistant_id?: string;
   words?: number;
+  is_document?: boolean;
 }
 
 export type CorrectionType = "grammar" | "style" | "structure" | "argument" | "register";
@@ -217,7 +218,7 @@ export async function streamCzar(
 
   let resp: Response;
   try {
-    resp = await fetch(`${FUNCTIONS_BASE}/czar-chat`, {
+    resp = await fetch(`${FUNCTIONS_BASE}/czar-brain`, {
       method: "POST",
       headers,
       body: JSON.stringify(req),
