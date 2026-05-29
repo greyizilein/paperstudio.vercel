@@ -2912,79 +2912,8 @@ ${thesisArea}`);
             )}
           </div>
 
-          {/* ── MOBILE BOTTOM BAR — CZAR style ── */}
-          <div className="sm:hidden bg-background flex-shrink-0">
-            {/* Progress bar — shown when generating or chapter has content */}
-            {(isGenerating || currentChapter?.content) && !currentLocked && (
-              <div className="flex items-center gap-2 px-4 pt-2 pb-0.5">
-                <span className="text-[10px] font-mono text-muted-foreground whitespace-nowrap">
-                  <b className={currentWC >= targetWC ? "text-green-500" : ""}>{currentWC.toLocaleString()}</b> / {targetWC.toLocaleString()}w
-                </span>
-                <div className="flex-1 h-[2px] bg-border rounded-sm overflow-hidden">
-                  <div className="h-full bg-primary rounded-sm transition-all duration-500" style={{ width: `${wcPct}%` }} />
-                </div>
-                <span className="text-[10px] font-mono text-muted-foreground">{wcPct}%</span>
-              </div>
-            )}
-            {/* Input card */}
-            <div className="px-3 pb-3 pt-1.5" style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}>
-              <div className="bg-background rounded-2xl shadow-[0_2px_24px_rgba(0,0,0,0.10)] border border-border overflow-hidden">
-                {/* Borderless textarea for notes */}
-                <div className="px-4 pt-4 pb-2">
-                  <textarea
-                    className="w-full bg-transparent border-none outline-none font-sans text-[16px] leading-[1.6] resize-none min-h-[28px] max-h-[120px] text-foreground placeholder:text-muted-foreground"
-                    placeholder={currentChapter?.content ? "Add notes or instructions…" : "Add context or notes for this chapter…"}
-                    value={personalise.notes || ''}
-                    onChange={(e) => setPersonalise((p: any) => ({ ...p, notes: e.target.value }))}
-                    rows={1}
-                    disabled={isGenerating}
-                  />
-                </div>
-                {/* Icon row — no separator */}
-                <div className="flex items-center gap-1.5 px-3 pb-3">
-                  <button
-                    className="w-10 h-10 bg-secondary hover:bg-secondary/70 rounded-full flex items-center justify-center text-foreground text-[22px] font-light transition-colors"
-                    onClick={() => setShowPersonalise(true)}>
-                    +
-                  </button>
-                  {currentChapter?.content && !isGenerating && (
-                    <button
-                      className="flex items-center gap-1 px-3 h-8 bg-secondary rounded-full text-muted-foreground text-[12px] font-medium hover:text-foreground transition-colors"
-                      onClick={() => setShowOutlineModal(true)}>
-                      Draft again
-                    </button>
-                  )}
-                  <div className="flex-1" />
-                  {isGenerating ? (
-                    <button
-                      className="w-10 h-10 bg-foreground text-background rounded-full flex items-center justify-center text-[13px] font-bold"
-                      onClick={() => handleStopGeneration()}>
-                      ◼
-                    </button>
-                  ) : currentLocked ? (
-                    <div className="w-10 h-10 bg-secondary rounded-full flex items-center justify-center opacity-40 cursor-not-allowed">
-                      <Lock size={14} />
-                    </div>
-                  ) : (
-                    <button
-                      className="w-10 h-10 bg-foreground text-background rounded-full flex items-center justify-center font-serif italic font-bold text-[18px] disabled:opacity-30 transition-opacity"
-                      onClick={() => {
-                        if (currentChapter?.content && (currentChapter.word_count_actual ?? 0) < (currentChapter.word_count_target ?? 0)) {
-                          handleContinueWriting(currentChapter.content, (currentChapter.word_count_target ?? 0) - (currentChapter.word_count_actual ?? 0));
-                        } else {
-                          setShowOutlineModal(true);
-                        }
-                      }}>
-                      §
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Bottom bar — desktop only */}
-          <div className="border-t border-transparent flex-shrink-0 bg-background hidden sm:block">
+          {/* Bottom bar */}
+          <div className="border-t border-transparent flex-shrink-0 bg-background">
 
             {/* ── EMPTY STATE: bare icon pair ── */}
             {!currentChapter?.content && !isGenerating && !currentLocked && (
