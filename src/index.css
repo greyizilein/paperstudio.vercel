@@ -302,6 +302,8 @@
 
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+.no-scrollbar::-webkit-scrollbar-track { display: none; }
+.no-scrollbar::-webkit-scrollbar-thumb { display: none; }
 
 /* ── PaperStudio scan-loader animations ─────────────────────────────── */
 @keyframes ps-page-float {
