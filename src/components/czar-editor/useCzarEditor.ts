@@ -954,6 +954,27 @@ export function useCzarEditor(): UseCzarEditorReturn {
               if (inferred) setDocTitle(inferred);
             }
           }
+          // Auto-generate any image placeholders the AI wrote (e.g. ![description])
+          const imgMatches = [...buffer.matchAll(/!\[([^\]]{10,})\](?!\()/g)];
+          imgMatches.forEach((match, i) => {
+            const desc = match[1];
+            const imgId = `img_${Date.now()}_${i}`;
+            setMessages(prev => [
+              ...prev,
+              { id: imgId, role: 'assistant' as const, content: 'Generating diagram…', mode: 'chat', isStreaming: true },
+            ]);
+            callCzarImage(desc)
+              .then(({ imageUrl, text: caption }) => {
+                setMessages(prev => prev.map(m => m.id === imgId
+                  ? { ...m, content: imageUrl ? '' : (caption || 'Couldn\'t generate that image.'), imageUrl: imageUrl ?? undefined, isStreaming: false }
+                  : m));
+              })
+              .catch(() => {
+                setMessages(prev => prev.map(m => m.id === imgId
+                  ? { ...m, content: 'Couldn\'t generate that image.', isStreaming: false }
+                  : m));
+              });
+          });
         },
         onError: (msg) => {
           clearStreamTimeout();
