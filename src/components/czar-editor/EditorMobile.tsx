@@ -219,7 +219,7 @@ function CzarChatMessage({ content, isStreaming, imageUrl }: { content: string; 
   return (
     <div className="mb-5">
       {/* Brand mark sits above the message so content spans the full width */}
-      <span className="block font-serif italic font-bold text-[#e85d3f] text-[15px] mb-1.5 leading-none">§</span>
+      <span className="block font-serif italic font-bold text-[#e85d3f] text-[15px] mb-1.5 leading-none">Ц</span>
       <div className="min-w-0">
         {isStreaming && !content && !imageUrl ? (
           <div className="flex gap-1 pt-1">
@@ -262,7 +262,7 @@ function CzarDocumentCard({
 
   return (
     <div className="flex items-start gap-2.5 mb-4">
-      <span className="font-serif italic font-bold text-[#e85d3f] text-[14px] mt-1 flex-shrink-0 w-5 text-center">§</span>
+      <span className="font-serif italic font-bold text-[#e85d3f] text-[14px] mt-1 flex-shrink-0 w-5 text-center">Ц</span>
       <div className="flex-1 min-w-0 border border-zinc-200 rounded-2xl overflow-hidden shadow-sm">
         {/* Card header */}
         <div className="flex items-center justify-between px-4 py-2.5 bg-zinc-50 border-b border-zinc-200">
@@ -297,7 +297,7 @@ function CzarDocumentCard({
             <div className="flex items-center gap-0 border-t border-zinc-100">
               {[
                 { icon: '✎', label: 'Edit', onClick: onExpand },
-                { icon: '§', label: 'Tighten', onClick: onTighten },
+                { icon: 'Ц', label: 'Tighten', onClick: onTighten },
                 { icon: '✓', label: 'Correct', onClick: onCorrect },
                 { icon: '↓', label: 'Word', onClick: onDownloadDocx },
               ].map(({ icon, label, onClick }) => (
@@ -396,7 +396,7 @@ function CzChatInput({
               className="w-10 h-10 bg-zinc-900 text-white rounded-full flex items-center justify-center font-serif italic font-bold text-[18px] disabled:opacity-30 transition-opacity"
               onClick={onSend}
               disabled={!value.trim()}>
-              §
+              Ц
             </button>
           )}
         </div>
@@ -616,7 +616,7 @@ export function CzarMobile() {
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center h-full gap-3 opacity-30">
-              <span className="font-serif italic text-[#e85d3f] text-6xl leading-none">§</span>
+              <span className="font-serif italic text-[#e85d3f] text-6xl leading-none">Ц</span>
               <span className="font-mono text-[10px] tracking-widest uppercase text-zinc-500">No document yet</span>
             </div>
           )}
