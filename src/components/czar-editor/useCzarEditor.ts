@@ -38,6 +38,15 @@ export interface CzSuggestion {
 export type StreamOp = 'tighten' | 'continue' | 'suggest' | 'write' | null;
 export type SaveStatus = 'saved' | 'saving' | 'unsaved' | 'error';
 
+export interface ChatMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  mode: string | null;
+  isStreaming?: boolean;
+  isDocument?: boolean;
+}
+
 export interface CzEditorPrefs {
   // Editor UI
   width: 'narrow' | 'medium' | 'wide';
@@ -241,6 +250,11 @@ export interface UseCzarEditorReturn {
   // Import file
   importFile: (attachment: CzarRequest['attachments'] extends (infer T)[] ? T : never) => void;
 
+  // Chat interface
+  messages: ChatMessage[];
+  sendMessage: (text: string, panelSettings?: Partial<CzPanelSettings>) => void;
+  tightenMessage: (content: string, msgId: string) => void;
+
   // Prefs
   prefs: CzEditorPrefs;
   setPrefs: (patch: Partial<CzEditorPrefs>) => void;
@@ -427,6 +441,17 @@ export function useCzarEditor(): UseCzarEditorReturn {
       setDocContentRaw(lastAssistant?.content ?? '');
       if (lastAssistant) activeMessageIdRef.current = lastAssistant.id;
 
+      const chatMsgs: ChatMessage[] = msgs
+        .filter((m: any) => m.content)
+        .map((m: any) => ({
+          id: m.id,
+          role: m.role as 'user' | 'assistant',
+          content: m.content ?? '',
+          mode: m.mode ?? null,
+          isDocument: m.role === 'assistant' && m.mode !== 'chat' && (m.content?.length ?? 0) > 150,
+        }));
+      setMessages(chatMsgs);
+
       const { data: conv } = await supabase
         .from('czar_conversations')
         .select('title, checkpoint_data')
@@ -519,6 +544,7 @@ export function useCzarEditor(): UseCzarEditorReturn {
   // ── AI Operations ────────────────────────────────────────────────────────
   const [streamOp, setStreamOp] = useState<StreamOp>(null);
   const [streamingDoc, setStreamingDoc] = useState(false);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [currentAgent, setCurrentAgent] = useState<string | null>(null);
   const [contentMode, setContentMode] = useState<CzarMode | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -782,6 +808,139 @@ export function useCzarEditor(): UseCzarEditorReturn {
     );
   }, [activePieceId, docContent, streamingDoc, prefs, activeVoice, audience, targetLength, persistContent, startStreamTimeout, clearStreamTimeout]);
 
+  const sendMessage = useCallback((text: string, panelSettings?: Partial<CzPanelSettings>) => {
+    if (!activePieceId || streamingDoc || !text.trim()) return;
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
+    startStreamTimeout(ctrl);
+    setStreamingDoc(true);
+    setStreamOp('write');
+
+    const effectiveMode = isImageRequest(text) ? 'chat' : (panelSettings?.mode ?? 'chat');
+    setContentMode(effectiveMode as any);
+
+    const userMsgId = 'user_' + Date.now();
+    const assistantMsgId = 'ast_' + Date.now();
+
+    setMessages(prev => [
+      ...prev,
+      { id: userMsgId, role: 'user', content: text, mode: null },
+      { id: assistantMsgId, role: 'assistant', content: '', mode: effectiveMode, isStreaming: true, isDocument: false },
+    ]);
+
+    let buffer = '';
+
+    streamCzar(
+      {
+        conversation_id: activePieceId,
+        user_message: text,
+        mode: effectiveMode as any,
+        settings: buildCzarSettings(prefs, activeVoice, audience, targetLength, panelSettings as any),
+      },
+      {
+        onAgent: (e) => setCurrentAgent(e.name),
+        onDelta: (txt) => {
+          buffer += txt;
+          setMessages(prev => prev.map(m => m.id === assistantMsgId ? { ...m, content: buffer } : m));
+        },
+        onReplace: (e) => {
+          buffer = e.content;
+          setMessages(prev => prev.map(m => m.id === assistantMsgId ? { ...m, content: buffer } : m));
+        },
+        onDone: () => {
+          clearStreamTimeout();
+          setStreamingDoc(false);
+          setStreamOp(null);
+          setCurrentAgent(null);
+          const isDoc = effectiveMode !== 'chat' && buffer.length > 150;
+          setMessages(prev => prev.map(m =>
+            m.id === assistantMsgId
+              ? { ...m, isStreaming: false, isDocument: isDoc, content: buffer }
+              : m
+          ));
+          if (isDoc) {
+            setDocContentRaw(buffer);
+            persistContent(buffer);
+            if (docTitle === 'Untitled' || !docTitle) {
+              const h1 = buffer.match(/^# (.+)/m);
+              const inferred = h1
+                ? h1[1].trim().slice(0, 80)
+                : text.trim().split(/\s+/).slice(0, 6).join(' ') + (text.trim().split(/\s+/).length > 6 ? '…' : '');
+              if (inferred) setDocTitle(inferred);
+            }
+          }
+        },
+        onError: (msg) => {
+          clearStreamTimeout();
+          setStreamingDoc(false);
+          setStreamOp(null);
+          setCurrentAgent(null);
+          setMessages(prev => prev.map(m =>
+            m.id === assistantMsgId
+              ? { ...m, isStreaming: false, content: msg ?? 'Something went wrong. Please try again.' }
+              : m
+          ));
+        },
+      },
+      ctrl.signal,
+    );
+  }, [activePieceId, streamingDoc, prefs, activeVoice, audience, targetLength, persistContent, docTitle, setDocTitle, startStreamTimeout, clearStreamTimeout]);
+
+  const tightenMessage = useCallback((content: string, msgId: string) => {
+    if (!activePieceId || streamingDoc || !content.trim()) return;
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
+    startStreamTimeout(ctrl);
+    setStreamingDoc(true);
+    setStreamOp('tighten');
+
+    setMessages(prev => prev.map(m =>
+      m.id === msgId ? { ...m, isStreaming: true } : m
+    ));
+
+    let buffer = '';
+
+    streamCzar(
+      {
+        conversation_id: activePieceId,
+        user_message: `Tighten this document. Maintain voice and meaning — cut unnecessary words, improve sentence rhythm, sharpen the prose:\n\n${content}`,
+        mode: 'write',
+        settings: buildCzarSettings(prefs, activeVoice, audience, targetLength),
+      },
+      {
+        onAgent: (e) => setCurrentAgent(e.name),
+        onDelta: (txt) => {
+          buffer += txt;
+          setMessages(prev => prev.map(m => m.id === msgId ? { ...m, content: buffer } : m));
+        },
+        onReplace: (e) => {
+          buffer = e.content;
+          setMessages(prev => prev.map(m => m.id === msgId ? { ...m, content: buffer } : m));
+        },
+        onDone: () => {
+          clearStreamTimeout();
+          setStreamingDoc(false);
+          setStreamOp(null);
+          setCurrentAgent(null);
+          setMessages(prev => prev.map(m =>
+            m.id === msgId ? { ...m, isStreaming: false, content: buffer } : m
+          ));
+          setDocContentRaw(buffer);
+          persistContent(buffer);
+        },
+        onError: (msg) => {
+          clearStreamTimeout();
+          setStreamingDoc(false);
+          setStreamOp(null);
+          setCurrentAgent(null);
+          setMessages(prev => prev.map(m => m.id === msgId ? { ...m, isStreaming: false } : m));
+          setError(msg ?? 'Tighten failed');
+        },
+      },
+      ctrl.signal,
+    );
+  }, [activePieceId, streamingDoc, prefs, activeVoice, audience, targetLength, persistContent, startStreamTimeout, clearStreamTimeout]);
+
   // ── Piece operations ─────────────────────────────────────────────────────
   const selectPiece = useCallback((id: string) => {
     setActivePieceId(id);
@@ -844,6 +1003,7 @@ export function useCzarEditor(): UseCzarEditorReturn {
     streamOp, streamingDoc, currentAgent, contentMode,
     isDownloadable: contentMode !== null && contentMode !== 'chat' && wordCount > 80,
     tighten, continueDoc, writeFromPrompt, stopStream, importFile,
+    messages, sendMessage, tightenMessage,
     prefs, setPrefs,
     error, clearError: () => setError(null),
   };
