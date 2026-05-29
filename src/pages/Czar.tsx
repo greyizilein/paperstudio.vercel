@@ -234,6 +234,16 @@ export default function CzarPage() {
     });
   }, [messages]);
 
+  // ── Scroll writer panel as content streams in ───────────────────────────────
+
+  useEffect(() => {
+    if (activeView === 'writer' && writerContent) {
+      requestAnimationFrame(() => {
+        writerEndRef.current?.scrollIntoView({ behavior: "instant" as ScrollBehavior });
+      });
+    }
+  }, [writerContent, activeView]);
+
   // ── Load user info + subscription ───────────────────────────────────────────
 
   useEffect(() => {
@@ -747,7 +757,7 @@ export default function CzarPage() {
                 type="button"
                 onClick={() => setActiveView('chat')}
                 className={[
-                  "flex items-center gap-1.5 px-4 text-[11.5px] font-medium border-r border-border/40 relative transition-colors select-none",
+                  "h-full flex items-center gap-1.5 px-4 text-[11.5px] font-medium border-r border-border/40 relative transition-colors select-none",
                   activeView === 'chat'
                     ? "bg-background/60 text-foreground"
                     : "text-muted-foreground/60 hover:text-muted-foreground hover:bg-secondary/40",
@@ -763,7 +773,7 @@ export default function CzarPage() {
                 type="button"
                 onClick={() => setActiveView('writer')}
                 className={[
-                  "flex items-center gap-1.5 px-4 text-[11.5px] font-medium border-r border-border/40 relative transition-colors select-none",
+                  "h-full flex items-center gap-1.5 px-4 text-[11.5px] font-medium border-r border-border/40 relative transition-colors select-none",
                   activeView === 'writer'
                     ? "bg-background/60 text-foreground"
                     : "text-muted-foreground/60 hover:text-muted-foreground hover:bg-secondary/40",
