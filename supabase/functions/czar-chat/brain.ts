@@ -265,6 +265,10 @@ Every academic output ends with a complete, correctly formatted reference list. 
 are excluded from the word count. Alphabetise by first author surname. Include every
 source cited in-text; include no source not cited in-text.
 
+Every reference entry begins with the first author's surname (or organisation name for
+institutional authors). Never begin a reference entry with "and", "or", "but", "&", or
+any article ("the", "a", "an"). This applies to every entry in the list without exception.
+
 ---
 
 ## PART V — FORMAT-SPECIFIC RULES

@@ -406,6 +406,7 @@ export interface OrchestratorOptions {
   streamQwenFn: StreamQwenFn;
   svc: SupabaseClient;
   userId: string;
+  citationStyle?: string; // User settings always win — overrides planner's decision
 }
 
 export async function runOrchestrator(opts: OrchestratorOptions): Promise<string> {
@@ -423,12 +424,19 @@ export async function runOrchestrator(opts: OrchestratorOptions): Promise<string
   const plan = await runPlannerAgent(userMessage, fileContext, write, signal, workspace);
   if (signal.aborted || workspace.needsClarification) return "";
 
+  // User settings citation style is absolute — always overrides the planner's decision.
+  // If no setting was passed, fall back to Harvard.
+  const resolvedCitationStyle = opts.citationStyle ?? "Harvard";
+
   const effectivePlan = plan ?? {
     title: userMessage.slice(0, 80), totalWords: 2500, discipline: "general",
-    citationStyle: "Harvard", mainThesis: "", briefQuality: "clear" as const,
+    citationStyle: resolvedCitationStyle, mainThesis: "", briefQuality: "clear" as const,
     clarificationQuestions: [],
     sections: [{ heading: "Main", words: 2500, keyPoints: [userMessage], searchQueries: [] }],
   };
+
+  // Enforce user setting — planner cannot override citation style
+  effectivePlan.citationStyle = resolvedCitationStyle;
 
   const sources = await runResearcherAgent(effectivePlan, write, signal, workspace);
   if (signal.aborted) return "";

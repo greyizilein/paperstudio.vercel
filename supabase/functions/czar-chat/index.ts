@@ -1829,6 +1829,7 @@ Rules:
           streamQwenFn: streamQwen,
           svc,
           userId,
+          citationStyle: req.settings?.citation_style as string | undefined,
         });
       } catch (err: any) {
         if (err?.name !== "AbortError") {
