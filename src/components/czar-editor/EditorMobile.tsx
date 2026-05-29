@@ -432,10 +432,12 @@ export function CzarMobile() {
   const [downloadContent, setDownloadContent] = useState('');
 
   const [input, setInput] = useState('');
-  const [expandedMsgId, setExpandedMsgId] = useState<string | null>(null);
+  const [activeView, setActiveView] = useState<'chat' | 'writer'>('chat');
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const writerScrollRef = useRef<HTMLDivElement>(null);
+  const didSwitchRef = useRef(false);
 
   // Upload modal
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
@@ -458,7 +460,29 @@ export function CzarMobile() {
   const v = CZ_VOICES.find((x) => x.id === editor.activeVoice) || CZ_VOICES[0];
   const userName: string = (user as any)?.user_metadata?.full_name || (user as any)?.user_metadata?.name || user?.email?.split('@')[0] || '';
 
-  // Auto-scroll to newest message
+  // Derive writer content from the streaming or last document message
+  const streamingMsg = editor.messages.slice().reverse().find(m => m.isStreaming && m.role === 'assistant');
+  const lastDocMsg = editor.messages.slice().reverse().find(m => m.isDocument && !m.isStreaming && m.role === 'assistant');
+  const writerContent = streamingMsg?.content ?? lastDocMsg?.content ?? '';
+  const writerStreaming = !!streamingMsg;
+
+  // Auto-switch to Writer tab when a document starts streaming
+  useEffect(() => {
+    if (!didSwitchRef.current) {
+      if ((streamingMsg && streamingMsg.content.length > 80) || lastDocMsg) {
+        didSwitchRef.current = true;
+        setActiveView('writer');
+      }
+    }
+  }, [editor.messages]);
+
+  // Reset to Chat tab when switching conversation
+  useEffect(() => {
+    didSwitchRef.current = false;
+    setActiveView('chat');
+  }, [editor.activePieceId]);
+
+  // Auto-scroll chat to newest message
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [editor.messages.length, editor.streamingDoc]);
@@ -517,9 +541,6 @@ export function CzarMobile() {
     editor.importFile({ storage_path: path, filename: f.name, size: f.size, mime });
   }, [user?.id, editor]);
 
-  // Find the last document message for download
-  const lastDocMessage = [...editor.messages].reverse().find(m => m.isDocument && !m.isStreaming);
-
   return (
     <div className="cz-m-vars flex flex-col w-full h-[100dvh] fixed inset-0 bg-white dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 font-sans z-[9000] overflow-hidden">
 
@@ -548,63 +569,86 @@ export function CzarMobile() {
             />
           </div>
 
-          {/* RIGHT: download + menu + settings */}
+          {/* RIGHT: menu + settings */}
           <div className="flex items-center gap-0.5 flex-shrink-0">
-            {lastDocMessage && (
-              <button className="w-9 h-9 flex items-center justify-center text-zinc-700 text-lg hover:bg-zinc-100 rounded-lg" onClick={() => { setDownloadContent(lastDocMessage.content); setDownloadSheet(true); }}>↓</button>
-            )}
             <button className="w-9 h-9 flex items-center justify-center text-zinc-900 text-[20px] font-bold hover:bg-zinc-100 rounded-lg" onClick={() => setPiecesSheet(true)}>≡</button>
             <button className="w-9 h-9 flex items-center justify-center text-zinc-900 text-[17px] hover:bg-zinc-100 rounded-lg" onClick={() => { setSettingsTab('academic'); setSettingsSheet(true); }}>⚙</button>
           </div>
         </div>
       </div>
 
-      {/* ── MESSAGE AREA ── */}
-      <div className="flex-1 overflow-y-auto overflow-x-hidden" {...drop.handlers}>
-        {editor.messages.length === 0 && !editor.docLoading ? (
-          <CzEmptyState userName={userName} />
-        ) : (
-          <div className="px-4 pt-4 pb-2">
-            {editor.docLoading && (
-              <div className="space-y-3 animate-pulse opacity-40 py-4">
-                <div className="h-4 bg-zinc-200 rounded w-2/3 ml-auto" />
-                <div className="h-20 bg-zinc-200 rounded w-full" />
-                <div className="h-4 bg-zinc-200 rounded w-1/2 ml-auto" />
-                <div className="h-32 bg-zinc-200 rounded w-full" />
-              </div>
-            )}
-            {editor.messages.map((msg) => {
-              if (msg.role === 'user') return <UserBubble key={msg.id} content={msg.content} />;
-              if (msg.isDocument || (msg.mode && msg.mode !== 'chat' && msg.content.length > 150)) {
-                return (
-                  <CzarDocumentCard
-                    key={msg.id}
-                    message={msg}
-                    expanded={expandedMsgId === msg.id}
-                    onExpand={() => setExpandedMsgId(expandedMsgId === msg.id ? null : msg.id)}
-                    onTighten={() => editor.tightenMessage(msg.content, msg.id)}
-                    onCorrect={() => setCorrectionOpen(true)}
-                    onDownloadDocx={() => downloadAsWord(msg.content)}
-                    onDownloadMd={() => downloadMarkdown(editor.docTitle, msg.content)}
-                    docTitle={editor.docTitle}
-                  />
-                );
-              }
-              return <CzarChatMessage key={msg.id} content={msg.content} isStreaming={msg.isStreaming} />;
-            })}
-
-            {/* Agent status during streaming */}
-            {editor.streamingDoc && editor.currentAgent && (
-              <div className="flex items-center gap-2 px-3 py-2 mb-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#e85d3f] animate-pulse" />
-                <span className="font-mono text-[9px] tracking-widest uppercase text-zinc-400">{editor.currentAgent}</span>
-              </div>
-            )}
-
-            <div ref={messagesEndRef} />
-          </div>
+      {/* ── TAB BAR ── */}
+      <div className="flex-shrink-0 flex items-stretch border-b border-zinc-100 bg-white">
+        <button
+          onClick={() => setActiveView('chat')}
+          className={`flex-1 h-10 relative text-[11px] font-mono tracking-[0.15em] uppercase transition-colors ${activeView === 'chat' ? 'text-zinc-900' : 'text-zinc-400 hover:text-zinc-600'}`}>
+          {activeView === 'chat' && <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-[#e85d3f] rounded-t-full" />}
+          Chat
+        </button>
+        <button
+          onClick={() => setActiveView('writer')}
+          className={`flex-1 h-10 relative flex items-center justify-center gap-1.5 text-[11px] font-mono tracking-[0.15em] uppercase transition-colors ${activeView === 'writer' ? 'text-zinc-900' : 'text-zinc-400 hover:text-zinc-600'}`}>
+          {activeView === 'writer' && <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-[#e85d3f] rounded-t-full" />}
+          Writer
+          {writerStreaming && <span className="w-1.5 h-1.5 rounded-full bg-[#e85d3f] animate-pulse flex-shrink-0" />}
+        </button>
+        {activeView === 'writer' && writerContent && (
+          <button
+            onClick={() => downloadAsWord(writerContent)}
+            disabled={writerStreaming}
+            className="px-4 h-10 border-l border-zinc-100 font-mono text-[11px] tracking-[0.15em] uppercase text-[#e85d3f] disabled:opacity-30 transition-opacity flex-shrink-0">
+            ↓ word
+          </button>
         )}
       </div>
+
+      {/* ── WRITER VIEW ── */}
+      {activeView === 'writer' ? (
+        <div ref={writerScrollRef} className="flex-1 overflow-y-auto px-5 pt-6 pb-10" {...drop.handlers}>
+          {writerContent ? (
+            <div className="prose prose-zinc max-w-none prose-p:font-serif prose-p:text-[16px] prose-p:leading-[1.8] prose-headings:font-serif prose-headings:font-bold prose-h1:text-2xl prose-h2:text-xl prose-h3:text-[17px] [&_table]:text-sm [&_table]:w-full [&_th]:bg-zinc-100 [&_th]:px-2 [&_th]:py-1 [&_th]:border [&_th]:border-zinc-300 [&_td]:px-2 [&_td]:py-1 [&_td]:border [&_td]:border-zinc-200">
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>{writerContent}</ReactMarkdown>
+              {writerStreaming && <span className="inline-block w-0.5 h-4 bg-[#e85d3f] ml-0.5 animate-pulse align-middle" />}
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center h-full gap-3 opacity-30">
+              <span className="font-serif italic text-[#e85d3f] text-6xl leading-none">§</span>
+              <span className="font-mono text-[10px] tracking-widest uppercase text-zinc-500">No document yet</span>
+            </div>
+          )}
+        </div>
+      ) : (
+        /* ── CHAT VIEW ── */
+        <div className="flex-1 overflow-y-auto overflow-x-hidden" {...drop.handlers}>
+          {editor.messages.length === 0 && !editor.docLoading ? (
+            <CzEmptyState userName={userName} />
+          ) : (
+            <div className="px-4 pt-4 pb-2">
+              {editor.docLoading && (
+                <div className="space-y-3 animate-pulse opacity-40 py-4">
+                  <div className="h-4 bg-zinc-200 rounded w-2/3 ml-auto" />
+                  <div className="h-20 bg-zinc-200 rounded w-full" />
+                  <div className="h-4 bg-zinc-200 rounded w-1/2 ml-auto" />
+                  <div className="h-32 bg-zinc-200 rounded w-full" />
+                </div>
+              )}
+              {editor.messages.map((msg) => {
+                if (msg.role === 'user') return <UserBubble key={msg.id} content={msg.content} />;
+                return <CzarChatMessage key={msg.id} content={msg.content} isStreaming={msg.isStreaming} />;
+              })}
+
+              {editor.streamingDoc && editor.currentAgent && (
+                <div className="flex items-center gap-2 px-3 py-2 mb-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#e85d3f] animate-pulse" />
+                  <span className="font-mono text-[9px] tracking-widest uppercase text-zinc-400">{editor.currentAgent}</span>
+                </div>
+              )}
+
+              <div ref={messagesEndRef} />
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ── INPUT BAR ── */}
       <div className="flex-shrink-0 bg-white z-20">
@@ -633,8 +677,8 @@ export function CzarMobile() {
       />
       <CzMobileDownloadSheet
         open={downloadSheet} onClose={() => setDownloadSheet(false)}
-        onDocx={() => downloadAsWord(downloadContent || lastDocMessage?.content || '')}
-        onMarkdown={() => downloadMarkdown(editor.docTitle, downloadContent || lastDocMessage?.content || '')}
+        onDocx={() => downloadAsWord(downloadContent || writerContent)}
+        onMarkdown={() => downloadMarkdown(editor.docTitle, downloadContent || writerContent)}
       />
       <CzMobileUploadModal open={uploadModalOpen} onClose={() => setUploadModalOpen(false)} info={uploadInfo} step={uploadStep} />
 
