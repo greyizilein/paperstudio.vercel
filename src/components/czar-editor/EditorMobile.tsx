@@ -434,7 +434,7 @@ export function CzarMobile() {
 
   const [piecesSheet, setPiecesSheet] = useState(false);
   const [settingsSheet, setSettingsSheet] = useState(false);
-  const [settingsTab, setSettingsTab] = useState<'voices' | 'academic' | 'rules'>('voices');
+  const [settingsTab, setSettingsTab] = useState<'voices' | 'academic' | 'rules' | 'rubric'>('voices');
   const [correctionOpen, setCorrectionOpen] = useState(false);
   const [downloadSheet, setDownloadSheet] = useState(false);
   const [downloadContent, setDownloadContent] = useState('');
@@ -698,7 +698,7 @@ export function CzarMobile() {
       {/* ── EXTERNAL OVERLAYS ── */}
       <div className="fixed inset-0 z-[100000] pointer-events-none">
         <div className="pointer-events-auto">
-          <CzMobileSettings open={settingsSheet} onClose={() => setSettingsSheet(false)} initialTab={settingsTab} activeVoice={editor.activeVoice} setVoice={editor.setActiveVoice} prefs={editor.prefs} setPrefs={editor.setPrefs} />
+          <CzMobileSettings open={settingsSheet} onClose={() => setSettingsSheet(false)} initialTab={settingsTab} activeVoice={editor.activeVoice} setVoice={editor.setActiveVoice} prefs={editor.prefs} setPrefs={editor.setPrefs} rubricCriteria={editor.rubricCriteria} setRubricCriteria={editor.setRubricCriteria} />
           <CzMobileMic open={dict.live} seconds={dict.seconds} final={dict.final} interim={dict.interim} onClose={() => { dict.stop(); }} onInsert={() => {}} />
           <CorrectionModal open={correctionOpen} onClose={() => setCorrectionOpen(false)} onApplied={(content) => { editor.setDocContent(content); editor.manualSave(); }} />
         </div>

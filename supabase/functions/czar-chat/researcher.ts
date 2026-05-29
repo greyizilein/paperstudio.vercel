@@ -178,6 +178,71 @@ async function searchSemanticScholar(
 }
 
 // ---------------------------------------------------------------------------
+// OpenAlex — 250M open scholarly works, no API key required
+// ---------------------------------------------------------------------------
+
+async function searchOpenAlex(
+  query: string,
+  signal: AbortSignal,
+): Promise<Array<Partial<VerifiedSource>>> {
+  try {
+    const encoded = encodeURIComponent(query);
+    const resp = await fetch(
+      `https://api.openalex.org/works?search=${encoded}&per-page=6&select=id,title,authorships,publication_year,primary_location,doi,abstract_inverted_index&mailto=support@paperstudio.app`,
+      { signal },
+    );
+    if (!resp.ok) return [];
+    const data = await resp.json();
+    return (data.results ?? []).map((p: any) => {
+      const rawDoi = p.doi ? String(p.doi).replace("https://doi.org/", "") : null;
+      const authors = (p.authorships ?? []).slice(0, 6).map((a: any) => {
+        const name: string = a.author?.display_name ?? "";
+        const parts = name.split(" ");
+        if (parts.length >= 2) {
+          const family = parts[parts.length - 1];
+          const initial = parts[0].charAt(0) + ".";
+          return `${family}, ${initial}`;
+        }
+        return name;
+      });
+      const journal: string | undefined =
+        p.primary_location?.source?.display_name ?? undefined;
+
+      // Reconstruct abstract from inverted index (OpenAlex format)
+      let abstract = "";
+      if (p.abstract_inverted_index && typeof p.abstract_inverted_index === "object") {
+        const positions: [number, string][] = [];
+        for (const [word, posArr] of Object.entries(
+          p.abstract_inverted_index as Record<string, number[]>,
+        )) {
+          for (const pos of posArr) positions.push([pos, word]);
+        }
+        abstract = positions
+          .sort((a, b) => a[0] - b[0])
+          .map(([, w]) => w)
+          .join(" ")
+          .slice(0, 400);
+      }
+
+      return {
+        authors,
+        year: p.publication_year ?? null,
+        title: p.title ?? "",
+        journal,
+        doi: rawDoi ?? undefined,
+        url: rawDoi
+          ? `https://doi.org/${rawDoi}`
+          : `https://openalex.org/${p.id}`,
+        snippet: abstract,
+        confidence: rawDoi ? ("probable" as const) : ("web-only" as const),
+      };
+    });
+  } catch {
+    return [];
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
@@ -295,6 +360,23 @@ export async function discoverSources(
         for (const r of results) {
           const key = dedupKey(r);
           if (key && !pool.has(key)) pool.set(key, r);
+        }
+      }),
+    );
+
+    // OpenAlex — free, 250M works, no key required
+    searchPromises.push(
+      searchOpenAlex(query, signal).then((results) => {
+        for (const r of results) {
+          const key = dedupKey(r);
+          if (key && !pool.has(key)) pool.set(key, r);
+          else if (key && pool.has(key)) {
+            // Upgrade web-only to probable if OpenAlex has a DOI
+            const existing = pool.get(key)!;
+            if (existing.confidence === "web-only" && r.confidence === "probable") {
+              pool.set(key, { ...existing, doi: r.doi, url: r.url, confidence: "probable" });
+            }
+          }
         }
       }),
     );
