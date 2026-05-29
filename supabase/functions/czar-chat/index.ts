@@ -1809,8 +1809,11 @@ Rules:
       }
     }
 
+    // Only use the multi-agent pipeline for genuinely complex tasks.
+    // Simple write requests go directly to the AI for immediate streaming.
     const isOrchestratedMode =
-      mode === "write" || mode === "research" || mode === "literature_review" || mode === "legal";
+      mode === "research" || mode === "literature_review" ||
+      (mode === "write" && complexity === "high");
 
     if (isOrchestratedMode && !signal.aborted) {
       // Multi-agent pipeline: Planner → Researcher → Writer → Critic → Illustrator
