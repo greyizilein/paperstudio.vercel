@@ -930,19 +930,15 @@ export function useCzarEditor(): UseCzarEditorReturn {
         },
         onDone: () => {
           clearStreamTimeout();
-          setStreamingDoc(false);
           setStreamOp(null);
-          setCurrentAgent(null);
+
           const isDoc = buffer.length > 200 && (
             effectiveMode !== 'chat' ||
             /^#{1,3} /m.test(buffer) ||
             buffer.split('\n\n').length >= 4
           );
-          setMessages(prev => prev.map(m =>
-            m.id === assistantMsgId
-              ? { ...m, isStreaming: false, isDocument: isDoc, content: buffer }
-              : m
-          ));
+
+          // Persist original content (images are session-display only)
           if (isDoc) {
             setDocContentRaw(buffer);
             persistContent(buffer);
@@ -954,27 +950,64 @@ export function useCzarEditor(): UseCzarEditorReturn {
               if (inferred) setDocTitle(inferred);
             }
           }
-          // Auto-generate any image placeholders the AI wrote (e.g. ![description])
+
           const imgMatches = [...buffer.matchAll(/!\[([^\]]{10,})\](?!\()/g)];
-          imgMatches.forEach((match, i) => {
-            const desc = match[1];
-            const imgId = `img_${Date.now()}_${i}`;
-            setMessages(prev => [
-              ...prev,
-              { id: imgId, role: 'assistant' as const, content: 'Generating diagram…', mode: 'chat', isStreaming: true },
-            ]);
-            callCzarImage(desc)
-              .then(({ imageUrl, text: caption }) => {
-                setMessages(prev => prev.map(m => m.id === imgId
-                  ? { ...m, content: imageUrl ? '' : (caption || 'Couldn\'t generate that image.'), imageUrl: imageUrl ?? undefined, isStreaming: false }
-                  : m));
-              })
-              .catch(() => {
-                setMessages(prev => prev.map(m => m.id === imgId
-                  ? { ...m, content: 'Couldn\'t generate that image.', isStreaming: false }
-                  : m));
-              });
+
+          if (imgMatches.length === 0) {
+            setStreamingDoc(false);
+            setCurrentAgent(null);
+            setMessages(prev => prev.map(m =>
+              m.id === assistantMsgId
+                ? { ...m, isStreaming: false, isDocument: isDoc, content: buffer }
+                : m
+            ));
+            return;
+          }
+
+          // Build display buffer — replace each placeholder with a loading marker
+          // so it renders as a Ц spinner inline at that exact position
+          let display = buffer;
+          const tasks: { id: string; desc: string }[] = [];
+          [...imgMatches].reverse().forEach((match, ri) => {
+            const i = imgMatches.length - 1 - ri;
+            const id = `${Date.now()}_${i}`;
+            tasks.unshift({ id, desc: match[1] });
+            display =
+              display.slice(0, match.index) +
+              `![${match[1]}](czar-loading://${id})` +
+              display.slice(match.index! + match[0].length);
           });
+
+          setMessages(prev => prev.map(m =>
+            m.id === assistantMsgId
+              ? { ...m, isStreaming: false, isDocument: isDoc, content: display }
+              : m
+          ));
+
+          // Generate sequentially — streamingDoc stays true to block input
+          setCurrentAgent('Illustrator');
+          (async () => {
+            let current = display;
+            for (const { id, desc } of tasks) {
+              try {
+                const { imageUrl } = await callCzarImage(desc);
+                current = current.replace(
+                  `czar-loading://${id}`,
+                  imageUrl ?? `czar-error://${id}`,
+                );
+              } catch {
+                current = current.replace(
+                  `czar-loading://${id}`,
+                  `czar-error://${id}`,
+                );
+              }
+              setMessages(prev => prev.map(m =>
+                m.id === assistantMsgId ? { ...m, content: current } : m
+              ));
+            }
+            setStreamingDoc(false);
+            setCurrentAgent(null);
+          })();
         },
         onError: (msg) => {
           clearStreamTimeout();
