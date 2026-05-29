@@ -2174,10 +2174,21 @@ ${thesisArea}`);
             {currentChapter?.title || project.title}
           </span>
         </div>
-        {/* RIGHT: chapters + settings */}
+        {/* RIGHT: humanise + corrections + chapters */}
         <div className="flex items-center gap-0.5 flex-shrink-0">
+          <button
+            className="w-9 h-9 flex items-center justify-center text-foreground hover:bg-secondary rounded-lg"
+            onClick={() => { if (!currentChapter?.content) { toast.error("Complete this chapter first."); return; } setShowHumanisePanel(true); setHumanisedText(null); setHumaniseDiff(null); setHumaniseStages([]); setIsHumanising(false); }}
+            title="Humanise">
+            <Wand2 size={16} />
+          </button>
+          <button
+            className={cn("w-9 h-9 flex items-center justify-center hover:bg-secondary rounded-lg", correctionDiff ? "text-amber-500" : "text-foreground")}
+            onClick={() => currentChapter?.status === "completed" ? setShowSupervisorModal(true) : toast.error("Complete this chapter first.")}
+            title="Corrections">
+            <FileEdit size={16} />
+          </button>
           <button className="w-9 h-9 flex items-center justify-center text-foreground text-[20px] font-bold hover:bg-secondary rounded-lg" onClick={() => setMobileChaptersOpen(true)}>≡</button>
-          <button className="w-9 h-9 flex items-center justify-center text-foreground text-[17px] hover:bg-secondary rounded-lg" onClick={() => setShowPersonalise(true)}>⚙</button>
         </div>
       </div>
 
@@ -2983,10 +2994,6 @@ ${thesisArea}`);
                     )}
                     <button onClick={() => setShowOutlineModal(true)} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-bold text-muted-foreground hover:bg-secondary hover:text-foreground transition-all">
                       <Wand2 size={11} /> Draft again
-                    </button>
-                    <div className="w-px h-3 bg-border" />
-                    <button onClick={() => setShowReviseModal(true)} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-bold text-muted-foreground hover:bg-secondary hover:text-foreground transition-all">
-                      Revise
                     </button>
                     <div className="ml-auto">
                       <button onClick={handleAccept} className="inline-flex items-center gap-1 px-3 py-1 rounded-md text-xs font-bold bg-primary text-white hover:bg-primary/90 transition-colors">
