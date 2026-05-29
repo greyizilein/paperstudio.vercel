@@ -554,8 +554,40 @@ function isPhotoRequest(message: string): boolean {
   return actionWord && imageWord && notDiagram;
 }
 
+// Decode base64 to raw bytes (Deno-safe, handles large payloads).
+function b64ToBytes(b64: string): Uint8Array {
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return bytes;
+}
+
+// Upload generated image bytes to the public czar-figures bucket.
+// Returns a small public URL — NOT a multi-MB base64 data URI. This is what
+// makes images render in-app, persist in the message row, and survive export.
+async function uploadFigure(
+  svc: SupabaseClient,
+  b64: string,
+  mime: string,
+): Promise<string | null> {
+  try {
+    const ext = mime.includes("jpeg") ? "jpg" : mime.includes("webp") ? "webp" : "png";
+    const path = `figures/${crypto.randomUUID()}.${ext}`;
+    const { error } = await svc.storage
+      .from("czar-figures")
+      .upload(path, b64ToBytes(b64), { contentType: mime, upsert: false });
+    if (error) return null;
+    const { data } = svc.storage.from("czar-figures").getPublicUrl(path);
+    return data?.publicUrl ?? null;
+  } catch {
+    return null;
+  }
+}
+
+// Imagen photorealistic / chart generation → uploads, returns public URL.
 async function generateImage(
   prompt: string,
+  svc: SupabaseClient,
   signal: AbortSignal,
 ): Promise<string | null> {
   const apiKey = Deno.env.get("GOOGLE_AI_API_KEY");
@@ -584,7 +616,7 @@ async function generateImage(
         const data = await resp.json();
         const b64 = data?.predictions?.[0]?.bytesBase64Encoded;
         const mime = data?.predictions?.[0]?.mimeType || "image/png";
-        if (b64) return `data:${mime};base64,${b64}`;
+        if (b64) return await uploadFigure(svc, b64, mime);
       }
     } catch { /* try next model */ }
   }
@@ -606,68 +638,99 @@ function detectIsDocument(content: string, wc: number): boolean {
 // Academic figure generation — replaces [IMAGE: description] markers
 // ---------------------------------------------------------------------------
 
-async function processAcademicImageMarkers(
-  content: string,
-  write: WriteFunction,
+// Generate one academic figure and upload it → public URL (or null on failure).
+async function generateFigure(
+  description: string,
+  svc: SupabaseClient,
   signal: AbortSignal,
-): Promise<string> {
+): Promise<string | null> {
   const apiKey = Deno.env.get("GOOGLE_AI_API_KEY");
-  if (!apiKey) return content;
+  if (!apiKey) return null;
+  const prompt = `Create a professional academic figure for a scholarly paper. Subject: ${description}. Style: clean white background, scientific illustration, high contrast, no decorative elements, professional typography, suitable for a peer-reviewed journal or doctoral dissertation.`;
 
-  const markerRe = /\[IMAGE:\s*([^\]]+)\]/gi;
-  const markers = [...content.matchAll(markerRe)];
-  if (markers.length === 0) return content;
+  for (const model of ["gemini-2.0-flash-preview-image-generation", "gemini-2.0-flash-exp"]) {
+    if (signal.aborted) return null;
+    try {
+      const resp = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: { responseModalities: ["TEXT", "IMAGE"] },
+          }),
+          signal: AbortSignal.timeout(45_000),
+        },
+      );
+      if (!resp.ok) continue;
+      const data = await resp.json();
+      const parts = data?.candidates?.[0]?.content?.parts ?? [];
+      const img = parts.find((p: { inlineData?: { data?: string; mimeType?: string } }) => p.inlineData?.data);
+      if (img?.inlineData) {
+        return await uploadFigure(svc, img.inlineData.data, img.inlineData.mimeType ?? "image/png");
+      }
+    } catch { /* try next model */ }
+  }
+  return null;
+}
 
-  write("agent", { id: "figures", name: "Figure Generation", status: "working", action: `Generating ${markers.length} figure(s) via Gemini…` });
+// Memoised figure generator. Kicking a figure off the moment its [IMAGE: …]
+// marker appears in the stream means it generates CONCURRENTLY while the model
+// keeps writing — so by the time the prose finishes, the figures are usually
+// already done. The post-stream resolver reuses the same in-flight promises.
+interface FigureGenerator {
+  startFromText: (accumulatedText: string) => void;
+  resolve: (content: string, write: WriteFunction) => Promise<string>;
+}
 
-  async function callGeminiImage(prompt: string): Promise<string | null> {
-    for (const model of ["gemini-2.0-flash-preview-image-generation", "gemini-2.0-flash-exp"]) {
-      if (signal.aborted) return null;
-      try {
-        const resp = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              contents: [{ parts: [{ text: prompt }] }],
-              generationConfig: { responseModalities: ["TEXT", "IMAGE"] },
-            }),
-            signal: AbortSignal.timeout(45_000),
-          },
-        );
-        if (!resp.ok) continue;
-        const data = await resp.json();
-        const parts = data?.candidates?.[0]?.content?.parts ?? [];
-        const img = parts.find((p: { inlineData?: { data?: string; mimeType?: string } }) => p.inlineData?.data);
-        if (img?.inlineData) {
-          return `data:${img.inlineData.mimeType ?? "image/png"};base64,${img.inlineData.data}`;
+function createFigureGenerator(svc: SupabaseClient, signal: AbortSignal): FigureGenerator {
+  const jobs = new Map<string, Promise<string | null>>();
+
+  const start = (description: string): Promise<string | null> => {
+    const key = description.trim();
+    if (!jobs.has(key)) jobs.set(key, generateFigure(key, svc, signal));
+    return jobs.get(key)!;
+  };
+
+  return {
+    startFromText(accumulatedText: string) {
+      // Only fire on COMPLETED markers (closing bracket present).
+      for (const m of accumulatedText.matchAll(/\[IMAGE:\s*([^\]]+)\]/gi)) start(m[1]);
+    },
+
+    async resolve(content: string, write: WriteFunction): Promise<string> {
+      const markers = [...content.matchAll(/\[IMAGE:\s*([^\]]+)\]/gi)];
+      if (markers.length === 0) return content;
+
+      write("agent", { id: "figures", name: "Figure Generation", status: "working", action: `Placing ${markers.length} figure(s)…` });
+
+      // Ensure every job is in flight (orchestrator path may not have pre-started
+      // them during streaming) so they generate in parallel, not one-by-one.
+      for (const match of markers) start(match[1]);
+
+      let updated = content;
+      let done = 0;
+      // Resolve each marker — promises are already running.
+      for (const match of markers) {
+        if (signal.aborted) break;
+        const description = match[1].trim();
+        const url = await start(description);
+        if (url) {
+          updated = updated.replace(match[0], `\n\n![${description}](${url})\n\n*Figure. ${description}*\n\n`);
+        } else {
+          updated = updated.replace(match[0], `\n\n*[Figure: ${description}]*\n\n`);
         }
-      } catch { /* try next model */ }
-    }
-    return null;
-  }
+        done++;
+        // Progressive: each image pops into place as it lands.
+        write("replace", { content: updated });
+        write("agent", { id: "figures", name: "Figure Generation", status: "working", action: `${done}/${markers.length} figures placed` });
+      }
 
-  let updated = content;
-  for (const match of markers) {
-    if (signal.aborted) break;
-    const description = match[1].trim();
-    const prompt = `Create a professional academic figure for a scholarly paper. Subject: ${description}. Style: clean white background, scientific illustration, high contrast, no decorative elements, professional typography, suitable for a peer-reviewed journal or doctoral dissertation.`;
-    const dataUri = await callGeminiImage(prompt);
-    if (dataUri) {
-      updated = updated.replace(match[0], `\n\n![${description}](${dataUri})\n\n`);
-    } else {
-      updated = updated.replace(match[0], `\n*[Figure: ${description}]*\n`);
-    }
-  }
-
-  write("agent", { id: "figures", name: "Figure Generation", status: "done", action: "Figures complete" });
-
-  if (updated !== content) {
-    write("replace", { content: updated });
-  }
-
-  return updated;
+      write("agent", { id: "figures", name: "Figure Generation", status: "done", action: "Figures complete" });
+      return updated;
+    },
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -1880,6 +1943,10 @@ Rules:
       mode === "research" || mode === "literature_review" ||
       (mode === "write" && complexity === "high");
 
+    // Figure generator — starts each image the moment its [IMAGE: …] marker is
+    // streamed, so figures render concurrently with continued writing.
+    const figureGen = createFigureGenerator(svc, signal);
+
     if (isOrchestratedMode && !signal.aborted) {
       // Multi-agent pipeline: Planner → Researcher → Writer → Critic → Illustrator
       try {
@@ -1921,7 +1988,7 @@ Rules:
           action: "Generating image with Gemini Imagen…",
         });
 
-        const imageDataUrl = await generateImage(req.user_message, signal).catch(() => null);
+        const imageDataUrl = await generateImage(req.user_message, svc, signal).catch(() => null);
 
         if (imageDataUrl && !signal.aborted) {
           const captionMatch = req.user_message.match(/\b(?:of|showing|depicting|illustrating|:)\s+(.+)/i);
@@ -1984,6 +2051,17 @@ Rules:
         { role: "user", content: userContent },
       ];
 
+      // Watch the stream: as soon as a complete [IMAGE: …] marker appears,
+      // start generating that figure in the background (concurrent with writing).
+      let streamAcc = "";
+      const writeWithFigures: WriteFunction = (event, data) => {
+        if (event === "delta" && typeof (data as { text?: unknown }).text === "string") {
+          streamAcc += (data as { text: string }).text;
+          figureGen.startFromText(streamAcc);
+        }
+        write(event, data);
+      };
+
       try {
         if (modelChoice.provider === "anthropic") {
           fullResponse = await streamAnthropic(
@@ -1991,7 +2069,7 @@ Rules:
             system,
             messages,
             modelChoice.thinking,
-            write,
+            writeWithFigures,
             signal,
           );
         } else if (modelChoice.provider === "qwen") {
@@ -1999,7 +2077,7 @@ Rules:
             modelChoice.model,
             system,
             messages,
-            write,
+            writeWithFigures,
             signal,
           );
         } else {
@@ -2007,7 +2085,7 @@ Rules:
             modelChoice.model,
             system,
             messages,
-            write,
+            writeWithFigures,
             signal,
           );
         }
@@ -2029,9 +2107,9 @@ Rules:
       });
     }
 
-    // ── 12b. Process academic image markers + detect document ────────────
+    // ── 12b. Place academic figures (concurrent jobs started during stream) ──
     if (fullResponse.length > 100) {
-      fullResponse = await processAcademicImageMarkers(fullResponse, write, signal);
+      fullResponse = await figureGen.resolve(fullResponse, write);
     }
     const isDocument = detectIsDocument(fullResponse, countWords(fullResponse));
 

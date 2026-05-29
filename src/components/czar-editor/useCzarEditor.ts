@@ -870,11 +870,13 @@ export function useCzarEditor(): UseCzarEditorReturn {
           setStreamingDoc(false);
           setStreamOp(null);
           setCurrentAgent(null);
-          const isDoc = buffer.length > 200 && (
+          // Images are document content — route them to the Writer tab too.
+          const hasImage = /!\[[^\]]*\]\([^)]+\)/.test(buffer) || /\[IMAGE:/i.test(buffer);
+          const isDoc = hasImage || (buffer.length > 200 && (
             effectiveMode !== 'chat' ||
             /^#{1,3} /m.test(buffer) ||
             buffer.split('\n\n').length >= 4
-          );
+          ));
           setMessages(prev => prev.map(m =>
             m.id === assistantMsgId
               ? { ...m, isStreaming: false, isDocument: isDoc, content: buffer }

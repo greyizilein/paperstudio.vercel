@@ -19,8 +19,35 @@ const LANG_MAP: Record<string, string> = {
   'es': 'es-ES', 'fr': 'fr-FR',
 };
 
+// buildDocx only embeds base64 images, but generated figures are now public
+// URLs. Fetch each remote image and inline it as base64 before building the doc
+// so figures appear in the downloaded Word file. Unresolved [IMAGE:] markers and
+// failed fetches are dropped so they don't litter the export.
+async function inlineRemoteImages(md: string): Promise<string> {
+  let out = md.replace(/\[IMAGE:\s*[^\]]+\]/gi, '');
+  const matches = [...out.matchAll(/!\[([^\]]*)\]\((https?:\/\/[^)]+)\)/g)];
+  for (const m of matches) {
+    try {
+      const resp = await fetch(m[2]);
+      if (!resp.ok) { out = out.replace(m[0], ''); continue; }
+      const blob = await resp.blob();
+      const dataUrl: string = await new Promise((resolve, reject) => {
+        const r = new FileReader();
+        r.onloadend = () => resolve(r.result as string);
+        r.onerror = reject;
+        r.readAsDataURL(blob);
+      });
+      out = out.replace(m[0], `![${m[1]}](${dataUrl})`);
+    } catch {
+      out = out.replace(m[0], '');
+    }
+  }
+  return out;
+}
+
 async function downloadAsWord(content: string) {
-  const doc = buildDocx(content);
+  const prepared = await inlineRemoteImages(content);
+  const doc = buildDocx(prepared);
   const blob = await Packer.toBlob(doc);
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -42,6 +69,35 @@ function downloadMarkdown(title: string, content: string) {
 function countWords(text: string) {
   return text.trim().split(/\s+/).filter(Boolean).length;
 }
+
+// Turn unresolved [IMAGE: description] markers into a sentinel image whose src
+// the custom renderer recognises as "still generating" — so the reader sees a
+// loading figure exactly where it will land, and prose flows around it.
+function prepareImageMarkers(md: string): string {
+  return md.replace(/\[IMAGE:\s*([^\]]+)\]/gi, (_m, desc: string) =>
+    `\n\n![](czar-figure-loading#${encodeURIComponent(desc.trim())})\n\n`);
+}
+
+// Custom markdown renderers: figures render as captioned images; pending
+// markers render as an animated loading card with the distinctive § glyph.
+const mdComponents = {
+  img: ({ src, alt }: { src?: string; alt?: string }) => {
+    if (typeof src === 'string' && src.startsWith('czar-figure-loading')) {
+      const desc = decodeURIComponent(src.split('#')[1] || '');
+      return (
+        <span className="block my-4 rounded-xl border border-[#e85d3f]/20 bg-[#e85d3f]/[0.04] px-5 py-6 text-center">
+          <span className="inline-block font-serif italic font-bold text-[#e85d3f] text-2xl animate-spin-slow" style={{ animation: 'cz-spin 1.4s linear infinite' }}>§</span>
+          <span className="block font-mono text-[10px] tracking-[0.15em] uppercase text-[#e85d3f]/80 mt-2">Generating figure</span>
+          {desc && <span className="block font-sans text-[12px] text-zinc-500 mt-1 max-w-sm mx-auto leading-snug">{desc}</span>}
+        </span>
+      );
+    }
+    return (
+      <img src={src} alt={alt || ''} loading="lazy"
+        className="block my-4 w-full rounded-xl border border-zinc-200 shadow-sm" />
+    );
+  },
+};
 
 function getGreeting(userName: string): [string, string, string] {
   const hour = new Date().getHours();
@@ -226,7 +282,7 @@ function CzarChatMessage({ content, isStreaming }: { content: string; isStreamin
           </div>
         ) : (
           <div className="prose prose-zinc max-w-none prose-p:font-serif prose-p:text-[16px] prose-p:leading-[1.75] prose-headings:font-serif prose-headings:font-bold prose-h1:text-2xl prose-h2:text-xl prose-h3:text-lg">
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
+            <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>{prepareImageMarkers(content)}</ReactMarkdown>
             {isStreaming && <span className="inline-block w-0.5 h-4 bg-[#e85d3f] ml-0.5 animate-pulse align-middle" />}
           </div>
         )}
@@ -600,7 +656,7 @@ export function CzarMobile() {
         <div ref={writerScrollRef} className="flex-1 overflow-y-auto px-5 pt-6 pb-10" {...drop.handlers}>
           {writerContent ? (
             <div className="prose prose-zinc max-w-none prose-p:font-serif prose-p:text-[16px] prose-p:leading-[1.8] prose-headings:font-serif prose-headings:font-bold prose-h1:text-2xl prose-h2:text-xl prose-h3:text-[17px] [&_table]:text-sm [&_table]:w-full [&_th]:bg-zinc-100 [&_th]:px-2 [&_th]:py-1 [&_th]:border [&_th]:border-zinc-300 [&_td]:px-2 [&_td]:py-1 [&_td]:border [&_td]:border-zinc-200">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>{writerContent}</ReactMarkdown>
+              <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>{prepareImageMarkers(writerContent)}</ReactMarkdown>
               {writerStreaming && <span className="inline-block w-0.5 h-4 bg-[#e85d3f] ml-0.5 animate-pulse align-middle" />}
             </div>
           ) : (
