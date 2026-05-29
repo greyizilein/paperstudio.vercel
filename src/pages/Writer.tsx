@@ -2527,8 +2527,8 @@ ${thesisArea}`);
 
         {/* Editor */}
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-          {/* Chapter strip — compact numbered dots + correction button at far right */}
-          <div className="h-10 border-b border-transparent flex items-center flex-shrink-0 bg-background">
+          {/* Chapter strip — compact numbered dots + guide button at far right */}
+          <div className="h-10 flex items-center flex-shrink-0 bg-background">
             {/* Scrollable dots */}
             <div className="flex items-center px-3 gap-2 overflow-x-auto flex-1 min-w-0 scrollbar-hide">
               {(() => {
@@ -2566,6 +2566,17 @@ ${thesisArea}`);
                 });
               })()}
             </div>
+            {/* Guide button */}
+            <button
+              onClick={() => setShowGuide(s => !s)}
+              title="Chapter guide — what to include, how to structure it"
+              className="relative mr-3 flex-shrink-0 text-[11px] font-bold text-muted-foreground hover:text-foreground transition-colors w-6 h-6 rounded-full border border-border flex items-center justify-center hover:border-primary hover:text-primary hover:bg-primary/5"
+            >
+              {!currentChapter?.content && (
+                <span className="absolute inset-0 rounded-full border border-primary/50 animate-[ping_1.8s_cubic-bezier(0,0,0.2,1)_4] pointer-events-none" />
+              )}
+              ?
+            </button>
           </div>
 
           {/* Content */}
@@ -2577,7 +2588,6 @@ ${thesisArea}`);
               </div>
             ) : isGenerating && streamingContent ? (
               <div className="max-w-[680px] lg:max-w-[920px] xl:max-w-[1080px] 2xl:max-w-[1180px] mx-auto px-4 sm:px-10 py-6 prose-academic">
-                <h1 className="not-prose text-xl sm:text-2xl font-bold text-foreground mb-6 leading-snug">{currentChapter?.title}</h1>
                 <Markdown remarkPlugins={[remarkGfm]} components={{
                   ol: ({ children, ...props }: any) => <ol {...props}>{children}</ol>,
                   ul: ({ children, ...props }: any) => <ul {...props}>{children}</ul>,
@@ -2626,15 +2636,9 @@ ${thesisArea}`);
                 onMouseUp={!isEditMode ? handleTextSelection : undefined}
                 onTouchEnd={!isEditMode ? handleTextSelection : undefined}
               >
-                {/* Chapter title in canvas */}
-                <div className={cn("flex items-start justify-between gap-2 mb-5", isEditMode && "flex-shrink-0 px-5 sm:px-10 pt-6 pb-2")}>
-                  <h1 className="not-prose text-xl sm:text-2xl font-bold text-foreground leading-snug flex-1">{currentChapter?.title}</h1>
+                {/* Edit / Done button */}
+                <div className={cn("flex items-start justify-end gap-2 mb-5", isEditMode && "flex-shrink-0 px-5 sm:px-10 pt-6 pb-2")}>
                   <div className="flex items-center gap-2 flex-shrink-0 mt-1">
-                    <button
-                      onClick={() => setShowGuide(s => !s)}
-                      title="Chapter guide"
-                      className="text-[11px] font-bold text-muted-foreground hover:text-foreground transition-colors w-5 h-5 rounded-full border border-border flex items-center justify-center hover:border-foreground/40"
-                    >?</button>
                     <button
                       onClick={() => {
                         if (isEditMode) {
@@ -2815,20 +2819,6 @@ ${thesisArea}`);
               </div>
             ) : (
               <div className="flex flex-col h-full">
-                {/* Chapter title */}
-                <div className="px-5 sm:px-12 pt-7 pb-2 flex-shrink-0 flex items-start justify-between gap-2">
-                  <h1 className="text-xl sm:text-2xl font-bold text-foreground leading-snug flex-1">{currentChapter?.title}</h1>
-                  <button
-                    onClick={() => setShowGuide(s => !s)}
-                    title="Chapter guide — what to include, how to structure it"
-                    className="relative mt-1 flex-shrink-0 text-[11px] font-bold text-muted-foreground hover:text-foreground transition-colors w-6 h-6 rounded-full border border-border flex items-center justify-center hover:border-primary hover:text-primary hover:bg-primary/5 group"
-                  >
-                    {!currentChapter?.content && (
-                      <span className="absolute inset-0 rounded-full border border-primary/50 animate-[ping_1.8s_cubic-bezier(0,0,0.2,1)_4] pointer-events-none" />
-                    )}
-                    ?
-                  </button>
-                </div>
                 {/* Alert banners at top of canvas */}
                 {chType === "methodology" && (
                   <div className="mx-4 sm:mx-10 mt-4 flex items-center gap-3 rounded-lg bg-amber-50 border border-amber-200 px-4 py-2.5 text-sm">
