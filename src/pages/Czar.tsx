@@ -720,6 +720,11 @@ export default function CzarPage() {
             onNewConv={newConv}
             onSelectConv={selectConv}
             onCorrect={() => setCorrectionModalOpen(true)}
+            activeView={activeView}
+            writerContent={writerContent}
+            writerStreaming={writerStreaming}
+            onViewChange={setActiveView}
+            onDownload={() => downloadContent(writerContent)}
           />
         </div>
 
