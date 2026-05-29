@@ -314,15 +314,6 @@ function isImageRequest(text: string): boolean {
   return IMAGE_ACTIONS.test(text) && IMAGE_SUBJECTS.test(text);
 }
 
-const WRITE_VERBS_RE = /\b(write|draft|create|compose|generate|produce|prepare)\b/i;
-const DOC_NOUNS_RE = /\b(essay|article|report|paper|document|letter|brief|review|analysis|thesis|proposal|story|plan|outline|summary|memo|chapter|section|research|dissertation|script|screenplay|poem|blog|assignment)\b/i;
-
-function detectMessageMode(text: string): 'write' | 'chat' {
-  if (isImageRequest(text)) return 'chat';
-  if (WRITE_VERBS_RE.test(text) && DOC_NOUNS_RE.test(text)) return 'write';
-  if (/\b\d+[\s-]?words?\b/i.test(text)) return 'write';
-  return 'chat';
-}
 
 // ── Main hook ─────────────────────────────────────────────────────────────────
 
@@ -826,7 +817,8 @@ export function useCzarEditor(): UseCzarEditorReturn {
     setStreamingDoc(true);
     setStreamOp('write');
 
-    const effectiveMode = panelSettings?.mode ?? detectMessageMode(text);
+    // Backend auto-detects intent — only explicitly route confirmed image requests to chat
+    const effectiveMode = panelSettings?.mode ?? (isImageRequest(text) ? 'chat' : 'write');
     setContentMode(effectiveMode as any);
 
     const userMsgId = 'user_' + Date.now();

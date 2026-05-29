@@ -42,11 +42,20 @@ function countWords(text: string) {
   return text.trim().split(/\s+/).filter(Boolean).length;
 }
 
-const MODE_LABEL: Record<string, string> = {
-  write: 'Document', research: 'Research', plan: 'Plan',
-  literature_review: 'Lit. Review', screenplay: 'Screenplay',
-  legal: 'Legal', chat: 'Chat',
-};
+function getGreeting(userName: string): [string, string] {
+  const hour = new Date().getHours();
+  const first = (userName || '').split(' ')[0] || '';
+  const prefix = first ? `Hi ${first},` : 'Hello,';
+  const period = hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : 'evening';
+  const lines: Record<string, string[]> = {
+    morning: ['What would you like to write today?', "What shall we create together?", "Ready to start writing?", "What's on your mind?"],
+    afternoon: ['What would you like to work on?', 'How can I help you today?', "What shall we write?", "Let's create something great."],
+    evening: ['Working on something special?', "What shall we create tonight?", "Let's make something great.", "What's on your mind?"],
+  };
+  const opts = lines[period];
+  const idx = new Date().getDate() % opts.length;
+  return [prefix, opts[idx]];
+}
 
 // ─── BOTTOM SHEET ─────────────────────────────────────────────────────────────
 
@@ -242,7 +251,6 @@ function CzarDocumentCard({
   docTitle: string;
 }) {
   const wc = countWords(message.content);
-  const modeLabel = MODE_LABEL[message.mode ?? ''] ?? 'Document';
 
   return (
     <div className="flex items-start gap-2.5 mb-4">
@@ -251,7 +259,7 @@ function CzarDocumentCard({
         {/* Card header */}
         <div className="flex items-center justify-between px-4 py-2.5 bg-zinc-50 border-b border-zinc-200">
           <div className="flex items-center gap-2 min-w-0">
-            <span className="font-mono text-[9px] tracking-widest uppercase text-[#e85d3f] font-bold">{modeLabel}</span>
+            <span className="font-serif italic font-bold text-[10px] text-[#e85d3f]">czar.</span>
             <span className="font-mono text-[9px] text-zinc-400">·</span>
             <span className="font-mono text-[9px] tracking-wide text-zinc-500">{wc.toLocaleString()} words</span>
           </div>
@@ -315,67 +323,61 @@ function CzChatInput({
   onUpload: () => void; onMic: () => void; dictLive: boolean; streaming: boolean; disabled?: boolean;
 }) {
   const taRef = useRef<HTMLTextAreaElement>(null);
-  const [focused, setFocused] = useState(false);
 
   useEffect(() => {
     const ta = taRef.current;
     if (!ta) return;
     ta.style.height = 'auto';
-    ta.style.height = Math.min(ta.scrollHeight, 128) + 'px';
+    ta.style.height = Math.min(ta.scrollHeight, 160) + 'px';
   }, [value]);
 
-  const showTools = focused || !!value || streaming || dictLive;
-
   return (
-    <div className="px-3 py-2.5" style={{ paddingBottom: 'max(0.625rem, env(safe-area-inset-bottom))' }}>
-      <div className="bg-zinc-50 border border-zinc-200 rounded-2xl shadow-sm overflow-hidden">
-        {/* Main input row */}
-        <div className="flex items-end px-3 py-2.5 gap-2">
+    <div className="px-3 pb-3 pt-1" style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}>
+      <div className="bg-white rounded-2xl shadow-[0_2px_24px_rgba(0,0,0,0.10)] border border-zinc-200/60 overflow-hidden">
+        {/* Borderless textarea */}
+        <div className="px-4 pt-4 pb-2">
           <textarea
             ref={taRef}
-            className="flex-1 bg-transparent border-none outline-none font-sans text-[15px] leading-[1.5] resize-none min-h-[24px] max-h-[128px] text-zinc-900 placeholder:text-zinc-400"
-            placeholder="Message Czar…"
+            className="w-full bg-transparent border-none outline-none font-sans text-[16px] leading-[1.6] resize-none min-h-[28px] max-h-[160px] text-zinc-900 placeholder:text-zinc-400"
+            placeholder="Ask Czar anything…"
             value={value}
             onChange={(e) => onChange(e.target.value)}
-            onFocus={() => setFocused(true)}
-            onBlur={() => setFocused(false)}
             onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); onSend(); } }}
             rows={1}
             disabled={disabled}
           />
+        </div>
+
+        {/* Icon row — no separator border */}
+        <div className="flex items-center gap-1.5 px-3 pb-3">
+          <button
+            className="w-10 h-10 bg-zinc-100 hover:bg-zinc-200 rounded-full flex items-center justify-center text-zinc-900 text-[22px] font-light transition-colors"
+            onPointerDown={(e) => e.preventDefault()}
+            onClick={onUpload}>
+            +
+          </button>
+          <button
+            className={`w-10 h-10 flex items-center justify-center rounded-full text-[17px] transition-colors ${dictLive ? 'bg-red-100 text-red-600 animate-pulse' : 'text-zinc-800 hover:bg-zinc-100'}`}
+            onPointerDown={(e) => e.preventDefault()}
+            onClick={onMic}>
+            {dictLive ? '◉' : '◎'}
+          </button>
+          <div className="flex-1" />
           {streaming ? (
             <button
-              className="w-9 h-9 flex items-center justify-center bg-[#e85d3f]/10 text-[#e85d3f] rounded-full flex-shrink-0 mb-0.5 text-[12px] font-bold"
+              className="w-10 h-10 bg-zinc-900 text-white rounded-full flex items-center justify-center text-[13px] font-bold transition-opacity"
               onClick={onStop}>
               ◼
             </button>
           ) : (
             <button
-              className="w-9 h-9 flex items-center justify-center bg-[#e85d3f] text-white rounded-full flex-shrink-0 mb-0.5 font-serif italic font-bold text-[16px] disabled:opacity-30 transition-opacity"
+              className="w-10 h-10 bg-zinc-900 text-white rounded-full flex items-center justify-center font-serif italic font-bold text-[18px] disabled:opacity-30 transition-opacity"
               onClick={onSend}
               disabled={!value.trim()}>
               §
             </button>
           )}
         </div>
-
-        {/* Tool strip — appears on focus / activity */}
-        {showTools && (
-          <div className="flex items-center gap-0.5 px-2 pb-2 pt-0.5 border-t border-zinc-100">
-            <button
-              className="w-9 h-9 flex items-center justify-center text-zinc-400 hover:text-[#e85d3f] rounded-lg text-[15px] transition-colors"
-              onPointerDown={(e) => e.preventDefault()}
-              onClick={onUpload}>
-              ↑
-            </button>
-            <button
-              className={`w-9 h-9 flex items-center justify-center rounded-lg text-[14px] transition-colors ${dictLive ? 'text-red-500 animate-pulse' : 'text-zinc-400 hover:text-[#e85d3f]'}`}
-              onPointerDown={(e) => e.preventDefault()}
-              onClick={onMic}>
-              {dictLive ? '◉' : '◎'}
-            </button>
-          </div>
-        )}
       </div>
     </div>
   );
@@ -383,8 +385,14 @@ function CzChatInput({
 
 // ─── EMPTY STATE ──────────────────────────────────────────────────────────────
 
-function CzEmptyState() {
-  return null;
+function CzEmptyState({ userName }: { userName: string }) {
+  const [line1, line2] = getGreeting(userName);
+  return (
+    <div className="flex flex-col flex-1 px-6 pt-10">
+      <p className="font-sans text-[14px] text-zinc-400 mb-1">{line1}</p>
+      <p className="font-serif font-bold text-[28px] leading-[1.2] text-zinc-900">{line2}</p>
+    </div>
+  );
 }
 
 // ─── MAIN COMPONENT ───────────────────────────────────────────────────────────
@@ -425,6 +433,7 @@ export function CzarMobile() {
   const dict = useCzDictation(dictLang);
   const drop = useCzDropZone(user?.id ?? undefined, editor.importFile);
   const v = CZ_VOICES.find((x) => x.id === editor.activeVoice) || CZ_VOICES[0];
+  const userName: string = (user as any)?.user_metadata?.full_name || (user as any)?.user_metadata?.name || user?.email?.split('@')[0] || '';
 
   // Auto-scroll to newest message
   useEffect(() => {
@@ -492,32 +501,37 @@ export function CzarMobile() {
     <div className="cz-m-vars flex flex-col w-full h-[100dvh] fixed inset-0 bg-white dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 font-sans z-[9000] overflow-hidden">
 
       {/* ── TOP BAR ── */}
-      <div className="flex-shrink-0 bg-white dark:bg-zinc-950 border-b border-zinc-200 dark:border-zinc-800 z-20 px-3 pt-safe relative shadow-sm">
-        <div className="flex items-center justify-between h-14">
-          <button className="w-10 h-10 flex items-center justify-center text-xl text-zinc-500 hover:bg-zinc-100 rounded-lg" onClick={() => setPiecesSheet(true)}>≡</button>
-
-          <div className="flex flex-col items-center flex-1 min-w-0 px-2">
-            <div className="font-serif italic font-bold text-[16px] text-[#e85d3f]">czar<span className="text-zinc-900 dark:text-white">.</span></div>
-            <input
-              type="text"
-              maxLength={120}
-              className="font-mono text-[9px] tracking-[0.15em] uppercase text-zinc-500 mt-0.5 truncate w-full text-center bg-transparent border-none outline-none"
-              defaultValue={editor.docTitle}
-              key={editor.docTitle}
-              onBlur={(e) => { const t = e.target.value.trim(); if (t && t !== editor.docTitle) editor.setDocTitle(t); }}
-            />
+      <div className="flex-shrink-0 bg-white border-b border-zinc-100 z-20 px-4 pt-safe">
+        <div className="flex items-center h-14 gap-2">
+          {/* LEFT: czar. branding */}
+          <div className="flex-shrink-0">
+            <div className="font-serif italic font-bold text-[22px] leading-none text-[#e85d3f]">czar<span className="text-zinc-900">.</span></div>
             <button
-              className="font-mono text-[8px] tracking-widest uppercase text-[#e85d3f]/60 hover:text-[#e85d3f] mt-0.5"
+              className="font-mono text-[8px] tracking-widest uppercase text-[#e85d3f]/60 hover:text-[#e85d3f] mt-0.5 leading-none block"
               onClick={() => { setSettingsTab('voices'); setSettingsSheet(true); }}>
               {v.glyph} {v.name}
             </button>
           </div>
 
-          <div className="flex items-center gap-1">
+          {/* CENTER: document title */}
+          <div className="flex-1 flex justify-center px-2 min-w-0">
+            <input
+              type="text"
+              maxLength={120}
+              className="font-mono text-[9px] tracking-[0.15em] uppercase text-zinc-400 text-center bg-transparent border-none outline-none w-full truncate"
+              defaultValue={editor.docTitle}
+              key={editor.docTitle}
+              onBlur={(e) => { const t = e.target.value.trim(); if (t && t !== editor.docTitle) editor.setDocTitle(t); }}
+            />
+          </div>
+
+          {/* RIGHT: download + menu + settings */}
+          <div className="flex items-center gap-0.5 flex-shrink-0">
             {lastDocMessage && (
-              <button className="w-9 h-9 flex items-center justify-center text-lg text-zinc-500 hover:bg-zinc-100 rounded-lg" onClick={() => { setDownloadContent(lastDocMessage.content); setDownloadSheet(true); }}>↓</button>
+              <button className="w-9 h-9 flex items-center justify-center text-zinc-700 text-lg hover:bg-zinc-100 rounded-lg" onClick={() => { setDownloadContent(lastDocMessage.content); setDownloadSheet(true); }}>↓</button>
             )}
-            <button className="w-9 h-9 flex items-center justify-center text-lg text-zinc-500 hover:bg-zinc-100 rounded-lg" onClick={() => { setSettingsTab('academic'); setSettingsSheet(true); }}>⚙</button>
+            <button className="w-9 h-9 flex items-center justify-center text-zinc-900 text-[20px] font-bold hover:bg-zinc-100 rounded-lg" onClick={() => setPiecesSheet(true)}>≡</button>
+            <button className="w-9 h-9 flex items-center justify-center text-zinc-900 text-[17px] hover:bg-zinc-100 rounded-lg" onClick={() => { setSettingsTab('academic'); setSettingsSheet(true); }}>⚙</button>
           </div>
         </div>
       </div>
@@ -525,7 +539,7 @@ export function CzarMobile() {
       {/* ── MESSAGE AREA ── */}
       <div className="flex-1 overflow-y-auto overflow-x-hidden" {...drop.handlers}>
         {editor.messages.length === 0 && !editor.docLoading ? (
-          <CzEmptyState />
+          <CzEmptyState userName={userName} />
         ) : (
           <div className="px-4 pt-4 pb-2">
             {editor.docLoading && (
@@ -570,7 +584,7 @@ export function CzarMobile() {
       </div>
 
       {/* ── INPUT BAR ── */}
-      <div className="flex-shrink-0 bg-white dark:bg-zinc-950 border-t border-zinc-200 dark:border-zinc-800 z-20">
+      <div className="flex-shrink-0 bg-white z-20">
         <CzChatInput
           value={input}
           onChange={setInput}
