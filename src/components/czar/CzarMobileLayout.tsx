@@ -9,7 +9,7 @@ import remarkGfm from "remark-gfm";
 import { PsAvatar } from "@/components/ps/PsAvatar";
 import { usePsTheme } from "@/contexts/PsThemeContext";
 import { supabase } from "@/integrations/supabase/client";
-import { chatMarkdownComponents, markdownComponents } from "@/lib/czarDocUtils.tsx";
+import { chatMarkdownComponents, markdownComponents, ImageViewer } from "@/lib/czarDocUtils.tsx";
 import type { CzarMode } from "@/lib/czarStream";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -21,6 +21,7 @@ interface MobileMsg {
   mode?: string;
   streaming?: boolean;
   error?: boolean;
+  imageUrl?: string;
 }
 
 interface Conv { id: string; title: string; updated_at: string; }
@@ -803,6 +804,11 @@ function MobileMessage({ msg, userInitials, streaming }: { msg: MobileMsg; userI
             className="inline-block w-[2px] bg-foreground align-middle ml-0.5"
             style={{ height: 16, animation: "blink 1s step-end infinite" }}
           />
+        )}
+        {msg.imageUrl && !msg.streaming && (
+          <div className="mt-3">
+            <ImageViewer src={msg.imageUrl} alt="Generated image" />
+          </div>
         )}
         {!msg.streaming && !msg.error && msg.content && (
           <button

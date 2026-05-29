@@ -733,7 +733,7 @@ export const markdownComponents = {
 
 // ── Interactive image component ───────────────────────────────────────────────
 
-function ImageViewer({ src, alt }: { src: string; alt?: string }) {
+export function ImageViewer({ src, alt }: { src: string; alt?: string }) {
   const [lightbox, setLightbox] = useState(false);
 
   const handleDownload = () => {
