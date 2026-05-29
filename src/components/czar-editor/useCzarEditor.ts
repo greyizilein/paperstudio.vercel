@@ -565,7 +565,6 @@ export function useCzarEditor(): UseCzarEditorReturn {
   // ── Suggestions ──────────────────────────────────────────────────────────
   const [suggestions, setSuggestions] = useState<CzSuggestion[]>([]);
   const [suggestionsLoading, setSuggestionsLoading] = useState(false);
-  const suggestTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const acceptSuggestion = useCallback((id: string) => {
     setSuggestions(prev => {
@@ -658,13 +657,11 @@ export function useCzarEditor(): UseCzarEditorReturn {
     );
   }, [activePieceId, docContent, wordCount, streamingDoc, prefs, activeVoice, audience, targetLength]);
 
-  useEffect(() => {
-    if (suggestTimerRef.current) clearTimeout(suggestTimerRef.current);
-    if (wordCount >= 200 && !streamingDoc && activePieceId) {
-      suggestTimerRef.current = setTimeout(triggerSuggest, 30_000);
-    }
-    return () => { if (suggestTimerRef.current) clearTimeout(suggestTimerRef.current); };
-  }, [docContent]); // eslint-disable-line react-hooks/exhaustive-deps
+  // NOTE: auto-suggest on a timer was removed. It sent the ENTIRE document as a
+  // user_message (mode 'correct') every 30s, which the server persists — so the
+  // whole document reappeared as a user bubble in the conversation, and it
+  // silently spent words. Suggestions are now only produced on explicit request
+  // (the desktop "scan" button calls triggerSuggest directly).
 
   const tighten = useCallback(() => {
     if (!activePieceId || !docContent.trim() || streamingDoc) return;
