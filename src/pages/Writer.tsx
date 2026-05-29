@@ -2877,7 +2877,7 @@ ${thesisArea}`);
                   value={personalise.notes}
                   onChange={(e) => setPersonalise(p => ({ ...p, notes: e.target.value }))}
                   placeholder="Click Draft below to start writing. Or add your own notes here first."
-                  className="flex-1 w-full resize-none bg-transparent outline-none text-[15px] text-foreground px-5 sm:px-12 py-6 placeholder:text-muted-foreground/30 leading-relaxed"
+                  className="flex-1 w-full resize-none bg-transparent outline-none border-0 text-[15px] text-foreground px-5 sm:px-12 py-6 placeholder:text-muted-foreground/30 leading-relaxed"
                 />
               </div>
             )}
