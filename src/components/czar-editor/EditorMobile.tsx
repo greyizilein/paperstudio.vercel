@@ -42,19 +42,34 @@ function countWords(text: string) {
   return text.trim().split(/\s+/).filter(Boolean).length;
 }
 
-function getGreeting(userName: string): [string, string] {
+function getGreeting(userName: string): [string, string, string] {
   const hour = new Date().getHours();
   const first = (userName || '').split(' ')[0] || '';
-  const prefix = first ? `Hi ${first},` : 'Hello,';
+  const nameLine = first ? `Hi ${first}` : 'Hi there';
   const period = hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : 'evening';
-  const lines: Record<string, string[]> = {
-    morning: ['What would you like to write today?', "What shall we create together?", "Ready to start writing?", "What's on your mind?"],
-    afternoon: ['What would you like to work on?', 'How can I help you today?', "What shall we write?", "Let's create something great."],
-    evening: ['Working on something special?', "What shall we create tonight?", "Let's make something great.", "What's on your mind?"],
+  const questions: Record<string, [string, string][]> = {
+    morning: [
+      ['How can I', 'help you today?'],
+      ['What would you', 'like to write?'],
+      ['Ready to', 'start writing?'],
+      ['What shall we', 'create together?'],
+    ],
+    afternoon: [
+      ['How can I', 'help you today?'],
+      ['What would you', 'like to work on?'],
+      ['What shall we', 'write together?'],
+      ['Ready to', 'create something?'],
+    ],
+    evening: [
+      ['How can I', 'help you tonight?'],
+      ['What shall we', 'create tonight?'],
+      ['Working on', 'something special?'],
+      ["What's on", 'your mind?'],
+    ],
   };
-  const opts = lines[period];
-  const idx = new Date().getDate() % opts.length;
-  return [prefix, opts[idx]];
+  const opts = questions[period];
+  const [q1, q2] = opts[new Date().getDate() % opts.length];
+  return [nameLine, q1, q2];
 }
 
 // ─── BOTTOM SHEET ─────────────────────────────────────────────────────────────
@@ -386,11 +401,12 @@ function CzChatInput({
 // ─── EMPTY STATE ──────────────────────────────────────────────────────────────
 
 function CzEmptyState({ userName }: { userName: string }) {
-  const [line1, line2] = getGreeting(userName);
+  const [nameLine, q1, q2] = getGreeting(userName);
   return (
     <div className="flex flex-col flex-1 px-6 pt-10">
-      <p className="font-serif italic text-[18px] text-[#e85d3f] mb-0.5">{line1}</p>
-      <p className="font-serif italic font-bold text-[28px] leading-[1.2] text-[#e85d3f]">{line2}</p>
+      <p className="font-sans text-[15px] text-zinc-900 mb-2">{nameLine}</p>
+      <p className="font-serif italic font-bold text-[32px] leading-[1.15] text-[#e85d3f]">{q1}</p>
+      <p className="font-serif italic font-bold text-[32px] leading-[1.15] text-[#e85d3f]">{q2}</p>
     </div>
   );
 }
