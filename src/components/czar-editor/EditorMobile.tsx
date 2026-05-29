@@ -389,8 +389,8 @@ function CzEmptyState({ userName }: { userName: string }) {
   const [line1, line2] = getGreeting(userName);
   return (
     <div className="flex flex-col flex-1 px-6 pt-10">
-      <p className="font-sans text-[14px] text-zinc-400 mb-1">{line1}</p>
-      <p className="font-serif font-bold text-[28px] leading-[1.2] text-zinc-900">{line2}</p>
+      <p className="font-serif italic text-[18px] text-[#e85d3f] mb-0.5">{line1}</p>
+      <p className="font-serif italic font-bold text-[28px] leading-[1.2] text-[#e85d3f]">{line2}</p>
     </div>
   );
 }
