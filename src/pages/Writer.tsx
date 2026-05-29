@@ -2566,6 +2566,40 @@ ${thesisArea}`);
                 });
               })()}
             </div>
+            {/* Edit / Done + Split — only when chapter has content */}
+            {currentChapter?.content && (
+              <div className="flex items-center gap-2 mr-2 flex-shrink-0">
+                <button
+                  onClick={() => {
+                    if (isEditMode) {
+                      if (currentChapter && editContent !== currentChapter.content) {
+                        const wc = countBodyWords(editContent);
+                        setEditedChapterIds(prev => new Set(prev).add(currentChapter.id));
+                        setEditedWordDeltas(prev => ({ ...prev, [currentChapter.id]: wc - (currentChapter.word_count_actual || 0) }));
+                        handleUpdate({ ...project, chapters: project.chapters.map(c => c.id === currentChapter.id ? { ...c, content: editContent, word_count_actual: wc } : c) });
+                      }
+                      setIsEditMode(false);
+                    } else {
+                      setEditContent(currentChapter.content || "");
+                      setIsEditMode(true);
+                    }
+                  }}
+                  className="text-[11px] font-bold text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  {isEditMode ? <><Check size={11} className="inline mr-0.5" /> Done</> : <>✎ Edit</>}
+                </button>
+                {isEditMode && (
+                  <button
+                    onClick={() => setSplitPane(s => !s)}
+                    title="Split view (desktop)"
+                    className="hidden md:inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    <Columns2 size={11} />
+                    {splitPane ? "Single" : "Split"}
+                  </button>
+                )}
+              </div>
+            )}
             {/* Guide button */}
             <button
               onClick={() => setShowGuide(s => !s)}
@@ -2636,40 +2670,6 @@ ${thesisArea}`);
                 onMouseUp={!isEditMode ? handleTextSelection : undefined}
                 onTouchEnd={!isEditMode ? handleTextSelection : undefined}
               >
-                {/* Edit / Done button */}
-                <div className={cn("flex items-start justify-end gap-2 mb-5", isEditMode && "flex-shrink-0 px-5 sm:px-10 pt-6 pb-2")}>
-                  <div className="flex items-center gap-2 flex-shrink-0 mt-1">
-                    <button
-                      onClick={() => {
-                        if (isEditMode) {
-                          if (currentChapter && editContent !== currentChapter.content) {
-                            const wc = countBodyWords(editContent);
-                            setEditedChapterIds(prev => new Set(prev).add(currentChapter.id));
-                            setEditedWordDeltas(prev => ({ ...prev, [currentChapter.id]: wc - (currentChapter.word_count_actual || 0) }));
-                            handleUpdate({ ...project, chapters: project.chapters.map(c => c.id === currentChapter.id ? { ...c, content: editContent, word_count_actual: wc } : c) });
-                          }
-                          setIsEditMode(false);
-                        } else {
-                          setEditContent(currentChapter.content || "");
-                          setIsEditMode(true);
-                        }
-                      }}
-                      className="text-[11px] font-bold text-muted-foreground hover:text-foreground transition-colors"
-                    >
-                      {isEditMode ? <><Check size={11} className="inline mr-0.5" /> Done</> : <>✎ Edit</>}
-                    </button>
-                    {isEditMode && (
-                      <button
-                        onClick={() => setSplitPane(s => !s)}
-                        title="Split view (desktop)"
-                        className="hidden md:inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
-                      >
-                        <Columns2 size={11} />
-                        {splitPane ? "Single" : "Split"}
-                      </button>
-                    )}
-                  </div>
-                </div>
                 {/* Recovery banner — shown when a previous auto-saved draft is found */}
                 {showRecovery && recoveryContent && (
                   <div className="mb-4 flex items-center gap-3 rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 text-sm">
