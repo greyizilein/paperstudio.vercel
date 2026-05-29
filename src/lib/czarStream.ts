@@ -218,7 +218,7 @@ export async function streamCzar(
 
   let resp: Response;
   try {
-    resp = await fetch(`${FUNCTIONS_BASE}/czar-brain`, {
+    resp = await fetch(`${FUNCTIONS_BASE}/czar-chat`, {
       method: "POST",
       headers,
       body: JSON.stringify(req),

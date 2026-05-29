@@ -6,6 +6,7 @@ on:
     branches:
       - main
       - claude/migrate-loveable-vercel-AvdzU
+      - claude/cazar-document-generation-8Ook4
 
 jobs:
   deploy:
