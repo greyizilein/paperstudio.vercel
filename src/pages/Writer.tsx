@@ -2566,33 +2566,6 @@ ${thesisArea}`);
                 });
               })()}
             </div>
-            {/* Correction slot + Humanise buttons — always pinned right */}
-            <div className="flex-shrink-0 flex items-center border-l border-transparent px-2 gap-1">
-              <button
-                onClick={() => {
-                  if (!currentChapter?.content) { toast.error("Complete this chapter first."); return; }
-                  setShowHumanisePanel(true);
-                  setHumanisedText(null);
-                  setHumaniseDiff(null);
-                  setHumaniseStages([]);
-                  setIsHumanising(false);
-                }}
-                title="Humanise this chapter"
-                className="w-7 h-7 rounded-md flex items-center justify-center transition-all text-muted-foreground hover:bg-secondary hover:text-foreground"
-              >
-                <Wand2 size={13} />
-              </button>
-              <button
-                onClick={() => currentChapter?.status === "completed" ? setShowSupervisorModal(true) : toast.error("Complete this chapter first.")}
-                title="Apply supervisor corrections"
-                className={cn(
-                  "w-7 h-7 rounded-md flex items-center justify-center transition-all",
-                  correctionDiff ? "text-amber-500 bg-amber-500/10" : "text-muted-foreground hover:bg-secondary hover:text-foreground"
-                )}
-              >
-                <FileEdit size={13} />
-              </button>
-            </div>
           </div>
 
           {/* Content */}
