@@ -382,7 +382,7 @@ function CzChatInput({
             onPointerDown={(e) => e.preventDefault()}
             onClick={onCorrect}
             title="Correct a draft">
-            ✦
+            ✓
           </button>
           <div className="flex-1" />
           {streaming ? (
