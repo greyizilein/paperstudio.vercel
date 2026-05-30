@@ -18,7 +18,7 @@ const corsHeaders = {
 
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY") || "";
 const MODEL_DETECT  = "claude-haiku-4-5-20251001";
-const MODEL_REWRITE = "claude-opus-4-6";
+const MODEL_REWRITE = "claude-sonnet-4-6";
 const MODEL_TRIM    = "claude-haiku-4-5-20251001";
 
 // ── Detect prompt ─────────────────────────────────────────────────────────────
@@ -240,8 +240,8 @@ Deno.serve(async (req) => {
       let ctx: DisciplineCtx = { ...DEFAULT_CTX };
 
       try {
-        // Stage 0: Detect
-        send("stage_start", { stage: 0, label: "Discipline Detection" });
+        // Stage 0: Analysis (discipline detection)
+        send("stage_start", { stage: 0, label: "Analysis" });
         try {
           const raw = await callClaude(DETECT_PROMPT, text.slice(0, 3000), signal, MODEL_DETECT, 512);
           const parsed = JSON.parse(raw.replace(/```json|```/gi, "").trim());
@@ -249,30 +249,30 @@ Deno.serve(async (req) => {
         } catch {
           // silently fall back to defaults
         }
-        send("stage_done", { stage: 0, label: "Discipline Detection", discipline: ctx.discipline, subdiscipline: ctx.subdiscipline, level: ctx.level });
+        send("stage_done", { stage: 0, label: "Analysis" });
 
-        // Stage 1: Pre-process
-        send("stage_start", { stage: 1, label: "Pre-processing" });
+        // Stage 1: Preparation (pre-process)
+        send("stage_start", { stage: 1, label: "Preparation" });
         current = preProcess(text);
-        send("stage_done", { stage: 1, label: "Pre-processing", words: wordCount(current) });
+        send("stage_done", { stage: 1, label: "Preparation", words: wordCount(current) });
 
-        // Stage 2: Structural Rewrite
-        send("stage_start", { stage: 2, label: "Structural Rewrite" });
+        // Stage 2: Pass I (structural rewrite)
+        send("stage_start", { stage: 2, label: "Pass I" });
         current = await callClaude(buildPass1(ctx), current, signal, MODEL_REWRITE);
-        send("stage_done", { stage: 2, label: "Structural Rewrite", words: wordCount(current) });
+        send("stage_done", { stage: 2, label: "Pass I", words: wordCount(current) });
 
-        // Stage 3: Field-Aware Paraphrase
-        send("stage_start", { stage: 3, label: "Field-Aware Paraphrase" });
+        // Stage 3: Pass II (field-aware paraphrase)
+        send("stage_start", { stage: 3, label: "Pass II" });
         current = await callClaude(buildPass2(ctx), current, signal, MODEL_REWRITE);
-        send("stage_done", { stage: 3, label: "Field-Aware Paraphrase", words: wordCount(current) });
+        send("stage_done", { stage: 3, label: "Pass II", words: wordCount(current) });
 
-        // Stage 4: Trim (conditional)
+        // Stage 4: Calibration (trim, conditional)
         const ceiling = Math.ceil(originalWords * 1.01);
         const afterWords = wordCount(current);
         if (afterWords > ceiling) {
-          send("stage_start", { stage: 4, label: "Word Count Trim" });
+          send("stage_start", { stage: 4, label: "Calibration" });
           current = await callClaude(buildTrim(ctx, originalWords, afterWords), current, signal, MODEL_TRIM);
-          send("stage_done", { stage: 4, label: "Word Count Trim", words: wordCount(current) });
+          send("stage_done", { stage: 4, label: "Calibration", words: wordCount(current) });
         }
 
         send("done", {
