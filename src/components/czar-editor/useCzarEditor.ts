@@ -250,8 +250,8 @@ export interface UseCzarEditorReturn {
   writeFromPrompt: (instruction: string, panelSettings: CzPanelSettings) => void;
   stopStream: () => void;
 
-  // Import file
-  importFile: (attachment: { storage_path: string; filename: string; size: number; mime: string }, mode?: string, customMessage?: string) => void;
+  // Import file(s)
+  importFile: (attachments: Array<{ storage_path: string; filename: string; size: number; mime: string }>, mode?: string, customMessage?: string) => void;
 
   // Chat interface
   messages: ChatMessage[];
@@ -814,24 +814,32 @@ export function useCzarEditor(): UseCzarEditorReturn {
     );
   }, [activePieceId, docContent, docTitle, streamingDoc, prefs, activeVoice, audience, targetLength, persistContent, setDocTitle, startStreamTimeout, clearStreamTimeout]);
 
-  const importFile = useCallback((attachment: any, mode: string = 'import', customMessage?: string) => {
-    if (!activePieceId || streamingDoc) return;
+  const importFile = useCallback((
+    attachments: Array<{ storage_path: string; filename: string; size: number; mime: string }>,
+    mode: string = 'import',
+    customMessage?: string,
+  ) => {
+    if (!activePieceId || streamingDoc || attachments.length === 0) return;
     const ctrl = new AbortController();
     abortRef.current = ctrl;
     startStreamTimeout(ctrl);
     setStreamingDoc(true);
+
+    const fileList = attachments.map(a => `"${a.filename}"`).join(', ');
+    const chipLine = attachments.map(a => `📎 ${a.filename}`).join('\n');
 
     if (mode === 'analyze_data') {
       setStreamOp('continue');
       setContentMode('chat');
       const base = docContent;
       let appended = '';
-      const userMessage = customMessage || `Perform a comprehensive data analysis of "${attachment.filename}". Run all appropriate statistical tests, generate visualisations, and write a full analytical narrative.`;
+      const userMessage = customMessage
+        || `Perform a comprehensive data analysis of ${fileList}. Run all appropriate statistical tests, generate visualisations, and write a full analytical narrative.`;
       streamCzar(
         {
           conversation_id: activePieceId,
           user_message: userMessage,
-          attachments: [attachment],
+          attachments,
           mode: 'analyze_data' as any,
           settings: buildCzarSettings(prefs, activeVoice, audience, targetLength, undefined, rubricCriteria),
         },
@@ -852,17 +860,15 @@ export function useCzarEditor(): UseCzarEditorReturn {
       return;
     }
 
-    // Import mode: read document → response appears in Chat tab
+    // Import mode: read documents → response appears in Chat tab
     setStreamOp('continue');
     setContentMode('chat');
     const uId = 'user_' + Date.now();
     const aId = 'ast_' + Date.now();
-    const displayMsg = customMessage
-      ? `${customMessage}\n📎 ${attachment.filename}`
-      : `📎 ${attachment.filename}`;
+    const displayMsg = customMessage ? `${customMessage}\n${chipLine}` : chipLine;
     const apiMsg = customMessage
-      ? `${customMessage}\n\nI've also uploaded "${attachment.filename}". Please read it carefully.`
-      : `I've uploaded "${attachment.filename}". Please read it carefully and summarise what it contains, then ask what I'd like to do with it.`;
+      ? `${customMessage}\n\nI've also uploaded ${fileList}. Please read them carefully.`
+      : `I've uploaded ${fileList}. Please read ${attachments.length === 1 ? 'it' : 'them'} carefully and summarise what ${attachments.length === 1 ? 'it contains' : 'they contain'}, then ask what I'd like to do.`;
     setMessages(prev => [
       ...prev,
       { id: uId, role: 'user' as const, content: displayMsg, mode: null },
@@ -873,7 +879,7 @@ export function useCzarEditor(): UseCzarEditorReturn {
       {
         conversation_id: activePieceId,
         user_message: apiMsg,
-        attachments: [attachment],
+        attachments,
         mode: 'import' as any,
         settings: buildCzarSettings(prefs, activeVoice, audience, targetLength, undefined, rubricCriteria),
       },
