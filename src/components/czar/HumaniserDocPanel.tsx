@@ -1,10 +1,10 @@
-// HumaniserDocPanel — Self-contained discipline-aware academic humaniser
+// HumaniserDocPanel — Self-contained academic humaniser panel
 // Completely separate ecosystem. Safe to improve or delete independently.
 // Reads files (txt, md, docx), sends to czar-humanise-doc edge function via SSE,
 // preserves headings / citations / reference lists — only rewrites body prose.
 
 import React, { useState, useRef, useCallback } from "react";
-import { X, Upload, Copy, Check, RotateCcw } from "lucide-react";
+import { X, Upload, Copy, Check, RotateCcw, Download } from "lucide-react";
 import { fetchEdge } from "@/lib/edgeFetch";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -15,31 +15,26 @@ interface StageState {
   words?: number;
 }
 
-interface DisciplineCtx {
-  discipline: string;
-  subdiscipline?: string;
-  level?: string;
-}
-
 type PanelPhase = "input" | "running" | "done" | "error";
 
 const STAGE_COLORS = [
-  "#60a5fa", // detect  — blue
-  "#4ade80", // pre     — green
-  "#e85d3f", // pass1   — czar red
-  "#c084fc", // pass2   — purple
-  "#94a3b8", // trim    — gray
+  "#60a5fa", // stage 0 — blue
+  "#4ade80", // stage 1 — green
+  "#e85d3f", // stage 2 — czar red
+  "#c084fc", // stage 3 — purple
+  "#94a3b8", // stage 4 — gray
 ];
 
+// Opaque names — do not reveal what each stage actually does
 const STAGE_LABELS = [
-  "Discipline Detection",
-  "Pre-processing",
-  "Structural Rewrite",
-  "Field-Aware Paraphrase",
-  "Word Count Trim",
+  "Analysis",
+  "Preparation",
+  "Pass I",
+  "Pass II",
+  "Calibration",
 ];
 
-// ── File reading ──────────────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 async function readFile(file: File): Promise<string> {
   const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
@@ -59,6 +54,18 @@ async function readFile(file: File): Promise<string> {
 
 function countWords(s: string): number {
   return (s || "").trim().split(/\s+/).filter(Boolean).length;
+}
+
+function downloadText(text: string, filename = "humanised.txt") {
+  const blob = new Blob([text], { type: "text/plain" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 // ── SSE reader ────────────────────────────────────────────────────────────────
@@ -104,8 +111,6 @@ export function HumaniserDocPanel({ open, onClose }: Props) {
   const [stages,      setStages]      = useState<StageState[]>(
     STAGE_LABELS.map((label) => ({ label, status: "idle" }))
   );
-  const [activeStage, setActiveStage] = useState<number | null>(null);
-  const [discipline,  setDiscipline]  = useState<DisciplineCtx | null>(null);
   const [result,      setResult]      = useState("");
   const [error,       setError]       = useState("");
   const [copied,      setCopied]      = useState(false);
@@ -123,8 +128,6 @@ export function HumaniserDocPanel({ open, onClose }: Props) {
     setInputText("");
     setFilename("");
     setStages(STAGE_LABELS.map((label) => ({ label, status: "idle" })));
-    setActiveStage(null);
-    setDiscipline(null);
     setResult("");
     setError("");
     setCopied(false);
@@ -164,14 +167,14 @@ export function HumaniserDocPanel({ open, onClose }: Props) {
 
     setPhase("running");
     setStages(STAGE_LABELS.map((label) => ({ label, status: "idle" })));
-    setActiveStage(null);
-    setDiscipline(null);
     setResult("");
     setError("");
     setWordsBefore(countWords(text));
 
     const updateStage = (idx: number, patch: Partial<StageState>) =>
       setStages((prev) => prev.map((s, i) => (i === idx ? { ...s, ...patch } : s)));
+
+    let gotDone = false;
 
     try {
       const resp = await fetchEdge("czar-humanise-doc", { text }, { signal: ac.signal });
@@ -182,21 +185,23 @@ export function HumaniserDocPanel({ open, onClose }: Props) {
 
         if (event === "stage_start") {
           const idx: number = data.stage;
-          setActiveStage(idx);
           updateStage(idx, { status: "active" });
         } else if (event === "stage_done") {
           const idx: number = data.stage;
           updateStage(idx, { status: "done", words: data.words });
-          setActiveStage(null);
-          if (idx === 0 && data.discipline) {
-            setDiscipline({ discipline: data.discipline, subdiscipline: data.subdiscipline, level: data.level });
-          }
         } else if (event === "done") {
+          gotDone = true;
           setResult(data.humanised ?? "");
           setWordsAfter(data.final_words ?? countWords(data.humanised ?? ""));
           if (data.error) setError(data.error);
           setPhase(data.humanised ? "done" : "error");
         }
+      }
+
+      // Stream ended without a done event — edge function likely timed out
+      if (!gotDone && !ac.signal.aborted) {
+        setError("Processing timed out. Please try again with a shorter text.");
+        setPhase("error");
       }
     } catch (err) {
       if (ac.signal.aborted) return;
@@ -211,6 +216,11 @@ export function HumaniserDocPanel({ open, onClose }: Props) {
     setTimeout(() => setCopied(false), 2000);
   }, [result]);
 
+  const download = useCallback(() => {
+    const base = filename ? filename.replace(/\.[^.]+$/, "") + "_humanised.txt" : "humanised.txt";
+    downloadText(result, base);
+  }, [result, filename]);
+
   if (!open) return null;
 
   // ── Render ─────────────────────────────────────────────────────────────────
@@ -219,27 +229,14 @@ export function HumaniserDocPanel({ open, onClose }: Props) {
     <div className="fixed inset-0 z-[99999] flex flex-col bg-white">
 
       {/* Header */}
-      <div className="flex items-center gap-3 px-4 pt-safe border-b border-zinc-100 h-14 flex-shrink-0">
+      <div className="flex items-center gap-3 px-4 border-b border-zinc-100 h-14 flex-shrink-0" style={{ paddingTop: "env(safe-area-inset-top)" }}>
         <button
           onClick={handleClose}
           className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-zinc-100 transition-colors text-zinc-600"
         >
           <X size={20} />
         </button>
-        <div className="flex-1 min-w-0">
-          <span className="font-serif italic font-bold text-[19px] text-[#e85d3f] leading-none">Humanise</span>
-          {discipline && (
-            <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-              {[discipline.discipline, discipline.subdiscipline, discipline.level]
-                .filter(Boolean)
-                .map((tag, i) => (
-                  <span key={i} className="text-[9px] font-mono tracking-widest uppercase text-zinc-400 bg-zinc-50 border border-zinc-200 px-1.5 py-0.5 rounded">
-                    {tag}
-                  </span>
-                ))}
-            </div>
-          )}
-        </div>
+        <span className="flex-1 font-serif italic font-bold text-[19px] text-[#e85d3f] leading-none">Humanise</span>
         {phase !== "input" && (
           <button
             onClick={reset}
@@ -319,13 +316,13 @@ export function HumaniserDocPanel({ open, onClose }: Props) {
         )}
 
         {/* ── RUNNING PHASE ── */}
-        {(phase === "running" || (phase === "done" && !result)) && (
+        {phase === "running" && (
           <div className="px-4 pt-6 pb-4 flex flex-col gap-3">
             <p className="text-[11px] font-mono tracking-widest uppercase text-zinc-400 mb-1">
-              Pipeline · {wordsBefore.toLocaleString()} words
+              Processing · {wordsBefore.toLocaleString()} words
             </p>
             {stages.map((s, i) => {
-              if (i === 4 && s.status === "idle") return null; // hide trim if not triggered
+              if (i === 4 && s.status === "idle") return null;
               const color = STAGE_COLORS[i];
               return (
                 <div key={i} className="flex items-center gap-3">
@@ -343,28 +340,20 @@ export function HumaniserDocPanel({ open, onClose }: Props) {
                       </svg>
                     )}
                     {s.status === "active" && (
-                      <div
-                        className="w-2 h-2 rounded-full animate-pulse"
-                        style={{ background: color }}
-                      />
+                      <div className="w-2 h-2 rounded-full animate-pulse" style={{ background: color }} />
                     )}
                   </div>
 
                   {/* Label */}
-                  <div className="flex-1 min-w-0">
-                    <span
-                      className="text-[13px] font-sans"
-                      style={{
-                        color: s.status === "idle" ? "#d4d4d8" : s.status === "active" ? "#18181b" : "#52525b",
-                        fontWeight: s.status === "active" ? 600 : 400,
-                      }}
-                    >
-                      {s.label}
-                    </span>
-                    {i === 0 && s.status === "done" && discipline?.discipline && (
-                      <span className="ml-2 text-[11px] text-zinc-400">{discipline.discipline}</span>
-                    )}
-                  </div>
+                  <span
+                    className="flex-1 text-[13px] font-sans"
+                    style={{
+                      color: s.status === "idle" ? "#d4d4d8" : s.status === "active" ? "#18181b" : "#52525b",
+                      fontWeight: s.status === "active" ? 600 : 400,
+                    }}
+                  >
+                    {s.label}
+                  </span>
 
                   {/* Words */}
                   {s.words !== undefined && (
@@ -406,15 +395,6 @@ export function HumaniserDocPanel({ open, onClose }: Props) {
                   {wordsAfter.toLocaleString()}
                 </div>
               </div>
-              {discipline?.discipline && (
-                <>
-                  <div className="text-zinc-300">·</div>
-                  <div className="flex-1 text-center">
-                    <div className="text-[11px] text-zinc-400 font-mono">Field</div>
-                    <div className="text-[12px] font-medium text-zinc-600 truncate">{discipline.discipline}</div>
-                  </div>
-                </>
-              )}
             </div>
 
             {error && (
@@ -426,7 +406,7 @@ export function HumaniserDocPanel({ open, onClose }: Props) {
             {/* Result text */}
             <div className="rounded-xl border border-zinc-200 overflow-hidden">
               <div className="px-4 py-3 bg-zinc-50 border-b border-zinc-200 flex items-center justify-between">
-                <span className="text-[10px] font-mono tracking-widest uppercase text-zinc-400">Humanised Output</span>
+                <span className="text-[10px] font-mono tracking-widest uppercase text-zinc-400">Output</span>
                 <button
                   onClick={copy}
                   className="flex items-center gap-1.5 text-[11px] text-zinc-500 hover:text-zinc-900 transition-colors"
@@ -478,9 +458,16 @@ export function HumaniserDocPanel({ open, onClose }: Props) {
             <div className="flex gap-2">
               <button
                 onClick={reset}
-                className="flex-1 py-3 rounded-xl font-sans text-[14px] text-zinc-600 border border-zinc-200 hover:bg-zinc-50 transition-colors"
+                className="py-3 px-4 rounded-xl font-sans text-[14px] text-zinc-600 border border-zinc-200 hover:bg-zinc-50 transition-colors flex-shrink-0"
               >
-                New Text
+                New
+              </button>
+              <button
+                onClick={download}
+                className="py-3 px-4 rounded-xl font-sans text-[14px] text-zinc-700 border border-zinc-200 hover:bg-zinc-50 transition-colors flex items-center gap-1.5 flex-shrink-0"
+              >
+                <Download size={15} />
+                .txt
               </button>
               <button
                 onClick={copy}
@@ -488,7 +475,7 @@ export function HumaniserDocPanel({ open, onClose }: Props) {
                 style={{ background: "#e85d3f" }}
               >
                 {copied ? <Check size={16} /> : <Copy size={16} />}
-                {copied ? "Copied!" : "Copy Output"}
+                {copied ? "Copied!" : "Copy"}
               </button>
             </div>
           )}
