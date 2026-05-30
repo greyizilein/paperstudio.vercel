@@ -179,6 +179,25 @@ function countWords(text: string): number {
   return text.trim().split(/\s+/).filter(Boolean).length;
 }
 
+function extractWordCountTarget(text: string): number | null {
+  const clean = text.replace(/,/g, "");
+  const patterns = [
+    /\b(\d{3,6})\s*[-–]?\s*words?\b/gi,
+    /\bword\s*(?:count|limit|target|requirement)[:\s]+(\d{3,6})\b/gi,
+    /\b(\d{3,6})\s*word\s*(?:limit|count|target|minimum|maximum|total)\b/gi,
+    /\btotal\s+(?:of\s+)?(\d{3,6})\s*words?\b/gi,
+  ];
+  let max = 0;
+  for (const pat of patterns) {
+    let m: RegExpExecArray | null;
+    while ((m = pat.exec(clean)) !== null) {
+      const n = parseInt(m[1]);
+      if (n >= 100 && n <= 100_000 && n > max) max = n;
+    }
+  }
+  return max > 0 ? max : null;
+}
+
 // ---------------------------------------------------------------------------
 // Mode detection
 // ---------------------------------------------------------------------------
@@ -2447,6 +2466,49 @@ Rules:
         status: "done",
         action: `${countWords(fullResponse)} words generated`,
       });
+
+      // ── Word count enforcement ────────────────────────────────────────────
+      // Detect if a word count target was specified and auto-expand if short.
+      const wcSource = req.user_message + " " + (fileContext || "");
+      const wcTarget = mode !== "chat" && mode !== "correct" ? extractWordCountTarget(wcSource) : null;
+      if (wcTarget && !signal.aborted) {
+        const MAX_EXPANSIONS = 2;
+        for (let pass = 0; pass < MAX_EXPANSIONS; pass++) {
+          const current = countWords(fullResponse);
+          const deficit = wcTarget - current;
+          if (deficit <= 0) break; // at or above target — stop
+          write("agent", {
+            id: "wordcount",
+            name: "Word Count",
+            status: "working",
+            action: `${current}/${wcTarget} words — expanding…`,
+          });
+          const expansionPrompt = `The document above is ${current} words. The required word count is ${wcTarget} words minimum. You are ${deficit} words short. Continue writing — add ${deficit} more words of substantive, relevant content. Seamlessly continue from where the document ends. Do not repeat anything already written. Do not add a closing statement if one already exists — expand body content, analysis, or supporting sections instead.`;
+          const expansionMessages = [
+            { role: "user", content: userContent },
+            { role: "assistant", content: fullResponse },
+            { role: "user", content: expansionPrompt },
+          ];
+          try {
+            let expansion = "";
+            if (modelChoice.provider === "anthropic") {
+              expansion = await streamAnthropic(modelChoice.model, system, expansionMessages, false, write, signal);
+            } else if (modelChoice.provider === "qwen") {
+              expansion = await streamQwen(modelChoice.model, system, expansionMessages, write, signal);
+            } else {
+              expansion = await streamGoogle(modelChoice.model, system, expansionMessages, write, signal);
+            }
+            if (expansion.trim()) fullResponse += "\n\n" + expansion;
+          } catch { break; }
+        }
+        const finalCount = countWords(fullResponse);
+        write("agent", {
+          id: "wordcount",
+          name: "Word Count",
+          status: "done",
+          action: `${finalCount} words${wcTarget ? ` / ${wcTarget} target` : ""}`,
+        });
+      }
     }
 
     // ── 12b. Process academic image markers + detect document ────────────
