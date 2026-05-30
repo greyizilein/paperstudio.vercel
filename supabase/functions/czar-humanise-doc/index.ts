@@ -1,14 +1,7 @@
-// czar-humanise-doc — Discipline-aware academic humaniser
-// Completely separate from czar-humanise. Can be improved or deleted independently.
-//
-// Pipeline:
-//   Stage 0: Discipline Detection  (Haiku  — JSON context)
-//   Stage 1: Pre-processing        (regex  — no API call)
-//   Stage 2: Structural Rewrite    (Opus   — rhythm, active voice, sentence variety)
-//   Stage 3: Field-Aware Paraphrase(Opus   — discipline-native word choices)
-//   Stage 4: Word Count Trim       (Haiku  — only runs if output > 101% of input)
-//
-// All stages preserve headings, citations, reference lists, and figure/table captions.
+// czar-humanise-doc — per-stage academic humaniser
+// One HTTP call per stage. Each call gets its own 150-second timeout budget.
+// Request:  POST { stage: 0|1|2|3|4, text: string, discipline?: DisciplineCtx, originalWords?: number }
+// Response: JSON { text: string, discipline?: DisciplineCtx, words?: number, skipped?: boolean }
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -29,7 +22,7 @@ const DETECT_PROMPT =
   '"style":"e.g. empirical-quantitative","register":"e.g. formal-analytical","hedging_norms":"e.g. statistical confidence intervals",' +
   '"typical_verbs":"e.g. demonstrates, indicates","avoided_words":"e.g. prove, feel, obviously","voice_notes":"e.g. passive preferred in methods"}';
 
-// ── Pre-processing (regex, no API) ────────────────────────────────────────────
+// ── Pre-processing ────────────────────────────────────────────────────────────
 
 const FILLER_STRIPS: [RegExp, string][] = [
   [/\bit is worth noting that,?\s*/gi, ""],
@@ -200,111 +193,76 @@ Deno.serve(async (req) => {
     });
   }
 
-  let body: { text: string };
+  const json = (data: unknown, status = 200) =>
+    new Response(JSON.stringify(data), {
+      status,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+
+  let body: { stage: number; text: string; discipline?: Partial<DisciplineCtx>; originalWords?: number };
   try { body = await req.json(); }
   catch {
-    return new Response(JSON.stringify({ error: "Invalid JSON" }), {
-      status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return json({ error: "Invalid JSON" }, 400);
   }
 
-  const text = (body?.text || "").trim();
-  if (!text) {
-    return new Response(JSON.stringify({ error: "text required" }), {
-      status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  }
-  if (!ANTHROPIC_API_KEY) {
-    return new Response(JSON.stringify({ error: "ANTHROPIC_API_KEY not configured" }), {
-      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  }
+  const { stage, text, discipline: inCtx, originalWords } = body;
+  if (!text?.trim()) return json({ error: "text required" }, 400);
+  if (!ANTHROPIC_API_KEY) return json({ error: "ANTHROPIC_API_KEY not configured" }, 500);
 
-  const originalWords = wordCount(text);
   const signal = req.signal;
-  const encoder = new TextEncoder();
 
-  const stream = new ReadableStream<Uint8Array>({
-    async start(controller) {
-      const send = (event: string, data: unknown) => {
-        try {
-          controller.enqueue(
-            encoder.encode("event: " + event + "\ndata: " + JSON.stringify(data) + "\n\n")
-          );
-        } catch { /* stream closed */ }
-      };
-
-      send("start", { original_words: originalWords });
-
-      let current = text;
-      let ctx: DisciplineCtx = { ...DEFAULT_CTX };
-
-      try {
-        // Stage 0: Analysis (discipline detection)
-        send("stage_start", { stage: 0, label: "Analysis" });
+  try {
+    switch (stage) {
+      case 0: {
+        // Analysis: discipline detection (Haiku, ~2s)
+        let ctx: DisciplineCtx = { ...DEFAULT_CTX };
         try {
           const raw = await callClaude(DETECT_PROMPT, text.slice(0, 3000), signal, MODEL_DETECT, 512);
           const parsed = JSON.parse(raw.replace(/```json|```/gi, "").trim());
           ctx = { ...ctx, ...parsed };
-        } catch {
-          // silently fall back to defaults
-        }
-        send("stage_done", { stage: 0, label: "Analysis" });
-
-        // Stage 1: Preparation (pre-process)
-        send("stage_start", { stage: 1, label: "Preparation" });
-        current = preProcess(text);
-        send("stage_done", { stage: 1, label: "Preparation", words: wordCount(current) });
-
-        // Stage 2: Pass I (structural rewrite)
-        send("stage_start", { stage: 2, label: "Pass I" });
-        current = await callClaude(buildPass1(ctx), current, signal, MODEL_REWRITE);
-        send("stage_done", { stage: 2, label: "Pass I", words: wordCount(current) });
-
-        // Stage 3: Pass II (field-aware paraphrase)
-        send("stage_start", { stage: 3, label: "Pass II" });
-        current = await callClaude(buildPass2(ctx), current, signal, MODEL_REWRITE);
-        send("stage_done", { stage: 3, label: "Pass II", words: wordCount(current) });
-
-        // Stage 4: Calibration (trim, conditional)
-        const ceiling = Math.ceil(originalWords * 1.01);
-        const afterWords = wordCount(current);
-        if (afterWords > ceiling) {
-          send("stage_start", { stage: 4, label: "Calibration" });
-          current = await callClaude(buildTrim(ctx, originalWords, afterWords), current, signal, MODEL_TRIM);
-          send("stage_done", { stage: 4, label: "Calibration", words: wordCount(current) });
-        }
-
-        send("done", {
-          humanised:      current,
-          discipline:     ctx,
-          original_words: originalWords,
-          final_words:    wordCount(current),
-        });
-      } catch (e: unknown) {
-        const msg = e instanceof Error ? e.message : String(e);
-        if (!msg.includes("abort") && !msg.includes("cancel")) {
-          console.error("[czar-humanise-doc] error:", msg);
-        }
-        send("done", {
-          humanised:      current,
-          discipline:     ctx,
-          original_words: originalWords,
-          final_words:    wordCount(current),
-          error:          msg.slice(0, 200),
-        });
-      } finally {
-        try { controller.close(); } catch { /* already closed */ }
+        } catch { /* fall back to defaults */ }
+        return json({ text, discipline: ctx });
       }
-    },
-  });
 
-  return new Response(stream, {
-    headers: {
-      ...corsHeaders,
-      "Content-Type": "text/event-stream",
-      "Cache-Control": "no-cache",
-      "Connection":    "keep-alive",
-    },
-  });
+      case 1: {
+        // Preparation: regex pre-processing (no API call)
+        const processed = preProcess(text);
+        return json({ text: processed, words: wordCount(processed) });
+      }
+
+      case 2: {
+        // Pass I: structural rewrite (Sonnet, up to ~60s)
+        const ctx: DisciplineCtx = { ...DEFAULT_CTX, ...(inCtx || {}) };
+        const rewritten = await callClaude(buildPass1(ctx), text, signal, MODEL_REWRITE, 8000);
+        return json({ text: rewritten, words: wordCount(rewritten) });
+      }
+
+      case 3: {
+        // Pass II: field-aware paraphrase (Sonnet, up to ~60s)
+        const ctx: DisciplineCtx = { ...DEFAULT_CTX, ...(inCtx || {}) };
+        const rewritten = await callClaude(buildPass2(ctx), text, signal, MODEL_REWRITE, 8000);
+        return json({ text: rewritten, words: wordCount(rewritten) });
+      }
+
+      case 4: {
+        // Calibration: trim only if output exceeded +1% of original (Haiku, ~3s)
+        const ctx: DisciplineCtx = { ...DEFAULT_CTX, ...(inCtx || {}) };
+        const orig = originalWords || wordCount(text);
+        const current = wordCount(text);
+        const ceiling = Math.ceil(orig * 1.01);
+        if (current <= ceiling) return json({ text, words: current, skipped: true });
+        const trimmed = await callClaude(buildTrim(ctx, orig, current), text, signal, MODEL_TRIM, 8000);
+        return json({ text: trimmed, words: wordCount(trimmed) });
+      }
+
+      default:
+        return json({ error: "Invalid stage (0–4 expected)" }, 400);
+    }
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (!msg.includes("abort") && !msg.includes("cancel")) {
+      console.error("[czar-humanise-doc] stage", stage, "error:", msg);
+    }
+    return json({ error: msg.slice(0, 300) }, 500);
+  }
 });
