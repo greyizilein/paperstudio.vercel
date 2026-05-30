@@ -1182,6 +1182,12 @@ async function callAnthropicSync(
 // Anthropic streaming
 // ---------------------------------------------------------------------------
 
+// Mime types Claude can read natively as inline content
+const CLAUDE_NATIVE_MIMES = new Set([
+  "application/pdf",
+  "image/jpeg", "image/jpg", "image/png", "image/gif", "image/webp",
+]);
+
 async function streamAnthropic(
   model: string,
   system: string,
@@ -1189,15 +1195,39 @@ async function streamAnthropic(
   useThinking: boolean,
   write: WriteFunction,
   signal: AbortSignal,
+  inlineParts?: Array<{ mimeType: string; data: string }>,
 ): Promise<string> {
   const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
   if (!apiKey) throw new Error("ANTHROPIC_API_KEY not configured");
+
+  // Build Anthropic messages — attach inline files to the last user message
+  type AnthropicContent =
+    | { type: "text"; text: string }
+    | { type: "image"; source: { type: "base64"; media_type: string; data: string } }
+    | { type: "document"; source: { type: "base64"; media_type: string; data: string } };
+
+  const builtMessages: { role: string; content: string | AnthropicContent[] }[] = messages.map((m, i) => {
+    const isLast = i === messages.length - 1;
+    const supportedParts = (inlineParts ?? []).filter(p => CLAUDE_NATIVE_MIMES.has(p.mimeType));
+    if (isLast && m.role === "user" && supportedParts.length > 0) {
+      const content: AnthropicContent[] = [{ type: "text", text: m.content }];
+      for (const p of supportedParts) {
+        if (p.mimeType === "application/pdf") {
+          content.push({ type: "document", source: { type: "base64", media_type: "application/pdf", data: p.data } });
+        } else {
+          content.push({ type: "image", source: { type: "base64", media_type: p.mimeType, data: p.data } });
+        }
+      }
+      return { role: "user", content };
+    }
+    return m;
+  });
 
   const body: Record<string, unknown> = {
     model,
     max_tokens: 16000,
     stream: true,
-    messages,
+    messages: builtMessages,
     system,
   };
 
@@ -1839,6 +1869,19 @@ async function runMain(
       }
     }
 
+    // Override to Claude when there are PDFs/images Claude can read natively.
+    // Claude gives better document comprehension and writing quality for standard tasks.
+    // Gemini stays for audio/video (Claude doesn't support them) and large files (>15MB).
+    const CLAUDE_INLINE_MAX = 15 * 1024 * 1024;
+    const claudeSupportedParts = geminiInlineParts.filter(p => CLAUDE_NATIVE_MIMES.has(p.mimeType));
+    // base64 length * 0.75 ≈ raw byte size
+    const claudeInlineBytes = claudeSupportedParts.reduce((s, p) => s + Math.ceil(p.data.length * 0.75), 0);
+    const useClaudeNative = claudeSupportedParts.length > 0 && claudeInlineBytes <= CLAUDE_INLINE_MAX &&
+      mode !== "analyze_data" && mode !== "correct";
+    if (useClaudeNative && modelChoice.provider !== "anthropic") {
+      modelChoice = { provider: "anthropic", model: C_SONNET, thinking: false, label: "document reader" };
+    }
+
     // ── 8b. Document intelligence (import mode) ──────────────────────────────
     // Import mode: read the document and confirm readiness — do NOT auto-execute.
     // The modeDirective for 'import' instructs the model to summarise and ask "just say go".
@@ -2368,6 +2411,7 @@ Rules:
             modelChoice.thinking,
             write,
             signal,
+            useClaudeNative ? claudeSupportedParts : undefined,
           );
         } else if (modelChoice.provider === "qwen") {
           fullResponse = await streamQwen(
