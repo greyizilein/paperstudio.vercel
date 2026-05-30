@@ -1,10 +1,10 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { SlidersHorizontal } from 'lucide-react';
-import ReactMarkdown from 'react-markdown';
+import ReactMarkdown, { defaultUrlTransform } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { Components } from 'react-markdown';
 import { CZ_VOICES } from './editorData';
-import { useCzarEditor, type ChatMessage } from './useCzarEditor';
+import { useCzarEditor } from './useCzarEditor';
 import { useCzDictation, useCzDropZone } from './editorHooks';
 import { CzMobileSettings, CzMobileMic } from './EditorExtras';
 import { useAuth } from '@/contexts/AuthContext';
@@ -13,6 +13,20 @@ import { buildDocx, docxFilename } from '@/lib/czarDocUtils';
 import { Packer } from 'docx';
 import { supabase } from '@/integrations/supabase/client';
 import type { CzPanelSettings } from './useCzarEditor';
+
+// react-markdown strips data: URIs and unknown schemes by default (XSS guard),
+// which blanks the src of inline generated images and our loading/error
+// sentinels. Whitelist them so inline figures actually render.
+const czarUrlTransform = (url: string): string => {
+  if (
+    url.startsWith('data:image/') ||
+    url.startsWith('czar-loading://') ||
+    url.startsWith('czar-error://')
+  ) {
+    return url;
+  }
+  return defaultUrlTransform(url);
+};
 
 // Custom image renderer — handles czar-loading:// and czar-error:// markers
 const czarImgComponents: Components = {
@@ -253,7 +267,7 @@ function CzarChatMessage({ content, isStreaming, imageUrl }: { content: string; 
           <>
             {content && (
               <div className="prose prose-zinc max-w-none prose-p:font-serif prose-p:text-[16px] prose-p:leading-[1.75] prose-headings:font-serif prose-headings:font-bold prose-h1:text-2xl prose-h2:text-xl prose-h3:text-lg">
-                <ReactMarkdown remarkPlugins={[remarkGfm]} components={czarImgComponents}>{content}</ReactMarkdown>
+                <ReactMarkdown remarkPlugins={[remarkGfm]} urlTransform={czarUrlTransform} components={czarImgComponents}>{content}</ReactMarkdown>
                 {isStreaming && <span className="inline-block w-0.5 h-4 bg-[#e85d3f] ml-0.5 animate-pulse align-middle" />}
               </div>
             )}
@@ -264,82 +278,6 @@ function CzarChatMessage({ content, isStreaming, imageUrl }: { content: string; 
               </div>
             )}
           </>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function CzarDocumentCard({
-  message, expanded, onExpand, onTighten, onCorrect, onDownloadDocx, onDownloadMd, docTitle,
-}: {
-  message: ChatMessage;
-  expanded: boolean;
-  onExpand: () => void;
-  onTighten: () => void;
-  onCorrect: () => void;
-  onDownloadDocx: () => void;
-  onDownloadMd: () => void;
-  docTitle: string;
-}) {
-  const wc = countWords(message.content);
-
-  return (
-    <div className="flex items-start gap-2.5 mb-4">
-      <span className="font-serif italic font-bold text-[#e85d3f] text-[14px] mt-1 flex-shrink-0 w-5 text-center">Ц</span>
-      <div className="flex-1 min-w-0 border border-zinc-200 rounded-2xl overflow-hidden shadow-sm">
-        {/* Card header */}
-        <div className="flex items-center justify-between px-4 py-2.5 bg-zinc-50 border-b border-zinc-200">
-          <div className="flex items-center gap-2 min-w-0">
-            <span className="font-serif italic font-bold text-[10px] text-[#e85d3f]">czar.</span>
-            <span className="font-mono text-[9px] text-zinc-400">·</span>
-            <span className="font-mono text-[9px] tracking-wide text-zinc-500">{wc.toLocaleString()} words</span>
-          </div>
-          {message.isStreaming && <span className="w-2 h-2 rounded-full bg-[#e85d3f] animate-pulse flex-shrink-0" />}
-        </div>
-
-        {/* Content */}
-        <div
-          className={`px-4 py-3 bg-white overflow-hidden transition-all duration-300 ${!expanded && !message.isStreaming ? 'max-h-52' : ''}`}
-          style={!expanded && !message.isStreaming ? { maskImage: 'linear-gradient(to bottom, black 60%, transparent 100%)' } : {}}>
-          <div className="prose prose-zinc prose-sm max-w-none prose-p:font-serif prose-p:text-[15px] prose-p:leading-[1.7] prose-headings:font-serif prose-headings:font-bold prose-h1:text-xl prose-h2:text-lg prose-h3:text-base [&_table]:text-xs [&_table]:w-full [&_th]:bg-zinc-100 [&_th]:px-2 [&_th]:py-1 [&_th]:border [&_th]:border-zinc-300 [&_td]:px-2 [&_td]:py-1 [&_td]:border [&_td]:border-zinc-200">
-            <ReactMarkdown remarkPlugins={[remarkGfm]} components={czarImgComponents}>{message.content}</ReactMarkdown>
-            {message.isStreaming && <span className="inline-block w-0.5 h-4 bg-[#e85d3f] ml-0.5 animate-pulse align-middle" />}
-          </div>
-        </div>
-
-        {/* Actions */}
-        {!message.isStreaming && (
-          <div className="border-t border-zinc-200 bg-zinc-50">
-            {!expanded && (
-              <button
-                className="w-full py-2 font-mono text-[10px] tracking-widest uppercase text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 transition-colors"
-                onClick={onExpand}>
-                Read full document ▾
-              </button>
-            )}
-            <div className="flex items-center gap-0 border-t border-zinc-100">
-              {[
-                { icon: '✎', label: 'Edit', onClick: onExpand },
-                { icon: 'Ц', label: 'Tighten', onClick: onTighten },
-                { icon: '✓', label: 'Correct', onClick: onCorrect },
-                { icon: '↓', label: 'Word', onClick: onDownloadDocx },
-              ].map(({ icon, label, onClick }) => (
-                <button key={label}
-                  className="flex-1 flex flex-col items-center gap-0.5 py-2.5 text-zinc-500 hover:text-[#e85d3f] hover:bg-white transition-colors"
-                  onClick={onClick}>
-                  <span className="text-[13px] font-serif italic">{icon}</span>
-                  <span className="font-mono text-[8px] uppercase tracking-wider">{label}</span>
-                </button>
-              ))}
-              {expanded && (
-                <button className="flex-1 flex flex-col items-center gap-0.5 py-2.5 text-zinc-400 hover:bg-white transition-colors" onClick={onExpand}>
-                  <span className="text-[11px]">▴</span>
-                  <span className="font-mono text-[8px] uppercase tracking-wider">Collapse</span>
-                </button>
-              )}
-            </div>
-          </div>
         )}
       </div>
     </div>
@@ -485,7 +423,10 @@ export function CzarMobile() {
   const userName: string = (user as any)?.user_metadata?.full_name || (user as any)?.user_metadata?.name || user?.email?.split('@')[0] || '';
 
   // Derive writer content from the streaming or last document message
-  const streamingMsg = editor.messages.slice().reverse().find(m => m.isStreaming && m.role === 'assistant');
+  // Exclude import-mode messages — those are chat summaries, not document content
+  const streamingMsg = editor.messages.slice().reverse().find(
+    m => m.isStreaming && m.role === 'assistant' && m.mode !== 'import'
+  );
   const lastDocMsg = editor.messages.slice().reverse().find(m => m.isDocument && !m.isStreaming && m.role === 'assistant');
   const writerContent = streamingMsg?.content ?? lastDocMsg?.content ?? '';
   const writerStreaming = !!streamingMsg;
@@ -548,26 +489,42 @@ export function CzarMobile() {
     await new Promise<void>(r => setTimeout(r, 750));
     setUploadStep(2);
 
+    const DATA_EXTS = ['csv', 'tsv', 'xlsx', 'xls', 'sav', 'zsav'];
+    const isDataFile = DATA_EXTS.includes(ext);
+
+    // Text/Markdown: extract locally and send with document intelligence trigger
     if (ext === 'txt' || ext === 'md') {
       const text = await f.text();
-      editor.sendMessage(`I've uploaded a file called "${f.name}". Here is its content:\n\n${text}\n\nPlease read it carefully and tell me what it's about.`);
+      editor.sendMessage(`[DOCUMENT UPLOADED: ${f.name}]\n\n${text}`);
       return;
     }
+
+    // DOCX: extract with mammoth and send with document intelligence trigger
     if (ext === 'docx') {
       const arrayBuffer = await f.arrayBuffer();
       const mammoth = await import('mammoth');
       const { value: text } = await mammoth.extractRawText({ arrayBuffer });
-      editor.sendMessage(`I've uploaded a Word document called "${f.name}". Full text:\n\n${text}\n\nTell me what this document is about and ask what I'd like to do with it.`);
+      editor.sendMessage(`[DOCUMENT UPLOADED: ${f.name}]\n\n${text}`);
       return;
     }
+
+    // All other files (PDF, images, audio, Excel, CSV, SPSS) → upload to storage
     let mime = f.type || 'application/octet-stream';
     if (mime === 'audio/x-m4a' || (ext === 'm4a' && !mime.startsWith('audio/'))) mime = 'audio/mp4';
-    if (!user?.id) { editor.sendMessage(`Upload failed — please sign in to upload binary files.`); return; }
+    if (ext === 'csv') mime = 'text/csv';
+    if (ext === 'tsv') mime = 'text/tab-separated-values';
+    if (ext === 'xlsx') mime = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+    if (ext === 'xls') mime = 'application/vnd.ms-excel';
+    if (ext === 'sav' || ext === 'zsav') mime = 'application/octet-stream';
+
+    if (!user?.id) { editor.sendMessage(`Upload failed — please sign in.`); return; }
     const safeName = f.name.replace(/[^a-zA-Z0-9._-]/g, '_');
     const path = `${user.id}/${Date.now()}_${safeName}`;
     const { error } = await supabase.storage.from('czar-uploads').upload(path, f, { contentType: mime });
     if (error) { editor.sendMessage(`Upload failed: ${error.message}`); return; }
-    editor.importFile({ storage_path: path, filename: f.name, size: f.size, mime });
+
+    // Data files → analyze_data mode; everything else → import mode (backend infers)
+    editor.importFile({ storage_path: path, filename: f.name, size: f.size, mime }, isDataFile ? 'analyze_data' : 'import');
   }, [user?.id, editor]);
 
   return (
@@ -635,7 +592,7 @@ export function CzarMobile() {
         <div ref={writerScrollRef} className="flex-1 overflow-y-auto px-5 pt-6 pb-10" {...drop.handlers}>
           {writerContent ? (
             <div className="prose prose-zinc max-w-none prose-p:font-serif prose-p:text-[16px] prose-p:leading-[1.8] prose-headings:font-serif prose-headings:font-bold prose-h1:text-2xl prose-h2:text-xl prose-h3:text-[17px] [&_table]:text-sm [&_table]:w-full [&_th]:bg-zinc-100 [&_th]:px-2 [&_th]:py-1 [&_th]:border [&_th]:border-zinc-300 [&_td]:px-2 [&_td]:py-1 [&_td]:border [&_td]:border-zinc-200">
-              <ReactMarkdown remarkPlugins={[remarkGfm]} components={czarImgComponents}>{writerContent}</ReactMarkdown>
+              <ReactMarkdown remarkPlugins={[remarkGfm]} urlTransform={czarUrlTransform} components={czarImgComponents}>{writerContent}</ReactMarkdown>
               {writerStreaming && <span className="inline-block w-0.5 h-4 bg-[#e85d3f] ml-0.5 animate-pulse align-middle" />}
             </div>
           ) : (
@@ -695,7 +652,7 @@ export function CzarMobile() {
       </div>
 
       {/* ── HIDDEN FILE INPUT ── */}
-      <input ref={fileInputRef} type="file" accept=".txt,.md,.docx,.pdf,.mp3,.wav,.m4a,.jpg,.jpeg,.png,.gif,.webp" className="hidden" onChange={handleFileInput} />
+      <input ref={fileInputRef} type="file" accept=".txt,.md,.docx,.pdf,.mp3,.wav,.m4a,.jpg,.jpeg,.png,.gif,.webp,.csv,.tsv,.xlsx,.xls,.sav" className="hidden" onChange={handleFileInput} />
 
       {/* ── BOTTOM SHEETS ── */}
       <CzMobilePiecesSheet
