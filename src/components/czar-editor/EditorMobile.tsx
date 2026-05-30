@@ -1,5 +1,6 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { SlidersHorizontal } from 'lucide-react';
+import { SlidersHorizontal, Bot } from 'lucide-react';
+import { HumaniserDocPanel } from '@/components/czar/HumaniserDocPanel';
 import ReactMarkdown, { defaultUrlTransform } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { Components } from 'react-markdown';
@@ -421,10 +422,10 @@ function AttachmentChip({ att, onDismiss }: { att: PendingAttachment; onDismiss:
 // ─── CHAT INPUT ───────────────────────────────────────────────────────────────
 
 function CzChatInput({
-  value, onChange, onSend, onStop, onUpload, onMic, onCorrect, onSettings, dictLive, streaming, disabled, pendingAttachments, onDismissAttachment,
+  value, onChange, onSend, onStop, onUpload, onMic, onCorrect, onSettings, onHumanise, dictLive, streaming, disabled, pendingAttachments, onDismissAttachment,
 }: {
   value: string; onChange: (v: string) => void; onSend: () => void; onStop: () => void;
-  onUpload: () => void; onMic: () => void; onCorrect: () => void; onSettings: () => void;
+  onUpload: () => void; onMic: () => void; onCorrect: () => void; onSettings: () => void; onHumanise: () => void;
   dictLive: boolean; streaming: boolean; disabled?: boolean;
   pendingAttachments?: PendingAttachment[]; onDismissAttachment?: (id: string) => void;
 }) {
@@ -491,6 +492,13 @@ function CzChatInput({
           <button
             className="w-10 h-10 flex items-center justify-center rounded-full text-zinc-800 hover:bg-zinc-100 transition-colors"
             onPointerDown={(e) => e.preventDefault()}
+            onClick={onHumanise}
+            title="Humanise text">
+            <Bot size={17} strokeWidth={1.8} />
+          </button>
+          <button
+            className="w-10 h-10 flex items-center justify-center rounded-full text-zinc-800 hover:bg-zinc-100 transition-colors"
+            onPointerDown={(e) => e.preventDefault()}
             onClick={onSettings}
             title="Settings">
             <SlidersHorizontal size={17} strokeWidth={1.8} />
@@ -541,6 +549,7 @@ export function CzarMobile() {
   const [correctionOpen, setCorrectionOpen] = useState(false);
   const [downloadSheet, setDownloadSheet] = useState(false);
   const [downloadContent, setDownloadContent] = useState('');
+  const [humaniserOpen, setHumaniserOpen] = useState(false);
 
   const [input, setInput] = useState('');
   const [activeView, setActiveView] = useState<'chat' | 'writer'>('chat');
@@ -831,6 +840,7 @@ export function CzarMobile() {
           onMic={() => dict.live ? dict.stop() : dict.start()}
           onCorrect={() => setCorrectionOpen(true)}
           onSettings={() => { setSettingsTab('academic'); setSettingsSheet(true); }}
+          onHumanise={() => setHumaniserOpen(true)}
           dictLive={dict.live}
           streaming={editor.streamingDoc}
           pendingAttachments={pendingAttachments}
@@ -864,6 +874,7 @@ export function CzarMobile() {
           <CzMobileSettings open={settingsSheet} onClose={() => setSettingsSheet(false)} initialTab={settingsTab} activeVoice={editor.activeVoice} setVoice={editor.setActiveVoice} prefs={editor.prefs} setPrefs={editor.setPrefs} rubricCriteria={editor.rubricCriteria} setRubricCriteria={editor.setRubricCriteria} />
           <CzMobileMic open={dict.live} seconds={dict.seconds} final={dict.final} interim={dict.interim} onClose={() => { dict.stop(); }} onInsert={() => {}} />
           <CorrectionModal open={correctionOpen} onClose={() => setCorrectionOpen(false)} onApplied={(content) => { editor.setDocContent(content); editor.manualSave(); }} />
+          <HumaniserDocPanel open={humaniserOpen} onClose={() => setHumaniserOpen(false)} />
         </div>
       </div>
     </div>
