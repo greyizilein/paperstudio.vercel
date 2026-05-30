@@ -14,11 +14,13 @@ const UNDERGRADUATE_NGN = 45_000;
 const TIER_NGN: Record<string, number> = {
   masters: 225_000,  // $150 @ ~₦1500
   phd:     420_000,  // $280 @ ~₦1500
+  czar:     75_000,  // $50  @ ~₦1500
 };
 const TIER_USD_DISPLAY: Record<string, number> = {
   undergraduate: 30,
   masters: 150,
   phd: 280,
+  czar: 50,
 };
 
 const PAPERSTUDIO_CUSTOM_USD_PER_WORD = 0.027;
@@ -74,6 +76,13 @@ Deno.serve(async (req) => {
       originalUsd = TIER_USD_DISPLAY.undergraduate;
       console.log(`Checkout: tier=undergraduate, NGN=₦${UNDERGRADUATE_NGN}, kobo=${amountInKobo}`);
 
+    } else if (tierKey === "czar") {
+      // CZAR word credits — goes to czar_subscriptions, not subscriptions
+      amountInKobo = TIER_NGN.czar * 100;
+      wordLimit = 20_000;
+      originalUsd = TIER_USD_DISPLAY.czar;
+      console.log(`Checkout: tier=czar, NGN=₦${TIER_NGN.czar}, USD=$${originalUsd}, kobo=${amountInKobo}`);
+
     } else if (TIER_NGN[tierKey]) {
       // Fixed NGN amount — no conversion. Site shows USD, user pays the locked NGN.
       amountInKobo = TIER_NGN[tierKey] * 100;
@@ -106,10 +115,11 @@ Deno.serve(async (req) => {
         currency: "NGN",
         callback_url: callback_url || "",
         metadata: {
-          product: "paperstudio",
+          product: tierKey === "czar" ? "czar" : "paperstudio",
           user_id: userId,
           tier: tierKey,
           word_limit: wordLimit,
+          words: tierKey === "czar" ? wordLimit : undefined,
           original_usd: originalUsd,
           exchange_rate: ngnRate,
         },
