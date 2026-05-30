@@ -1793,7 +1793,7 @@ async function runMain(
     const hasFiles = (req.attachments?.length ?? 0) > 0;
     const mode = detectMode(req.user_message, hasFiles, req.mode);
     const complexity = detectComplexity(req.user_message, req.attachments?.length ?? 0, mode);
-    const modelChoice = pickModel(tier, mode, complexity, email);
+    let modelChoice = pickModel(tier, mode, complexity, email);
 
     // ── 4. Ensure conversation ───────────────────────────────────────────
     const conversationTitle = req.user_message.slice(0, 60) || "New chat";
