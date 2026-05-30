@@ -72,34 +72,6 @@ async function downloadDocx(text: string, fallbackFilename: string) {
   URL.revokeObjectURL(url);
 }
 
-// ── SSE reader ────────────────────────────────────────────────────────────────
-
-async function* readSSE(resp: Response): AsyncGenerator<{ event: string; data: any }> {
-  if (!resp.body) return;
-  const reader = resp.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
-  let currentEvent = "message";
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-
-    const lines = buffer.split("\n");
-    buffer = lines.pop() ?? "";
-
-    for (const line of lines) {
-      if (line.startsWith("event: ")) {
-        currentEvent = line.slice(7).trim();
-      } else if (line.startsWith("data: ")) {
-        try {
-          yield { event: currentEvent, data: JSON.parse(line.slice(6)) };
-        } catch { /* malformed line */ }
-      }
-    }
-  }
-}
 
 // ── Main component ────────────────────────────────────────────────────────────
 
@@ -173,40 +145,61 @@ export function HumaniserDocPanel({ open, onClose }: Props) {
     setStages(STAGE_LABELS.map((label) => ({ label, status: "idle" })));
     setResult("");
     setError("");
-    setWordsBefore(countWords(text));
+    const originalWords = countWords(text);
+    setWordsBefore(originalWords);
 
     const updateStage = (idx: number, patch: Partial<StageState>) =>
       setStages((prev) => prev.map((s, i) => (i === idx ? { ...s, ...patch } : s)));
 
-    let gotDone = false;
+    const callStage = async (body: Record<string, unknown>) => {
+      const resp = await fetchEdge("czar-humanise-doc", body, { signal: ac.signal });
+      if (!resp.ok) {
+        const msg = await resp.text().catch(() => "Request failed");
+        throw new Error(msg.slice(0, 200));
+      }
+      return resp.json() as Promise<{ text: string; discipline?: unknown; words?: number; skipped?: boolean }>;
+    };
 
     try {
-      const resp = await fetchEdge("czar-humanise-doc", { text }, { signal: ac.signal });
-      if (!resp.ok) throw new Error(await resp.text());
+      let current = text;
+      let discipline: unknown = undefined;
 
-      for await (const { event, data } of readSSE(resp)) {
-        if (ac.signal.aborted) break;
+      // Stage 0: Analysis
+      updateStage(0, { status: "active" });
+      const s0 = await callStage({ stage: 0, text: current });
+      discipline = s0.discipline;
+      updateStage(0, { status: "done" });
 
-        if (event === "stage_start") {
-          const idx: number = data.stage;
-          updateStage(idx, { status: "active" });
-        } else if (event === "stage_done") {
-          const idx: number = data.stage;
-          updateStage(idx, { status: "done", words: data.words });
-        } else if (event === "done") {
-          gotDone = true;
-          setResult(data.humanised ?? "");
-          setWordsAfter(data.final_words ?? countWords(data.humanised ?? ""));
-          if (data.error) setError(data.error);
-          setPhase(data.humanised ? "done" : "error");
-        }
+      // Stage 1: Preparation
+      updateStage(1, { status: "active" });
+      const s1 = await callStage({ stage: 1, text: current });
+      current = s1.text;
+      updateStage(1, { status: "done", words: s1.words });
+
+      // Stage 2: Pass I
+      updateStage(2, { status: "active" });
+      const s2 = await callStage({ stage: 2, text: current, discipline });
+      current = s2.text;
+      updateStage(2, { status: "done", words: s2.words });
+
+      // Stage 3: Pass II
+      updateStage(3, { status: "active" });
+      const s3 = await callStage({ stage: 3, text: current, discipline });
+      current = s3.text;
+      updateStage(3, { status: "done", words: s3.words });
+
+      // Stage 4: Calibration (only if over limit)
+      const afterWords = countWords(current);
+      if (afterWords > Math.ceil(originalWords * 1.01)) {
+        updateStage(4, { status: "active" });
+        const s4 = await callStage({ stage: 4, text: current, discipline, originalWords });
+        current = s4.text;
+        updateStage(4, { status: "done", words: s4.words });
       }
 
-      // Stream ended without a done event — edge function likely timed out
-      if (!gotDone && !ac.signal.aborted) {
-        setError("Processing timed out. Please try again with a shorter text.");
-        setPhase("error");
-      }
+      setResult(current);
+      setWordsAfter(countWords(current));
+      setPhase("done");
     } catch (err) {
       if (ac.signal.aborted) return;
       setError(err instanceof Error ? err.message : "Something went wrong.");
