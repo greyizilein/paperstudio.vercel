@@ -380,16 +380,29 @@ export function useCzarEditor(): UseCzarEditorReturn {
           isDraft: wc < 100,
         };
       });
-      setPieces(mapped);
-      if (mapped.length > 0 && !activePieceId) {
-        setActivePieceId(mapped[0].id);
+
+      if (mapped.length > 0) {
+        setPieces(mapped);
+        if (!activePieceId) setActivePieceId(mapped[0].id);
+      } else {
+        // No conversations yet — create one automatically so the user can start immediately
+        const { data } = await supabase
+          .from('czar_conversations')
+          .insert({ user_id: user!.id, title: 'Untitled', mode: 'write' })
+          .select('id')
+          .single();
+        if (data) {
+          const fresh: CzPiece = { id: data.id, name: 'Untitled', meta: 'empty', updatedAt: new Date().toISOString(), isDraft: true };
+          setPieces([fresh]);
+          setActivePieceId(data.id);
+        }
       }
     } catch (e: any) {
       setPiecesError(e?.message ?? 'Failed to load pieces');
     } finally {
       setPiecesLoading(false);
     }
-  }, [activePieceId]);
+  }, [activePieceId, user]);
 
   useEffect(() => {
     if (user) loadPieces();
