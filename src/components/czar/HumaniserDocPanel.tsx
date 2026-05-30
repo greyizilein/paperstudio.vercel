@@ -5,7 +5,9 @@
 
 import React, { useState, useRef, useCallback } from "react";
 import { X, Upload, Copy, Check, RotateCcw, Download } from "lucide-react";
+import { Packer } from "docx";
 import { fetchEdge } from "@/lib/edgeFetch";
+import { buildDocx, docxFilename } from "@/lib/czarDocUtils";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -56,12 +58,14 @@ function countWords(s: string): number {
   return (s || "").trim().split(/\s+/).filter(Boolean).length;
 }
 
-function downloadText(text: string, filename = "humanised.txt") {
-  const blob = new Blob([text], { type: "text/plain" });
+async function downloadDocx(text: string, fallbackFilename: string) {
+  const doc = buildDocx(text);
+  const blob = await Packer.toBlob(doc);
+  const name = docxFilename(text) || fallbackFilename;
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = filename;
+  a.download = name;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
@@ -217,8 +221,8 @@ export function HumaniserDocPanel({ open, onClose }: Props) {
   }, [result]);
 
   const download = useCallback(() => {
-    const base = filename ? filename.replace(/\.[^.]+$/, "") + "_humanised.txt" : "humanised.txt";
-    downloadText(result, base);
+    const base = filename ? filename.replace(/\.[^.]+$/, "") + "_humanised.docx" : "humanised.docx";
+    downloadDocx(result, base);
   }, [result, filename]);
 
   if (!open) return null;
@@ -467,7 +471,7 @@ export function HumaniserDocPanel({ open, onClose }: Props) {
                 className="py-3 px-4 rounded-xl font-sans text-[14px] text-zinc-700 border border-zinc-200 hover:bg-zinc-50 transition-colors flex items-center gap-1.5 flex-shrink-0"
               >
                 <Download size={15} />
-                .txt
+                .docx
               </button>
               <button
                 onClick={copy}
