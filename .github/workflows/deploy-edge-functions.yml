@@ -7,6 +7,7 @@ on:
       - main
       - claude/migrate-loveable-vercel-AvdzU
       - claude/cazar-document-generation-8Ook4
+      - claude/czar-image-generation-debug-QqkMp
 
 jobs:
   deploy:

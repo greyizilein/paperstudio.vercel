@@ -991,28 +991,44 @@ async function ingestFiles(
 
       let text = "";
 
-      const isText = att.mime === "text/plain" || att.mime === "text/markdown" ||
-        att.filename.endsWith(".md") || att.filename.endsWith(".txt") ||
-        att.mime.startsWith("text/") || att.mime === "application/json";
+      const isText = att.mime.startsWith("text/") ||
+        att.mime === "application/json" ||
+        att.mime === "application/xml" ||
+        att.mime === "application/xhtml+xml" ||
+        att.mime === "application/javascript" ||
+        att.mime === "application/typescript" ||
+        /\.(txt|md|json|xml|html|htm|yaml|yml|toml|csv|tsv|log|rtf|css|js|ts|jsx|tsx|py|rb|java|c|cpp|h|cs|php|go|rs|sh|bat|sql|graphql|svg)$/i.test(att.filename);
 
-      const isPdf = att.mime === "application/pdf" || att.filename.endsWith(".pdf");
+      const isPdf = att.mime === "application/pdf" || /\.pdf$/i.test(att.filename);
 
-      const isExcel = /\.(xlsx|xls)$/i.test(att.filename) ||
+      const isExcel = /\.(xlsx|xls|ods)$/i.test(att.filename) ||
         att.mime === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
-        att.mime === "application/vnd.ms-excel";
+        att.mime === "application/vnd.ms-excel" ||
+        att.mime === "application/vnd.oasis.opendocument.spreadsheet";
 
       const isDataFile = /\.(csv|tsv)$/i.test(att.filename) || att.mime === "text/csv" || att.mime === "text/tab-separated-values";
 
       const isSPSS = /\.(sav|zsav)$/i.test(att.filename);
 
-      const isAudio = att.mime.startsWith("audio/") ||
-        /\.(mp3|wav|m4a|ogg|webm|flac|aac)$/i.test(att.filename);
+      const isOfficeDoc = /\.(docx|doc|odt|rtf|pptx|ppt|odp|epub)$/i.test(att.filename) ||
+        att.mime === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+        att.mime === "application/msword" ||
+        att.mime === "application/vnd.openxmlformats-officedocument.presentationml.presentation" ||
+        att.mime === "application/vnd.ms-powerpoint" ||
+        att.mime === "application/vnd.oasis.opendocument.text" ||
+        att.mime === "application/epub+zip";
 
-      const isSvg = att.mime === "image/svg+xml" || att.filename.toLowerCase().endsWith(".svg");
+      const isAudio = att.mime.startsWith("audio/") ||
+        /\.(mp3|wav|m4a|ogg|webm|flac|aac|opus|wma|aiff)$/i.test(att.filename);
+
+      const isVideo = att.mime.startsWith("video/") ||
+        /\.(mp4|mov|avi|mkv|webm|flv|wmv|m4v|3gp)$/i.test(att.filename);
+
+      const isSvg = /\.svg$/i.test(att.filename) || att.mime === "image/svg+xml";
 
       const isImage = !isSvg && (
         att.mime.startsWith("image/") ||
-        /\.(jpg|jpeg|png|gif|webp|bmp|tiff|ico|avif|heic)$/i.test(att.filename)
+        /\.(jpg|jpeg|png|gif|webp|bmp|tiff|tif|ico|avif|heic|heif)$/i.test(att.filename)
       );
 
       if (isText || isSvg || isDataFile) {
@@ -1020,7 +1036,7 @@ async function ingestFiles(
       } else if (isExcel || isSPSS) {
         // For Excel/SPSS: extract a structural description via Gemini multimodal
         const buf = await data.arrayBuffer();
-        const b64 = toBase64(buf);
+        const b64 = arrayBufferToBase64(buf);
         const instruction = isExcel
           ? "This is an Excel spreadsheet. Describe its structure: list all sheet names, column headers, data types, and provide the first 20 rows as a CSV-style table. Note any patterns in the data."
           : "This is an SPSS .sav file. List the variable names, labels, value labels, and describe the dataset structure.";
@@ -1041,6 +1057,29 @@ async function ingestFiles(
             ? `[PDF: ${att.filename} — extraction returned limited content. Please paste key sections directly.]`
             : `[Audio: ${att.filename} — transcription failed or returned empty.]`;
         }
+      } else if (isOfficeDoc) {
+        // Word, PowerPoint, EPUB, ODT, ODP → Gemini multimodal extraction
+        const buf = await data.arrayBuffer();
+        const b64 = arrayBufferToBase64(buf);
+        const isPptLike = /\.(pptx|ppt|odp)$/i.test(att.filename) ||
+          att.mime.includes("presentation");
+        const instruction = isPptLike
+          ? "Extract ALL content from this presentation. For each slide: its number, title, all body text, bullet points, and describe any images, charts, or diagrams. Include speaker notes. Preserve the slide order."
+          : "Extract ALL content from this document. Include: all text (headings, paragraphs, footnotes, captions), all tables (reproduce every row and column in markdown table format), and describe any images or diagrams. Preserve document structure and heading hierarchy.";
+        text = await extractWithGemini(b64, att.mime || "application/octet-stream", instruction, signal);
+        if (!text || text.length < 20) {
+          text = `[Document: ${att.filename} — extraction returned limited content. Try pasting key sections directly.]`;
+        }
+      } else if (isVideo) {
+        // Video → Gemini multimodal (describe scenes, transcribe speech, read on-screen text)
+        const buf = await data.arrayBuffer();
+        const b64 = arrayBufferToBase64(buf);
+        const instruction =
+          "Describe this video thoroughly. Include: what happens in each scene, any on-screen text or captions, any spoken dialogue (transcribe accurately), and the overall structure and key content.";
+        text = await extractWithGemini(b64, att.mime || "video/mp4", instruction, signal);
+        if (!text || text.length < 20) {
+          text = `[Video: ${att.filename} — could not be analysed. Try a shorter clip or provide a transcript.]`;
+        }
       } else if (isImage) {
         // Vision: describe the image in full detail via Gemini multimodal
         const buf = await data.arrayBuffer();
@@ -1058,7 +1097,7 @@ async function ingestFiles(
           text = `[Image: ${att.filename} — visual content could not be analysed. Try a clearer image.]`;
         }
       } else {
-        text = `[File: ${att.filename} (${att.mime}) — binary format, not extractable as text.]`;
+        text = `[File: ${att.filename} (${att.mime}) — format not recognised. Try converting to PDF, image, or plain text.]`;
       }
 
       parts.push(`\n\n--- FILE: ${att.filename} ---\n${text}\n--- END FILE ---`);
