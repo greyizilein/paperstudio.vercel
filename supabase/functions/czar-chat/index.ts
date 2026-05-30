@@ -938,6 +938,20 @@ async function extractWithGemini(
 }
 
 // ---------------------------------------------------------------------------
+// Safe base64 — avoids call-stack overflow on large buffers
+// ---------------------------------------------------------------------------
+
+function arrayBufferToBase64(buf: ArrayBuffer): string {
+  const bytes = new Uint8Array(buf);
+  const CHUNK = 8192;
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    binary += String.fromCharCode(...bytes.subarray(i, Math.min(i + CHUNK, bytes.length)));
+  }
+  return btoa(binary);
+}
+
+// ---------------------------------------------------------------------------
 // File ingestion
 // ---------------------------------------------------------------------------
 
@@ -1001,16 +1015,6 @@ async function ingestFiles(
         /\.(jpg|jpeg|png|gif|webp|bmp|tiff|ico|avif|heic)$/i.test(att.filename)
       );
 
-      // Safe base64 encoder — avoids call-stack overflow on large buffers
-      function toBase64(buf: ArrayBuffer): string {
-        const bytes = new Uint8Array(buf);
-        let b = '';
-        for (let i = 0; i < bytes.length; i += 8192) {
-          b += String.fromCharCode.apply(null, bytes.subarray(i, i + 8192) as unknown as number[]);
-        }
-        return btoa(b);
-      }
-
       if (isText || isSvg || isDataFile) {
         text = await data.text();
       } else if (isExcel || isSPSS) {
@@ -1027,7 +1031,7 @@ async function ingestFiles(
       } else if (isPdf || isAudio) {
         // Use Gemini multimodal for PDFs and audio
         const buf = await data.arrayBuffer();
-        const b64 = toBase64(buf);
+        const b64 = arrayBufferToBase64(buf);
         const instruction = isPdf
           ? "Extract ALL content from this PDF document. Include: all text (headings, paragraphs, footnotes, captions), all tables (reproduce every row and column), all figures and charts (describe in detail including axes, data, and trends), all diagrams (describe structure and labels). Preserve section headings and document structure. This document may be an assignment brief, research paper, or report — extract every word of guidance, requirements, word counts, and marking criteria."
           : "Transcribe this audio file accurately and completely. Return only the transcription, with speaker labels if multiple speakers are apparent.";
@@ -1040,7 +1044,7 @@ async function ingestFiles(
       } else if (isImage) {
         // Vision: describe the image in full detail via Gemini multimodal
         const buf = await data.arrayBuffer();
-        const b64 = toBase64(buf);
+        const b64 = arrayBufferToBase64(buf);
         const instruction =
           "Describe every element of this image with full precision. Transcribe all visible text exactly. " +
           "For charts/graphs: describe type, axes, labels, data values, trends. " +

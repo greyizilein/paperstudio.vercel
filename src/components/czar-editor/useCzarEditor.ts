@@ -251,7 +251,7 @@ export interface UseCzarEditorReturn {
   stopStream: () => void;
 
   // Import file
-  importFile: (attachment: { storage_path: string; filename: string; size: number; mime: string }, mode?: string) => void;
+  importFile: (attachment: { storage_path: string; filename: string; size: number; mime: string }, mode?: string, customMessage?: string) => void;
 
   // Chat interface
   messages: ChatMessage[];
@@ -814,7 +814,7 @@ export function useCzarEditor(): UseCzarEditorReturn {
     );
   }, [activePieceId, docContent, docTitle, streamingDoc, prefs, activeVoice, audience, targetLength, persistContent, setDocTitle, startStreamTimeout, clearStreamTimeout]);
 
-  const importFile = useCallback((attachment: any, mode: string = 'import') => {
+  const importFile = useCallback((attachment: any, mode: string = 'import', customMessage?: string) => {
     if (!activePieceId || streamingDoc) return;
     const ctrl = new AbortController();
     abortRef.current = ctrl;
@@ -822,12 +822,11 @@ export function useCzarEditor(): UseCzarEditorReturn {
     setStreamingDoc(true);
 
     if (mode === 'analyze_data') {
-      // Data analysis: full document output → stream to Writer tab
       setStreamOp('continue');
       setContentMode('chat');
       const base = docContent;
       let appended = '';
-      const userMessage = `Perform a comprehensive data analysis of "${attachment.filename}". Run all appropriate statistical tests, generate visualisations, and write a full analytical narrative.`;
+      const userMessage = customMessage || `Perform a comprehensive data analysis of "${attachment.filename}". Run all appropriate statistical tests, generate visualisations, and write a full analytical narrative.`;
       streamCzar(
         {
           conversation_id: activePieceId,
@@ -840,17 +839,11 @@ export function useCzarEditor(): UseCzarEditorReturn {
           onAgent: (e) => setCurrentAgent(e.name),
           onDelta: (text) => { appended += text; setDocContentRaw((base ? base + '\n\n' : '') + appended); },
           onDone: () => {
-            clearStreamTimeout();
-            setStreamingDoc(false);
-            setStreamOp(null);
-            setCurrentAgent(null);
+            clearStreamTimeout(); setStreamingDoc(false); setStreamOp(null); setCurrentAgent(null);
             persistContent((base ? base + '\n\n' : '') + appended);
           },
           onError: (msg) => {
-            clearStreamTimeout();
-            setStreamingDoc(false);
-            setStreamOp(null);
-            setCurrentAgent(null);
+            clearStreamTimeout(); setStreamingDoc(false); setStreamOp(null); setCurrentAgent(null);
             setError(msg ?? 'Data analysis failed');
           },
         },
@@ -859,20 +852,27 @@ export function useCzarEditor(): UseCzarEditorReturn {
       return;
     }
 
-    // Import mode: read document, summarise, ask to confirm — response goes to Chat tab
-    pendingImportRef.current = attachment;
-    const userMsgId = 'user_' + Date.now();
-    const assistantMsgId = 'ast_' + Date.now();
+    // Import mode: read document → response appears in Chat tab
+    setStreamOp('continue');
+    setContentMode('chat');
+    const uId = 'user_' + Date.now();
+    const aId = 'ast_' + Date.now();
+    const displayMsg = customMessage
+      ? `${customMessage}\n📎 ${attachment.filename}`
+      : `📎 ${attachment.filename}`;
+    const apiMsg = customMessage
+      ? `${customMessage}\n\nI've also uploaded "${attachment.filename}". Please read it carefully.`
+      : `I've uploaded "${attachment.filename}". Please read it carefully and summarise what it contains, then ask what I'd like to do with it.`;
     setMessages(prev => [
       ...prev,
-      { id: userMsgId, role: 'user' as const, content: `📎 ${attachment.filename}`, mode: null },
-      { id: assistantMsgId, role: 'assistant' as const, content: '', mode: 'import', isStreaming: true },
+      { id: uId, role: 'user' as const, content: displayMsg, mode: null },
+      { id: aId, role: 'assistant' as const, content: '', mode: 'chat', isStreaming: true },
     ]);
     let buffer = '';
     streamCzar(
       {
         conversation_id: activePieceId,
-        user_message: `I've uploaded "${attachment.filename}". Please read it and tell me what it is.`,
+        user_message: apiMsg,
         attachments: [attachment],
         mode: 'import' as any,
         settings: buildCzarSettings(prefs, activeVoice, audience, targetLength, undefined, rubricCriteria),
@@ -881,23 +881,16 @@ export function useCzarEditor(): UseCzarEditorReturn {
         onAgent: (e) => setCurrentAgent(e.name),
         onDelta: (text) => {
           buffer += text;
-          setMessages(prev => prev.map(m => m.id === assistantMsgId ? { ...m, content: buffer } : m));
+          setMessages(prev => prev.map(m => m.id === aId ? { ...m, content: buffer } : m));
         },
         onDone: () => {
-          clearStreamTimeout();
-          setStreamingDoc(false);
-          setStreamOp(null);
-          setCurrentAgent(null);
-          setMessages(prev => prev.map(m => m.id === assistantMsgId ? { ...m, isStreaming: false } : m));
-          // Backend saves the message directly — do NOT call persistContent here
+          clearStreamTimeout(); setStreamingDoc(false); setStreamOp(null); setCurrentAgent(null);
+          setMessages(prev => prev.map(m => m.id === aId ? { ...m, content: buffer, isStreaming: false } : m));
         },
         onError: (msg) => {
-          clearStreamTimeout();
-          setStreamingDoc(false);
-          setStreamOp(null);
-          setCurrentAgent(null);
-          setMessages(prev => prev.map(m => m.id === assistantMsgId
-            ? { ...m, isStreaming: false, content: msg ?? 'File import failed' }
+          clearStreamTimeout(); setStreamingDoc(false); setStreamOp(null); setCurrentAgent(null);
+          setMessages(prev => prev.map(m => m.id === aId
+            ? { ...m, content: msg ?? 'Could not read the file. Please try again.', isStreaming: false }
             : m));
         },
       },
