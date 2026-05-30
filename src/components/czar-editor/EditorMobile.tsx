@@ -486,26 +486,42 @@ export function CzarMobile() {
     await new Promise<void>(r => setTimeout(r, 750));
     setUploadStep(2);
 
+    const DATA_EXTS = ['csv', 'tsv', 'xlsx', 'xls', 'sav', 'zsav'];
+    const isDataFile = DATA_EXTS.includes(ext);
+
+    // Text/Markdown: extract locally and send with document intelligence trigger
     if (ext === 'txt' || ext === 'md') {
       const text = await f.text();
-      editor.sendMessage(`I've uploaded a file called "${f.name}". Here is its content:\n\n${text}\n\nPlease read it carefully and tell me what it's about.`);
+      editor.sendMessage(`[DOCUMENT UPLOADED: ${f.name}]\n\n${text}`);
       return;
     }
+
+    // DOCX: extract with mammoth and send with document intelligence trigger
     if (ext === 'docx') {
       const arrayBuffer = await f.arrayBuffer();
       const mammoth = await import('mammoth');
       const { value: text } = await mammoth.extractRawText({ arrayBuffer });
-      editor.sendMessage(`I've uploaded a Word document called "${f.name}". Full text:\n\n${text}\n\nTell me what this document is about and ask what I'd like to do with it.`);
+      editor.sendMessage(`[DOCUMENT UPLOADED: ${f.name}]\n\n${text}`);
       return;
     }
+
+    // All other files (PDF, images, audio, Excel, CSV, SPSS) → upload to storage
     let mime = f.type || 'application/octet-stream';
     if (mime === 'audio/x-m4a' || (ext === 'm4a' && !mime.startsWith('audio/'))) mime = 'audio/mp4';
-    if (!user?.id) { editor.sendMessage(`Upload failed — please sign in to upload binary files.`); return; }
+    if (ext === 'csv') mime = 'text/csv';
+    if (ext === 'tsv') mime = 'text/tab-separated-values';
+    if (ext === 'xlsx') mime = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+    if (ext === 'xls') mime = 'application/vnd.ms-excel';
+    if (ext === 'sav' || ext === 'zsav') mime = 'application/octet-stream';
+
+    if (!user?.id) { editor.sendMessage(`Upload failed — please sign in.`); return; }
     const safeName = f.name.replace(/[^a-zA-Z0-9._-]/g, '_');
     const path = `${user.id}/${Date.now()}_${safeName}`;
     const { error } = await supabase.storage.from('czar-uploads').upload(path, f, { contentType: mime });
     if (error) { editor.sendMessage(`Upload failed: ${error.message}`); return; }
-    editor.importFile({ storage_path: path, filename: f.name, size: f.size, mime });
+
+    // Data files → analyze_data mode; everything else → import mode (backend infers)
+    editor.importFile({ storage_path: path, filename: f.name, size: f.size, mime }, isDataFile ? 'analyze_data' : 'import');
   }, [user?.id, editor]);
 
   return (
@@ -633,7 +649,7 @@ export function CzarMobile() {
       </div>
 
       {/* ── HIDDEN FILE INPUT ── */}
-      <input ref={fileInputRef} type="file" accept=".txt,.md,.docx,.pdf,.mp3,.wav,.m4a,.jpg,.jpeg,.png,.gif,.webp" className="hidden" onChange={handleFileInput} />
+      <input ref={fileInputRef} type="file" accept=".txt,.md,.docx,.pdf,.mp3,.wav,.m4a,.jpg,.jpeg,.png,.gif,.webp,.csv,.tsv,.xlsx,.xls,.sav" className="hidden" onChange={handleFileInput} />
 
       {/* ── BOTTOM SHEETS ── */}
       <CzMobilePiecesSheet
