@@ -284,13 +284,43 @@ function CzarChatMessage({ content, isStreaming, imageUrl }: { content: string; 
   );
 }
 
+// ─── ATTACHMENT CHIP ─────────────────────────────────────────────────────────
+
+type PendingAttachment =
+  | { type: 'text'; filename: string; kind: string; size: string; textContent: string; uploading: false }
+  | { type: 'binary'; filename: string; kind: string; size: string; uploading: true }
+  | { type: 'binary'; filename: string; kind: string; size: string; uploading: false; storageRef: { storage_path: string; filename: string; size: number; mime: string }; isDataFile: boolean };
+
+function AttachmentChip({ att, onDismiss }: { att: PendingAttachment; onDismiss: () => void }) {
+  return (
+    <div className="mx-4 mt-3 mb-1 flex items-center gap-2 bg-zinc-100 rounded-xl px-3 py-2 max-w-full">
+      <span className="font-mono text-[10px] tracking-widest uppercase text-[#e85d3f] flex-shrink-0 w-8 text-center">{att.kind}</span>
+      <span className="font-sans text-[13px] text-zinc-800 truncate flex-1 min-w-0">{att.filename}</span>
+      {att.uploading ? (
+        <span className="w-4 h-4 border-2 border-zinc-400 border-t-transparent rounded-full animate-spin flex-shrink-0" />
+      ) : (
+        <span className="font-mono text-[10px] text-zinc-400 flex-shrink-0">{att.size}</span>
+      )}
+      <button
+        className="w-6 h-6 flex items-center justify-center text-zinc-400 hover:text-zinc-700 text-[16px] flex-shrink-0"
+        onPointerDown={(e) => e.preventDefault()}
+        onClick={onDismiss}
+        aria-label="Remove attachment">
+        ×
+      </button>
+    </div>
+  );
+}
+
 // ─── CHAT INPUT ───────────────────────────────────────────────────────────────
 
 function CzChatInput({
-  value, onChange, onSend, onStop, onUpload, onMic, onCorrect, onSettings, dictLive, streaming, disabled,
+  value, onChange, onSend, onStop, onUpload, onMic, onCorrect, onSettings, dictLive, streaming, disabled, pendingAttachment, onDismissAttachment,
 }: {
   value: string; onChange: (v: string) => void; onSend: () => void; onStop: () => void;
-  onUpload: () => void; onMic: () => void; onCorrect: () => void; onSettings: () => void; dictLive: boolean; streaming: boolean; disabled?: boolean;
+  onUpload: () => void; onMic: () => void; onCorrect: () => void; onSettings: () => void;
+  dictLive: boolean; streaming: boolean; disabled?: boolean;
+  pendingAttachment?: PendingAttachment | null; onDismissAttachment?: () => void;
 }) {
   const taRef = useRef<HTMLTextAreaElement>(null);
 
@@ -301,18 +331,25 @@ function CzChatInput({
     ta.style.height = Math.min(ta.scrollHeight, 160) + 'px';
   }, [value]);
 
+  const canSend = value.trim() || (pendingAttachment && !pendingAttachment.uploading);
+
   return (
     <div className="px-3 pb-3 pt-1" style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}>
       <div className="bg-white rounded-2xl shadow-[0_2px_24px_rgba(0,0,0,0.10)] border border-zinc-200/60 overflow-hidden">
+        {/* Attachment chip (sits inside the card, above the textarea) */}
+        {pendingAttachment && (
+          <AttachmentChip att={pendingAttachment} onDismiss={onDismissAttachment!} />
+        )}
+
         {/* Borderless textarea */}
         <div className="px-4 pt-4 pb-2">
           <textarea
             ref={taRef}
             className="w-full bg-transparent border-none outline-none font-sans text-[16px] leading-[1.6] resize-none min-h-[28px] max-h-[160px] text-zinc-900 placeholder:text-zinc-400"
-            placeholder="Ask Czar anything…"
+            placeholder={pendingAttachment ? 'Add a message… (optional)' : 'Ask Czar anything…'}
             value={value}
             onChange={(e) => onChange(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); onSend(); } }}
+            onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); if (canSend) onSend(); } }}
             rows={1}
             disabled={disabled}
           />
@@ -357,7 +394,7 @@ function CzChatInput({
             <button
               className="w-10 h-10 bg-zinc-900 text-white rounded-full flex items-center justify-center font-serif italic font-bold text-[18px] disabled:opacity-30 transition-opacity"
               onClick={onSend}
-              disabled={!value.trim()}>
+              disabled={!canSend}>
               Ц
             </button>
           )}
@@ -395,26 +432,12 @@ export function CzarMobile() {
 
   const [input, setInput] = useState('');
   const [activeView, setActiveView] = useState<'chat' | 'writer'>('chat');
+  const [pendingAttachment, setPendingAttachment] = useState<PendingAttachment | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const writerScrollRef = useRef<HTMLDivElement>(null);
   const didSwitchRef = useRef(false);
-
-  // Upload modal
-  const [uploadModalOpen, setUploadModalOpen] = useState(false);
-  const [uploadStep, setUploadStep] = useState(0);
-  const [uploadInfo, setUploadInfo] = useState<{ name: string; kind: string; size: string } | null>(null);
-  const [uploadStreamingStarted, setUploadStreamingStarted] = useState(false);
-
-  useEffect(() => { if (uploadModalOpen && uploadStep === 2 && editor.streamingDoc) setUploadStreamingStarted(true); }, [uploadModalOpen, uploadStep, editor.streamingDoc]);
-  useEffect(() => {
-    if (uploadModalOpen && uploadStep === 2 && uploadStreamingStarted && !editor.streamingDoc) {
-      const t = setTimeout(() => { setUploadStep(3); setUploadStreamingStarted(false); }, 400);
-      return () => clearTimeout(t);
-    }
-  }, [editor.streamingDoc, uploadStep, uploadModalOpen, uploadStreamingStarted]);
-  useEffect(() => { if (!uploadModalOpen || uploadStep !== 2) return; const t = setTimeout(() => setUploadStep(3), 60_000); return () => clearTimeout(t); }, [uploadModalOpen, uploadStep]);
 
   const dictLang = LANG_MAP[editor.prefs.language_variant] || 'en-GB';
   const dict = useCzDictation(dictLang);
@@ -469,46 +492,61 @@ export function CzarMobile() {
   }, [dict.final, dict.live]);
 
   const handleSend = useCallback(() => {
-    if (!input.trim() || editor.streamingDoc) return;
-    editor.sendMessage(input.trim());
+    if (editor.streamingDoc) return;
+    const text = input.trim();
+
+    if (pendingAttachment && !pendingAttachment.uploading) {
+      const customMsg = text || undefined;
+      if (pendingAttachment.type === 'text') {
+        const docMsg = customMsg
+          ? `${customMsg}\n\n[DOCUMENT UPLOADED: ${pendingAttachment.filename}]\n\n${pendingAttachment.textContent}`
+          : `[DOCUMENT UPLOADED: ${pendingAttachment.filename}]\n\n${pendingAttachment.textContent}`;
+        editor.sendMessage(docMsg);
+      } else {
+        editor.importFile(pendingAttachment.storageRef, pendingAttachment.isDataFile ? 'analyze_data' : 'import', customMsg);
+      }
+      setPendingAttachment(null);
+      setInput('');
+      return;
+    }
+
+    if (!text) return;
+    editor.sendMessage(text);
     setInput('');
-  }, [input, editor]);
+  }, [input, pendingAttachment, editor]);
 
   const handleFileInput = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
     if (!f) return;
     e.target.value = '';
     const ext = (f.name.split('.').pop() || '').toLowerCase();
-    setUploadInfo({ name: f.name, kind: ext.toUpperCase(), size: (f.size / 1024).toFixed(1) + ' KB' });
-    setUploadStreamingStarted(false);
-    setUploadStep(0);
-    setUploadModalOpen(true);
+    const kind = ext.toUpperCase();
+    const size = (f.size / 1024).toFixed(1) + ' KB';
 
-    await new Promise<void>(r => setTimeout(r, 750));
-    setUploadStep(1);
-    await new Promise<void>(r => setTimeout(r, 750));
-    setUploadStep(2);
-
-    const DATA_EXTS = ['csv', 'tsv', 'xlsx', 'xls', 'sav', 'zsav'];
-    const isDataFile = DATA_EXTS.includes(ext);
-
-    // Text/Markdown: extract locally and send with document intelligence trigger
+    // Text/Markdown: extract locally — set chip immediately, no upload needed
     if (ext === 'txt' || ext === 'md') {
-      const text = await f.text();
-      editor.sendMessage(`[DOCUMENT UPLOADED: ${f.name}]\n\n${text}`);
+      const textContent = await f.text();
+      setPendingAttachment({ type: 'text', filename: f.name, kind, size, textContent, uploading: false });
       return;
     }
 
-    // DOCX: extract with mammoth and send with document intelligence trigger
+    // DOCX: extract with mammoth — set chip after local extraction
     if (ext === 'docx') {
       const arrayBuffer = await f.arrayBuffer();
       const mammoth = await import('mammoth');
-      const { value: text } = await mammoth.extractRawText({ arrayBuffer });
-      editor.sendMessage(`[DOCUMENT UPLOADED: ${f.name}]\n\n${text}`);
+      const { value: textContent } = await mammoth.extractRawText({ arrayBuffer });
+      setPendingAttachment({ type: 'text', filename: f.name, kind, size, textContent, uploading: false });
       return;
     }
 
-    // All other files (PDF, images, audio, Excel, CSV, SPSS) → upload to storage
+    // Binary files: show chip in "uploading" state, upload in background, then update chip
+    const DATA_EXTS = ['csv', 'tsv', 'xlsx', 'xls', 'sav', 'zsav'];
+    const isDataFile = DATA_EXTS.includes(ext);
+
+    if (!user?.id) { setPendingAttachment(null); return; }
+
+    setPendingAttachment({ type: 'binary', filename: f.name, kind, size, uploading: true });
+
     let mime = f.type || 'application/octet-stream';
     if (mime === 'audio/x-m4a' || (ext === 'm4a' && !mime.startsWith('audio/'))) mime = 'audio/mp4';
     if (ext === 'csv') mime = 'text/csv';
@@ -517,15 +555,20 @@ export function CzarMobile() {
     if (ext === 'xls') mime = 'application/vnd.ms-excel';
     if (ext === 'sav' || ext === 'zsav') mime = 'application/octet-stream';
 
-    if (!user?.id) { editor.sendMessage(`Upload failed — please sign in.`); return; }
     const safeName = f.name.replace(/[^a-zA-Z0-9._-]/g, '_');
     const path = `${user.id}/${Date.now()}_${safeName}`;
     const { error } = await supabase.storage.from('czar-uploads').upload(path, f, { contentType: mime });
-    if (error) { editor.sendMessage(`Upload failed: ${error.message}`); return; }
+    if (error) {
+      setPendingAttachment(null);
+      return;
+    }
 
-    // Data files → analyze_data mode; everything else → import mode (backend infers)
-    editor.importFile({ storage_path: path, filename: f.name, size: f.size, mime }, isDataFile ? 'analyze_data' : 'import');
-  }, [user?.id, editor]);
+    setPendingAttachment({
+      type: 'binary', filename: f.name, kind, size, uploading: false,
+      storageRef: { storage_path: path, filename: f.name, size: f.size, mime },
+      isDataFile,
+    });
+  }, [user?.id]);
 
   return (
     <div className="cz-m-vars flex flex-col w-full h-[100dvh] fixed inset-0 bg-white dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 font-sans z-[9000] overflow-hidden">
@@ -648,6 +691,8 @@ export function CzarMobile() {
           onSettings={() => { setSettingsTab('academic'); setSettingsSheet(true); }}
           dictLive={dict.live}
           streaming={editor.streamingDoc}
+          pendingAttachment={pendingAttachment}
+          onDismissAttachment={() => setPendingAttachment(null)}
         />
       </div>
 
@@ -666,7 +711,6 @@ export function CzarMobile() {
         onDocx={() => downloadAsWord(downloadContent || writerContent)}
         onMarkdown={() => downloadMarkdown(editor.docTitle, downloadContent || writerContent)}
       />
-      <CzMobileUploadModal open={uploadModalOpen} onClose={() => setUploadModalOpen(false)} info={uploadInfo} step={uploadStep} />
 
       {/* ── EXTERNAL OVERLAYS ── */}
       <div className="fixed inset-0 z-[100000] pointer-events-none">

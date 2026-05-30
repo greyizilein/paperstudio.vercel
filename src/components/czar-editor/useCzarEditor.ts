@@ -251,7 +251,7 @@ export interface UseCzarEditorReturn {
   stopStream: () => void;
 
   // Import file
-  importFile: (attachment: { storage_path: string; filename: string; size: number; mime: string }, mode?: string) => void;
+  importFile: (attachment: { storage_path: string; filename: string; size: number; mime: string }, mode?: string, customMessage?: string) => void;
 
   // Chat interface
   messages: ChatMessage[];
