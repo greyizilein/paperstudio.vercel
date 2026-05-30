@@ -2,7 +2,7 @@ import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Check, Minus, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -98,6 +98,18 @@ export const MarketingPricing = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [loadingTier, setLoadingTier] = useState<string | null>(null);
+
+  // Reset loading state when user returns to this tab/page (e.g. closed Paystack and came back)
+  useEffect(() => {
+    const onVisible = () => { if (document.visibilityState === 'visible') setLoadingTier(null); };
+    const onPageShow = (e: PageTransitionEvent) => { if (e.persisted) setLoadingTier(null); };
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('pageshow', onPageShow);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('pageshow', onPageShow);
+    };
+  }, []);
 
   // Direct-to-Paystack from the homepage. If the user isn't signed in,
   // we route through /auth with a redirect that lands back on Settings → billing
@@ -287,9 +299,6 @@ export const MarketingPricing = () => {
                       </button>
                     );
                   })()}
-                  {tier.name !== "Free" && (
-                    <p className="text-[10px] text-center mt-2" style={{ color: "var(--ma-text-dim)" }}>Charged in NGN at checkout</p>
-                  )}
                 </div>
               </motion.div>
             );
@@ -376,8 +385,6 @@ export const MarketingPricing = () => {
                     </button>
                   );
                 })()}
-                <p className="text-[11px] text-center" style={{ color: "#4A7A38" }}>1,000 words free to start</p>
-                <p className="text-[10px] text-center mt-1" style={{ color: "var(--ma-text-dim)" }}>Charged in NGN at checkout</p>
               </div>
             </div>
           </div>

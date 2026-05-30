@@ -230,9 +230,6 @@ export const CzarSection = () => (
               Try CZAR free
             </button>
           </Link>
-          <p style={{ fontFamily: DA_FONTS.body, fontSize: "0.78rem", color: "var(--ma-text-dim)", margin: 0 }}>
-            1,000 words free — no card needed
-          </p>
         </div>
       </motion.div>
 
