@@ -804,7 +804,7 @@ export function useCzarEditor(): UseCzarEditorReturn {
     );
   }, [activePieceId, docContent, docTitle, streamingDoc, prefs, activeVoice, audience, targetLength, persistContent, setDocTitle, startStreamTimeout, clearStreamTimeout]);
 
-  const importFile = useCallback((attachment: any) => {
+  const importFile = useCallback((attachment: any, mode: string = 'import') => {
     if (!activePieceId) return;
     const ctrl = new AbortController();
     abortRef.current = ctrl;
@@ -815,12 +815,16 @@ export function useCzarEditor(): UseCzarEditorReturn {
     const base = docContent;
     let appended = '';
 
+    const userMessage = mode === 'analyze_data'
+      ? `Perform a comprehensive data analysis of "${attachment.filename}". Run all appropriate statistical tests, generate visualisations, and write a full analytical narrative.`
+      : `Read "${attachment.filename}" and immediately execute whatever task it contains.`;
+
     streamCzar(
       {
         conversation_id: activePieceId,
-        user_message: 'I have uploaded a document for you to read. Please read it carefully, tell me what you understand from it, and ask me what you would like to do with it.',
+        user_message: userMessage,
         attachments: [attachment],
-        mode: 'chat',
+        mode: mode as any,
         settings: buildCzarSettings(prefs, activeVoice, audience, targetLength, undefined, rubricCriteria),
       },
       {
@@ -893,8 +897,9 @@ export function useCzarEditor(): UseCzarEditorReturn {
     setStreamingDoc(true);
     setStreamOp('write');
 
-    // Backend auto-detects intent — only explicitly route confirmed image requests to chat
-    const effectiveMode = panelSettings?.mode ?? (isImageRequest(text) ? 'chat' : 'write');
+    // Backend auto-detects intent — route document uploads to import mode
+    const isDocumentUpload = text.startsWith('[DOCUMENT UPLOADED:');
+    const effectiveMode = panelSettings?.mode ?? (isDocumentUpload ? 'import' : isImageRequest(text) ? 'chat' : 'write');
     setContentMode(effectiveMode as any);
 
     const userMsgId = 'user_' + Date.now();

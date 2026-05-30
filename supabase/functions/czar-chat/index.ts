@@ -27,7 +27,7 @@ interface Attachment {
   mime: string;
 }
 
-type CzarMode = "chat" | "write" | "correct" | "research" | "plan" | "literature_review" | "screenplay" | "legal";
+type CzarMode = "chat" | "write" | "correct" | "research" | "plan" | "literature_review" | "screenplay" | "legal" | "import" | "analyze_data";
 
 interface CzarRequest {
   conversation_id: string | null;
@@ -206,6 +206,12 @@ function detectMode(message: string, hasFiles: boolean, requestedMode?: CzarMode
     return "legal";
   }
 
+  // Explicit import/analyze_data modes: always respect
+  if (requestedMode === "import" || requestedMode === "analyze_data") return requestedMode;
+
+  // Document upload signal in message
+  if (message.startsWith("[DOCUMENT UPLOADED:")) return "import";
+
   // Respect an explicit non-chat mode from the frontend.
   // "chat" is the frontend default — treat it as "no override" so we can upgrade
   // to a better mode when the message is clearly a writing task.
@@ -279,6 +285,16 @@ function pickModel(
   const isAdmin = !!email && email.toLowerCase() === ADMIN_EMAIL;
   const effectiveTier = isAdmin ? "phd" : tier.toLowerCase();
   const isPremium = ["phd", "enterprise", "custom"].includes(effectiveTier) || isAdmin;
+
+  // Import: resolved before model selection — treat as chat for initial inference
+  if (mode === "import") {
+    return { provider: "google", model: G_FAST, thinking: false, label: "standard" };
+  }
+
+  // Data analysis: Gemini Pro with code execution
+  if (mode === "analyze_data") {
+    return { provider: "google", model: G_PRO, thinking: false, label: "data analysis" };
+  }
 
   // Chat + Plan: fast Gemini — conversational, no heavy reasoning needed
   if (mode === "chat" || mode === "plan") {
@@ -354,6 +370,10 @@ Rules: sections must be numbered; words per section must be specific integers; e
       return `You are writing in Fountain screenplay format. Use proper scene headings (INT./EXT. LOCATION — DAY/NIGHT), action lines (present tense, active voice), character names (centred, all caps), and dialogue. Each scene must advance character or plot. Subtext over exposition. No camera directions unless essential. Dialogue must do at least two things simultaneously.`;
     case "legal":
       return `You are writing a legal document. Apply IRAC structure (Issue, Rule, Application, Conclusion) for each legal question. Distinguish clearly between statute (legislation as written), case law (judicial interpretation), and academic commentary. Cite cases in italics, statutes in plain text. Use OSCOLA citation style unless otherwise specified. Argument must be formally valid — state premises explicitly.`;
+    case "analyze_data":
+      return `You are a data analyst and academic statistician. Analyse the provided dataset comprehensively: run descriptive statistics, normality checks, reliability analysis (if Likert scales), correlation analysis, appropriate inferential tests (t-test, ANOVA, regression, chi-square, etc.), and effect sizes. Generate matplotlib/seaborn visualisations for each key finding. Then write a complete dissertation Chapter 4 narrative (2,500–3,500 words) in formal academic prose covering all findings.`;
+    case "import":
+      return `A document has been uploaded. Read it and identify what task it requires. Execute that task immediately and completely.`;
     case "chat":
     default:
       return "";
@@ -671,6 +691,216 @@ async function processAcademicImageMarkers(
 }
 
 // ---------------------------------------------------------------------------
+// Document intelligence — infer task from uploaded document content
+// ---------------------------------------------------------------------------
+
+async function inferDocumentTask(
+  content: string,
+  filename: string,
+  signal: AbortSignal,
+): Promise<{ action: CzarMode; inferredMessage: string }> {
+  const apiKey = Deno.env.get("GOOGLE_AI_API_KEY");
+  if (!apiKey) return { action: "write", inferredMessage: `Execute the task in "${filename}".` };
+
+  const system = `You are a document intelligence classifier for CZAR, an academic AI.
+Analyse the document and classify it. Return ONLY valid JSON:
+{
+  "doc_type": "assignment_brief|draft_document|research_paper|questionnaire|rubric|report|letter|other",
+  "action": "write|analyze_data|correct|research|literature_review|plan|chat",
+  "writing_task": "the complete writing task to execute, written as if the user typed it (1–3 sentences including word count, academic level, topic)",
+  "title": "inferred output document title"
+}
+
+Classification:
+- assignment_brief (has task description, word limits, learning outcomes, marking criteria) → "write"
+- draft_document (has headings + written paragraphs, clearly written prose) → "correct"
+- research_paper / journal article → "research"
+- dataset (rows/columns of numbers, survey data) → "analyze_data"
+- questionnaire/survey instrument → "analyze_data"
+- rubric (marking criteria, grade bands) → "write"
+- Default unclear academic doc → "write"
+
+For "write": writing_task must fully describe the assignment drawn from the doc (topic, word count, level, type)
+For "correct": writing_task should say what to review and improve`;
+
+  try {
+    const resp = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${G_FAST}:generateContent?key=${apiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          system_instruction: { parts: [{ text: system }] },
+          contents: [{ role: "user", parts: [{ text: `Filename: ${filename}\n\n${content.slice(0, 14000)}` }] }],
+          generationConfig: { maxOutputTokens: 512, temperature: 0 },
+        }),
+        signal: AbortSignal.timeout(15_000),
+      },
+    );
+    if (!resp.ok) return { action: "write", inferredMessage: `Execute the task in "${filename}".` };
+    const data = await resp.json();
+    const raw = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+    const m = raw.match(/\{[\s\S]*\}/);
+    if (!m) return { action: "write", inferredMessage: `Execute the task in "${filename}".` };
+    const parsed = JSON.parse(m[0]);
+    const validActions: CzarMode[] = ["write", "analyze_data", "correct", "research", "literature_review", "plan", "chat"];
+    const action: CzarMode = validActions.includes(parsed.action) ? parsed.action : "write";
+    const inferredMessage = parsed.writing_task?.trim() || `Execute the task described in "${filename}".`;
+    return { action, inferredMessage };
+  } catch {
+    return { action: "write", inferredMessage: `Execute the task described in "${filename}".` };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Data analysis — Gemini 2.5 Pro with code execution
+// ---------------------------------------------------------------------------
+
+async function runDataAnalysis(
+  textContent: string,
+  filename: string,
+  mimeType: string,
+  storagePath: string | null,
+  svc: SupabaseClient,
+  write: WriteFunction,
+  signal: AbortSignal,
+): Promise<string> {
+  const apiKey = Deno.env.get("GOOGLE_AI_API_KEY");
+  if (!apiKey) throw new Error("GOOGLE_AI_API_KEY not configured");
+
+  const isExcel = /\.(xlsx|xls)$/i.test(filename);
+  const isSPSS = /\.(sav|zsav)$/i.test(filename);
+  const needsBinary = (isExcel || isSPSS) && storagePath;
+
+  write("agent", { id: "analyst", name: "Data Analyst", status: "working", action: "Loading dataset…" });
+
+  // Download binary for Excel/SPSS
+  let fileB64: string | null = null;
+  if (needsBinary) {
+    try {
+      const { data: raw } = await svc.storage.from("czar-uploads").download(storagePath!);
+      if (raw) {
+        const buf = await raw.arrayBuffer();
+        const bytes = new Uint8Array(buf);
+        let b = "";
+        for (let i = 0; i < bytes.length; i += 32768) {
+          b += String.fromCharCode(...bytes.subarray(i, i + 32768));
+        }
+        fileB64 = btoa(b);
+      }
+    } catch { /* fall back to text */ }
+  }
+
+  const systemPrompt = `You are a world-class data analyst and academic statistician writing a dissertation Chapter 4.
+
+ANALYSIS PROTOCOL — execute in order:
+1. Load and explore the dataset (shape, dtypes, head, describe, missing values)
+2. Descriptive statistics for ALL variables (mean, SD, min, max, frequencies, percentages)
+3. Normality assessment where appropriate (Shapiro-Wilk, skewness/kurtosis ±2)
+4. Reliability analysis if Likert/psychometric scales present (Cronbach's alpha, threshold ≥ .70)
+5. Correlation matrix (Pearson or Spearman based on normality)
+6. Inferential tests appropriate to the data and research questions:
+   - Continuous DV: t-test, ANOVA (with Tukey post-hoc), regression
+   - Categorical: chi-square, Fisher's exact, logistic regression
+   - Non-normal: Mann-Whitney U, Kruskal-Wallis
+   - Report: test statistic, df, p-value, effect size (Cohen's d/eta²/Cramér's V/r)
+7. Generate publication-quality visualisations using matplotlib/seaborn:
+   - Histogram/distribution for key variables
+   - Correlation heatmap
+   - Bar charts for categorical/grouped comparisons
+   - Scatter plots for regression/correlation
+   - Box plots for group comparisons
+   - Use seaborn style="whitegrid", clean professional look
+
+After all code runs, write a COMPLETE Chapter 4 narrative (2,500–3,500 words) in formal academic prose:
+- Introduction to the data and analysis approach
+- Data preparation and screening
+- Descriptive findings section (reference tables/figures)
+- Inferential findings by research question
+- Use third person, UK English, no contractions, cite all statistics inline (e.g. "M = 3.45, SD = 0.82")
+- Bold all p-values: **p < .05**
+- Include a summary table at the end of each major section`;
+
+  let userParts: any[];
+
+  if (isExcel && fileB64) {
+    userParts = [
+      {
+        text: `Filename: ${filename} (Excel file)\n\nLoad the Excel file from the provided binary data using:\nimport pandas as pd, io, base64\nbytes_data = base64.b64decode(excel_b64)\ndf = pd.read_excel(io.BytesIO(bytes_data))\n\nThen perform the full analysis protocol and write the complete Chapter 4 narrative.`,
+      },
+      { inlineData: { mimeType: "application/octet-stream", data: fileB64 } },
+    ];
+  } else if (isSPSS && fileB64) {
+    userParts = [{
+      text: `Filename: ${filename} (SPSS .sav file)\n\nAttempt to load:\nimport pyreadstat, io, base64\n\nIf pyreadstat unavailable, try:\nimport pandas as pd\n# pd.read_spss() requires pyreadstat\n\nIf loading fails entirely, write a detailed template Chapter 4 based on the variable names and structure visible in the file metadata, explaining what analysis would be run with the specified variables. Do not leave the analysis incomplete — provide the complete narrative structure with placeholders for actual statistics.\n\nThe file is provided as binary below:`,
+    }, { inlineData: { mimeType: "application/octet-stream", data: fileB64 } }];
+  } else {
+    // CSV/TSV — pass as text
+    const truncated = textContent.length > 400_000 ? textContent.slice(0, 400_000) + "\n[... truncated for size ...]" : textContent;
+    userParts = [{
+      text: `Filename: ${filename}\n\nLoad this data using:\nimport pandas as pd, io\ncsv_text = """${truncated.replace(/"""/g, "'''")}"""\ndf = pd.read_csv(io.StringIO(csv_text))\n\nThen execute the full analysis protocol and write the complete Chapter 4 analytical narrative.`,
+    }];
+  }
+
+  write("agent", { id: "analyst", name: "Data Analyst", status: "working", action: "Running statistical analysis…" });
+
+  const resp = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${G_PRO}:generateContent?key=${apiKey}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        system_instruction: { parts: [{ text: systemPrompt }] },
+        contents: [{ role: "user", parts: userParts }],
+        tools: [{ code_execution: {} }],
+        generationConfig: { maxOutputTokens: 32768, temperature: 0.2 },
+      }),
+      signal: AbortSignal.timeout(240_000),
+    },
+  );
+
+  if (!resp.ok) {
+    const errText = await resp.text().catch(() => "");
+    throw new Error(`Data analysis API error: ${errText.slice(0, 300)}`);
+  }
+
+  const responseData = await resp.json();
+  const parts = responseData?.candidates?.[0]?.content?.parts ?? [];
+
+  let fullText = "";
+  let chartCount = 0;
+
+  for (const part of parts) {
+    if (signal.aborted) break;
+    if (part.text) {
+      fullText += part.text;
+      write("delta", { text: part.text });
+    } else if (part.inlineData?.mimeType?.startsWith("image/")) {
+      chartCount++;
+      const chartUri = `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
+      const chartMd = `\n\n![Figure ${chartCount} — statistical analysis chart](${chartUri})\n\n`;
+      fullText += chartMd;
+      write("delta", { text: chartMd });
+    } else if (part.executableCode?.code) {
+      write("thinking", { text: `\`\`\`python\n${part.executableCode.code}\n\`\`\`` });
+    } else if (part.codeExecutionResult?.output) {
+      write("thinking", { text: part.codeExecutionResult.output });
+    }
+  }
+
+  if (!fullText.trim()) throw new Error("Data analysis returned empty response");
+
+  write("agent", {
+    id: "analyst",
+    name: "Data Analyst",
+    status: "done",
+    action: `Analysis complete — ${chartCount} chart${chartCount !== 1 ? "s" : ""} generated`,
+  });
+
+  return fullText;
+}
+
+// ---------------------------------------------------------------------------
 // Gemini multimodal extraction (PDF, audio)
 // ---------------------------------------------------------------------------
 
@@ -753,6 +983,14 @@ async function ingestFiles(
 
       const isPdf = att.mime === "application/pdf" || att.filename.endsWith(".pdf");
 
+      const isExcel = /\.(xlsx|xls)$/i.test(att.filename) ||
+        att.mime === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
+        att.mime === "application/vnd.ms-excel";
+
+      const isDataFile = /\.(csv|tsv)$/i.test(att.filename) || att.mime === "text/csv" || att.mime === "text/tab-separated-values";
+
+      const isSPSS = /\.(sav|zsav)$/i.test(att.filename);
+
       const isAudio = att.mime.startsWith("audio/") ||
         /\.(mp3|wav|m4a|ogg|webm|flac|aac)$/i.test(att.filename);
 
@@ -763,14 +1001,25 @@ async function ingestFiles(
         /\.(jpg|jpeg|png|gif|webp|bmp|tiff|ico|avif|heic)$/i.test(att.filename)
       );
 
-      if (isText || isSvg) {
+      if (isText || isSvg || isDataFile) {
         text = await data.text();
+      } else if (isExcel || isSPSS) {
+        // For Excel/SPSS: extract a structural description via Gemini multimodal
+        const buf = await data.arrayBuffer();
+        const b64 = btoa(String.fromCharCode(...new Uint8Array(buf)));
+        const instruction = isExcel
+          ? "This is an Excel spreadsheet. Describe its structure: list all sheet names, column headers, data types, and provide the first 20 rows as a CSV-style table. Note any patterns in the data."
+          : "This is an SPSS .sav file. List the variable names, labels, value labels, and describe the dataset structure.";
+        text = await extractWithGemini(b64, "image/png", instruction, signal); // use generic mime, Gemini handles it
+        if (!text || text.length < 20) {
+          text = `[Data file: ${att.filename} — will be processed directly in analysis mode]`;
+        }
       } else if (isPdf || isAudio) {
         // Use Gemini multimodal for PDFs and audio
         const buf = await data.arrayBuffer();
         const b64 = btoa(String.fromCharCode(...new Uint8Array(buf)));
         const instruction = isPdf
-          ? "Extract all text from this PDF document. Preserve headings, paragraph structure, and any tables or lists. Return only the extracted text."
+          ? "Extract ALL content from this PDF document. Include: all text (headings, paragraphs, footnotes, captions), all tables (reproduce every row and column), all figures and charts (describe in detail including axes, data, and trends), all diagrams (describe structure and labels). Preserve section headings and document structure. This document may be an assignment brief, research paper, or report — extract every word of guidance, requirements, word counts, and marking criteria."
           : "Transcribe this audio file accurately and completely. Return only the transcription, with speaker labels if multiple speakers are apparent.";
         text = await extractWithGemini(b64, att.mime, instruction, signal);
         if (!text || text.length < 20) {
@@ -1507,6 +1756,41 @@ async function runMain(
       }
     }
 
+    // ── 8b. Document intelligence (import mode) ──────────────────────────────
+    if (mode === "import" && !signal.aborted) {
+      // Content source: attachments (fileContext) OR embedded in user message ([DOCUMENT UPLOADED: ...])
+      const isEmbedded = req.user_message.startsWith("[DOCUMENT UPLOADED:");
+      const contentToAnalyse = fileContext || (isEmbedded ? req.user_message : "");
+      const filenameHint = req.attachments?.[0]?.filename
+        ?? (isEmbedded ? req.user_message.match(/\[DOCUMENT UPLOADED:\s*([^\]]+)\]/)?.[1] ?? "document" : "document");
+
+      if (contentToAnalyse) {
+        write("agent", { id: "intelligence", name: "Document Intelligence", status: "working", action: "Understanding your document…" });
+        try {
+          const { action, inferredMessage } = await inferDocumentTask(contentToAnalyse, filenameHint, signal);
+          mode = action;
+          // For embedded documents, replace the message with the inferred task
+          // (keeps the document content in fileContext via the user message for the write path)
+          if (isEmbedded) {
+            // Preserve document content as file context, replace user message with the inferred task
+            fileContext = contentToAnalyse;
+            req.user_message = inferredMessage;
+          } else {
+            req.user_message = inferredMessage;
+          }
+          const newModelChoice = pickModel(tier, mode, "high", email);
+          Object.assign(modelChoice, newModelChoice);
+          write("agent", { id: "intelligence", name: "Document Intelligence", status: "done", action: `Detected: ${action} task — executing now` });
+        } catch {
+          mode = "write";
+          if (isEmbedded) fileContext = contentToAnalyse;
+          write("agent", { id: "intelligence", name: "Document Intelligence", status: "done", action: "Defaulting to write mode" });
+        }
+      } else {
+        mode = "chat";
+      }
+    }
+
     // ── 9. Load conversation history ──────────────────────────────────────
     // MUST come before system prompt assembly and mode-switch detection,
     // both of which reference `history`.
@@ -1862,9 +2146,31 @@ Rules:
       return;
     }
 
+    // ── Special path: Data analysis ──────────────────────────────────────────
+    if (mode === "analyze_data" && !signal.aborted) {
+      const firstAtt = req.attachments?.[0];
+      try {
+        fullResponse = await runDataAnalysis(
+          fileContext,
+          firstAtt?.filename ?? "data",
+          firstAtt?.mime ?? "text/csv",
+          firstAtt?.storage_path ?? null,
+          svc,
+          write,
+          signal,
+        );
+      } catch (err: any) {
+        if (err?.name !== "AbortError") {
+          write("error", { message: `Data analysis failed: ${err?.message ?? "unknown error"}`, recoverable: false });
+          return;
+        }
+      }
+      // Fall through to persistence
+    }
+
     // ── Web search pre-flight (chat mode only — orchestrated modes have their own search) ──
     let webContext = "";
-    if (mode === "chat" && !signal.aborted && shouldSearchWeb(req.user_message, req.settings ?? {})) {
+    if (mode === "chat" && !fullResponse && !signal.aborted && shouldSearchWeb(req.user_message, req.settings ?? {})) {
       write("agent", { id: "searcher", name: "Web Search", status: "working", action: "Searching the web…" });
       try {
         webContext = await searchGeneralWeb(req.user_message, signal);
@@ -1880,7 +2186,7 @@ Rules:
       mode === "research" || mode === "literature_review" ||
       (mode === "write" && complexity === "high");
 
-    if (isOrchestratedMode && !signal.aborted) {
+    if (isOrchestratedMode && !fullResponse && !signal.aborted) {
       // Multi-agent pipeline: Planner → Researcher → Writer → Critic → Illustrator
       try {
         fullResponse = await runOrchestrator({
@@ -1908,7 +2214,7 @@ Rules:
           return;
         }
       }
-    } else {
+    } else if (!fullResponse) {
       // ── Image generation ──
       // The web client now handles all image requests directly via the
       // `czar-image` function (returns JSON { imageUrl } and renders an <img>),
