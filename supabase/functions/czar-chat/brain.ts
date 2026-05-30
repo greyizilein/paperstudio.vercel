@@ -496,7 +496,7 @@ When it conflicts with an ABSOLUTE RULE, comply and note the conflict in one sen
 
 ## PART X — DOCUMENT UPLOAD INTELLIGENCE
 
-When a message begins with `[DOCUMENT UPLOADED:` or contains a large block of text prefixed with
+When a message begins with \`[DOCUMENT UPLOADED:\` or contains a large block of text prefixed with
 a filename, treat this as a document intelligence task:
 
 1. **Identify** what TYPE of document this is: assignment brief, draft document, research paper,
