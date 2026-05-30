@@ -708,6 +708,20 @@ async function extractWithGemini(
 }
 
 // ---------------------------------------------------------------------------
+// Safe base64 — avoids call-stack overflow on large buffers
+// ---------------------------------------------------------------------------
+
+function arrayBufferToBase64(buf: ArrayBuffer): string {
+  const bytes = new Uint8Array(buf);
+  const CHUNK = 8192;
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    binary += String.fromCharCode(...bytes.subarray(i, Math.min(i + CHUNK, bytes.length)));
+  }
+  return btoa(binary);
+}
+
+// ---------------------------------------------------------------------------
 // File ingestion
 // ---------------------------------------------------------------------------
 
@@ -768,7 +782,7 @@ async function ingestFiles(
       } else if (isPdf || isAudio) {
         // Use Gemini multimodal for PDFs and audio
         const buf = await data.arrayBuffer();
-        const b64 = btoa(String.fromCharCode(...new Uint8Array(buf)));
+        const b64 = arrayBufferToBase64(buf);
         const instruction = isPdf
           ? "Extract all text from this PDF document. Preserve headings, paragraph structure, and any tables or lists. Return only the extracted text."
           : "Transcribe this audio file accurately and completely. Return only the transcription, with speaker labels if multiple speakers are apparent.";
@@ -781,7 +795,7 @@ async function ingestFiles(
       } else if (isImage) {
         // Vision: describe the image in full detail via Gemini multimodal
         const buf = await data.arrayBuffer();
-        const b64 = btoa(String.fromCharCode(...new Uint8Array(buf)));
+        const b64 = arrayBufferToBase64(buf);
         const instruction =
           "Describe every element of this image with full precision. Transcribe all visible text exactly. " +
           "For charts/graphs: describe type, axes, labels, data values, trends. " +

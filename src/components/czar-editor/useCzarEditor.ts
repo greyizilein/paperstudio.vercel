@@ -808,20 +808,28 @@ export function useCzarEditor(): UseCzarEditorReturn {
   }, [activePieceId, docContent, docTitle, streamingDoc, prefs, activeVoice, audience, targetLength, persistContent, setDocTitle, startStreamTimeout, clearStreamTimeout]);
 
   const importFile = useCallback((attachment: any) => {
-    if (!activePieceId) return;
+    if (!activePieceId || streamingDoc) return;
     const ctrl = new AbortController();
     abortRef.current = ctrl;
     setStreamingDoc(true);
     setStreamOp('continue');
     setContentMode('chat');
     startStreamTimeout(ctrl);
-    const base = docContent;
-    let appended = '';
+
+    const uId = 'user_' + Date.now();
+    const aId = 'ast_' + Date.now();
+    setMessages(prev => [
+      ...prev,
+      { id: uId, role: 'user' as const, content: `Uploaded: ${attachment.filename}`, mode: null },
+      { id: aId, role: 'assistant' as const, content: '', mode: 'chat', isStreaming: true },
+    ]);
+
+    let buffer = '';
 
     streamCzar(
       {
         conversation_id: activePieceId,
-        user_message: 'I have uploaded a document for you to read. Please read it carefully, tell me what you understand from it, and ask me what you would like to do with it.',
+        user_message: `I've uploaded "${attachment.filename}". Please read it carefully and summarise what it contains, then ask what I'd like to do with it.`,
         attachments: [attachment],
         mode: 'chat',
         settings: buildCzarSettings(prefs, activeVoice, audience, targetLength, undefined, rubricCriteria),
@@ -829,27 +837,29 @@ export function useCzarEditor(): UseCzarEditorReturn {
       {
         onAgent: (e) => setCurrentAgent(e.name),
         onDelta: (text) => {
-          appended += text;
-          setDocContentRaw((base ? base + '\n\n' : '') + appended);
+          buffer += text;
+          setMessages(prev => prev.map(m => m.id === aId ? { ...m, content: buffer } : m));
         },
         onDone: () => {
           clearStreamTimeout();
           setStreamingDoc(false);
           setStreamOp(null);
           setCurrentAgent(null);
-          persistContent((base ? base + '\n\n' : '') + appended);
+          setMessages(prev => prev.map(m => m.id === aId ? { ...m, content: buffer, isStreaming: false } : m));
         },
         onError: (msg) => {
           clearStreamTimeout();
           setStreamingDoc(false);
           setStreamOp(null);
           setCurrentAgent(null);
-          setError(msg ?? 'File import failed');
+          setMessages(prev => prev.map(m => m.id === aId
+            ? { ...m, content: msg ?? 'Could not read the file. Please try again.', isStreaming: false }
+            : m));
         },
       },
       ctrl.signal,
     );
-  }, [activePieceId, docContent, streamingDoc, prefs, activeVoice, audience, targetLength, persistContent, startStreamTimeout, clearStreamTimeout]);
+  }, [activePieceId, streamingDoc, prefs, activeVoice, audience, targetLength, startStreamTimeout, clearStreamTimeout]);
 
   const sendMessage = useCallback((text: string, panelSettings?: Partial<CzPanelSettings>) => {
     if (!activePieceId || streamingDoc || !text.trim()) return;
