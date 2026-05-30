@@ -77,10 +77,10 @@ function CzarQuestionCard({ raw, onAnswer }: { raw: string; onAnswer: (text: str
   };
 
   return (
-    <div className="my-3 rounded-2xl border border-zinc-200 bg-zinc-50 p-4 space-y-4 not-prose">
+    <div className="my-3 rounded-2xl border border-zinc-200 bg-white p-4 space-y-4 not-prose" style={{ backgroundColor: '#ffffff', color: '#18181b' }}>
       {questions.map(q => (
         <div key={q.id}>
-          <p className="font-mono text-[10px] tracking-widest uppercase text-zinc-500 mb-2">{q.text}</p>
+          <p className="font-mono text-[10px] tracking-widest uppercase mb-2" style={{ color: '#52525b' }}>{q.text}</p>
           {(q.type === 'radio' || q.type === 'checkbox') && (
             <div className="flex flex-wrap gap-1.5">
               {q.options.map(opt => {
@@ -110,7 +110,7 @@ function CzarQuestionCard({ raw, onAnswer }: { raw: string; onAnswer: (text: str
               placeholder={(q as { placeholder?: string }).placeholder ?? ''}
               value={answers[q.id] as string}
               onChange={e => setAnswers(p => ({ ...p, [q.id]: e.target.value }))}
-              className="w-full border border-zinc-200 rounded-xl px-3 py-2 text-[13px] bg-white focus:outline-none focus:border-[#e85d3f]/50"
+              className="w-full border border-zinc-200 rounded-xl px-3 py-2 text-[13px] text-zinc-900 placeholder-zinc-400 bg-white focus:outline-none focus:border-[#e85d3f]/50"
             />
           )}
         </div>
