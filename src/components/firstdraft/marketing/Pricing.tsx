@@ -113,7 +113,9 @@ export const MarketingPricing = () => {
 
     setLoadingTier(tier);
     try {
-      const callbackUrl = `${window.location.origin}/payment/callback`;
+      // CZAR uses a separate verification path — append product flag to callback
+      const callbackBase = `${window.location.origin}/payment/callback`;
+      const callbackUrl = tier === "czar" ? `${callbackBase}?product=czar` : callbackBase;
       const res = await supabase.functions.invoke("create-paystack-checkout", {
         body: { tier, callback_url: callbackUrl },
       });
@@ -159,7 +161,7 @@ export const MarketingPricing = () => {
           </p>
         </motion.div>
 
-        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
           {tiers.map((tier, i) => {
             const isPrimary = tier.variant === "primary";
             const isDark = tier.variant === "dark";
@@ -293,6 +295,94 @@ export const MarketingPricing = () => {
             );
           })}
         </div>
+
+        {/* CZAR AI Assistant — credit-based, separate from per-project tiers */}
+        <motion.div
+          initial={{ opacity: 0, y: 16, filter: "blur(4px)" }}
+          whileInView={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+          viewport={{ once: true, amount: 0.2 }}
+          transition={{ duration: 0.6, delay: 0.1, ease: [0.16, 1, 0.3, 1] }}
+        >
+          <div className="flex items-center gap-4 mb-6">
+            <div className="flex-1 h-px" style={{ background: "var(--ma-border)" }} />
+            <span className="text-xs font-bold tracking-[0.18em] uppercase" style={{ color: "var(--ma-text-dim)" }}>
+              CZAR AI Writing Assistant
+            </span>
+            <div className="flex-1 h-px" style={{ background: "var(--ma-border)" }} />
+          </div>
+
+          <div
+            className="rounded-2xl border-2 overflow-hidden"
+            style={{ borderColor: "rgba(74,122,56,0.4)", background: "var(--ma-surface)" }}
+          >
+            <div className="flex flex-col md:flex-row">
+              {/* Left: description */}
+              <div className="px-8 py-8 flex-1" style={{ borderRight: "1px solid rgba(74,122,56,0.15)" }}>
+                <div
+                  className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-[11px] font-bold tracking-widest uppercase mb-5"
+                  style={{ background: "rgba(74,122,56,0.1)", border: "1px solid rgba(74,122,56,0.25)", color: "#4A7A38" }}
+                >
+                  <svg width="13" height="13" viewBox="0 0 64 64" fill="none" aria-hidden="true">
+                    <path d="M50 6 C 40 10, 32 18, 27 30 C 24 38, 23 46, 24 52 L 28 52 C 30 46, 33 40, 38 34 C 44 26, 49 18, 52 10 C 53 8, 52 6, 50 6 Z" fill="#4A7A38" />
+                    <path d="M24 52 L 28 52 L 26 58 Z" fill="#4A7A38" />
+                  </svg>
+                  Credit-based · No project limits
+                </div>
+                <p className="text-sm leading-relaxed mb-6" style={{ color: "var(--ma-text-muted)", maxWidth: "420px" }}>
+                  CZAR is your embedded academic AI. Reads your PDFs, analyses data, writes at command. Works across every project you have — pay once, use everywhere.
+                </p>
+                <ul className="space-y-2.5">
+                  {[
+                    "Upload briefs, PDFs, datasets — CZAR reads and executes",
+                    "Works across all your projects, unlimited conversations",
+                    "Full data analysis: stats, charts, Chapter 4 write-up",
+                    "All 12 citation styles, Harvard-first",
+                    "1,000 words free — no card needed to start",
+                  ].map((f) => (
+                    <li key={f} className="flex items-start gap-2.5 text-sm" style={{ color: "var(--ma-text-muted)" }}>
+                      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="shrink-0 mt-0.5" aria-hidden="true">
+                        <circle cx="8" cy="8" r="7" stroke="rgba(74,122,56,0.4)" strokeWidth="1" fill="none" />
+                        <path d="M5 8 L7 10 L11 6" stroke="#4A7A38" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                      {f}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              {/* Right: price + CTA */}
+              <div className="px-8 py-8 flex flex-col justify-center min-w-[220px]">
+                <p className="text-xs font-bold tracking-[0.18em] uppercase mb-3" style={{ color: "#4A7A38", opacity: 0.8 }}>
+                  CZAR
+                </p>
+                <div className="flex items-baseline gap-1 mb-1">
+                  <span className="text-5xl font-extrabold tracking-tight tabular-nums" style={{ color: "var(--ma-text)" }}>$50</span>
+                </div>
+                <p className="text-sm mb-1" style={{ color: "var(--ma-text-muted)" }}>20,000 words</p>
+                <p className="text-xs mb-8" style={{ color: "var(--ma-text-dim)" }}>Credits roll over for 30 days</p>
+
+                {(() => {
+                  const isLoading = loadingTier === "czar";
+                  return (
+                    <button
+                      onClick={() => startCheckout("czar")}
+                      disabled={isLoading}
+                      className="w-full font-bold py-2.5 rounded-lg transition-all active:scale-[0.98] mb-2"
+                      style={{ background: "#4A7A38", color: "#FFFFFF", border: "none", fontFamily: '"Geist", system-ui, sans-serif', fontSize: "0.9rem" }}
+                      onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.opacity = "0.88"; }}
+                      onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.opacity = "1"; }}
+                    >
+                      {isLoading ? <span className="inline-flex items-center justify-center gap-2"><Loader2 size={14} className="animate-spin" /> Starting…</span> : "Get CZAR →"}
+                    </button>
+                  );
+                })()}
+                <p className="text-[11px] text-center" style={{ color: "#4A7A38" }}>1,000 words free to start</p>
+                <p className="text-[10px] text-center mt-1" style={{ color: "var(--ma-text-dim)" }}>Charged in NGN at checkout</p>
+              </div>
+            </div>
+          </div>
+        </motion.div>
+
       </div>
     </section>
   );

@@ -202,7 +202,7 @@ export const CzarSection = () => (
         </ul>
 
         {/* CTA */}
-        <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
           <Link to="/czar">
             <button
               style={{
@@ -230,12 +230,8 @@ export const CzarSection = () => (
               Try CZAR free
             </button>
           </Link>
-          <p style={{ fontFamily: DA_FONTS.body, fontSize: "0.8rem", color: "var(--ma-text-dim)", margin: 0 }}>
-            <span style={{ color: "#4A7A38", fontWeight: 600 }}>1,000 words free</span>
-            {" · "}
-            <Link to="/settings?tab=billing" style={{ color: "var(--ma-text-muted)", textDecoration: "underline", textDecorationStyle: "dotted" }}>
-              $20 for 50,000 words
-            </Link>
+          <p style={{ fontFamily: DA_FONTS.body, fontSize: "0.78rem", color: "var(--ma-text-dim)", margin: 0 }}>
+            1,000 words free — no card needed
           </p>
         </div>
       </motion.div>
