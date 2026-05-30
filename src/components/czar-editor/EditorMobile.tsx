@@ -423,7 +423,10 @@ export function CzarMobile() {
   const userName: string = (user as any)?.user_metadata?.full_name || (user as any)?.user_metadata?.name || user?.email?.split('@')[0] || '';
 
   // Derive writer content from the streaming or last document message
-  const streamingMsg = editor.messages.slice().reverse().find(m => m.isStreaming && m.role === 'assistant');
+  // Exclude import-mode messages — those are chat summaries, not document content
+  const streamingMsg = editor.messages.slice().reverse().find(
+    m => m.isStreaming && m.role === 'assistant' && m.mode !== 'import'
+  );
   const lastDocMsg = editor.messages.slice().reverse().find(m => m.isDocument && !m.isStreaming && m.role === 'assistant');
   const writerContent = streamingMsg?.content ?? lastDocMsg?.content ?? '';
   const writerStreaming = !!streamingMsg;
