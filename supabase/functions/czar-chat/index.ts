@@ -921,12 +921,12 @@ async function extractWithGemini(
         { inlineData: { mimeType, data: b64 } },
       ],
     }],
-    generationConfig: { maxOutputTokens: 16384, temperature: 0 },
+    generationConfig: { maxOutputTokens: 65536, temperature: 0 },
   };
 
   try {
     const resp = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${G_FAST}:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/${G_PRO}:generateContent?key=${apiKey}`,
       { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal },
     );
     if (!resp.ok) return "";
@@ -955,13 +955,41 @@ function arrayBufferToBase64(buf: ArrayBuffer): string {
 // File ingestion
 // ---------------------------------------------------------------------------
 
+// Formats Gemini can read natively (text + images in one pass, no extraction needed)
+const GEMINI_NATIVE_MIME = new Set([
+  "application/pdf",
+  "image/jpeg", "image/jpg", "image/png", "image/gif", "image/webp",
+  "image/bmp", "image/tiff", "image/heic", "image/heif", "image/avif",
+  "audio/mp3", "audio/mpeg", "audio/wav", "audio/wave", "audio/x-wav",
+  "audio/aiff", "audio/x-aiff", "audio/flac", "audio/ogg", "audio/aac",
+  "audio/mp4", "audio/m4a", "audio/opus",
+  "video/mp4", "video/mpeg", "video/mov", "video/quicktime",
+  "video/avi", "video/x-msvideo", "video/x-flv", "video/webm",
+  "video/mkv", "video/x-matroska", "video/3gpp",
+]);
+
+const isGeminiNative = (mime: string, filename: string): boolean =>
+  GEMINI_NATIVE_MIME.has(mime) ||
+  /\.pdf$/i.test(filename) ||
+  /\.(jpg|jpeg|png|gif|webp|bmp|tiff|tif|heic|heif|avif|ico)$/i.test(filename) ||
+  /\.(mp3|wav|m4a|ogg|flac|aac|opus|aiff)$/i.test(filename) ||
+  /\.(mp4|mov|avi|mkv|webm|flv|wmv|m4v|3gp)$/i.test(filename);
+
+const MAX_INLINE_BYTES = 20 * 1024 * 1024; // 20 MB — Gemini inline data limit
+
+interface IngestResult {
+  text: string;
+  inline: Array<{ mimeType: string; data: string }>;
+}
+
 async function ingestFiles(
   attachments: Attachment[],
   svc: SupabaseClient,
   write: WriteFunction,
   signal: AbortSignal,
-): Promise<string> {
+): Promise<IngestResult> {
   const parts: string[] = [];
+  const inline: Array<{ mimeType: string; data: string }> = [];
   let successCount = 0;
 
   for (const att of attachments) {
@@ -1034,67 +1062,55 @@ async function ingestFiles(
       if (isText || isSvg || isDataFile) {
         text = await data.text();
       } else if (isExcel || isSPSS) {
-        // For Excel/SPSS: extract a structural description via Gemini multimodal
+        // Excel/SPSS: Gemini can't natively analyse these — extract structure as text
         const buf = await data.arrayBuffer();
         const b64 = arrayBufferToBase64(buf);
         const instruction = isExcel
-          ? "This is an Excel spreadsheet. Describe its structure: list all sheet names, column headers, data types, and provide the first 20 rows as a CSV-style table. Note any patterns in the data."
-          : "This is an SPSS .sav file. List the variable names, labels, value labels, and describe the dataset structure.";
-        text = await extractWithGemini(b64, "image/png", instruction, signal); // use generic mime, Gemini handles it
+          ? "This is an Excel spreadsheet. List all sheet names. For each sheet, list every column header and reproduce ALL rows as a CSV-style table — do not truncate or summarise. Include every data value."
+          : "This is an SPSS .sav file. List every variable name, its label, all value labels, and the full data structure including variable types and any descriptive statistics visible in the metadata.";
+        text = await extractWithGemini(b64, "application/octet-stream", instruction, signal);
         if (!text || text.length < 20) {
           text = `[Data file: ${att.filename} — will be processed directly in analysis mode]`;
         }
-      } else if (isPdf || isAudio) {
-        // Use Gemini multimodal for PDFs and audio
-        const buf = await data.arrayBuffer();
-        const b64 = arrayBufferToBase64(buf);
-        const instruction = isPdf
-          ? "Extract ALL content from this PDF document. Include: all text (headings, paragraphs, footnotes, captions), all tables (reproduce every row and column), all figures and charts (describe in detail including axes, data, and trends), all diagrams (describe structure and labels). Preserve section headings and document structure. This document may be an assignment brief, research paper, or report — extract every word of guidance, requirements, word counts, and marking criteria."
-          : "Transcribe this audio file accurately and completely. Return only the transcription, with speaker labels if multiple speakers are apparent.";
-        text = await extractWithGemini(b64, att.mime, instruction, signal);
-        if (!text || text.length < 20) {
-          text = isPdf
-            ? `[PDF: ${att.filename} — extraction returned limited content. Please paste key sections directly.]`
-            : `[Audio: ${att.filename} — transcription failed or returned empty.]`;
-        }
       } else if (isOfficeDoc) {
-        // Word, PowerPoint, EPUB, ODT, ODP → Gemini multimodal extraction
+        // Word/PPTX/ODT/EPUB: Gemini can read these — pass inline if small enough, else extract
         const buf = await data.arrayBuffer();
         const b64 = arrayBufferToBase64(buf);
-        const isPptLike = /\.(pptx|ppt|odp)$/i.test(att.filename) ||
-          att.mime.includes("presentation");
-        const instruction = isPptLike
-          ? "Extract ALL content from this presentation. For each slide: its number, title, all body text, bullet points, and describe any images, charts, or diagrams. Include speaker notes. Preserve the slide order."
-          : "Extract ALL content from this document. Include: all text (headings, paragraphs, footnotes, captions), all tables (reproduce every row and column in markdown table format), and describe any images or diagrams. Preserve document structure and heading hierarchy.";
-        text = await extractWithGemini(b64, att.mime || "application/octet-stream", instruction, signal);
-        if (!text || text.length < 20) {
-          text = `[Document: ${att.filename} — extraction returned limited content. Try pasting key sections directly.]`;
+        if (buf.byteLength <= MAX_INLINE_BYTES && isGeminiNative(att.mime, att.filename)) {
+          inline.push({ mimeType: att.mime || "application/octet-stream", data: b64 });
+          text = `[attached: ${att.filename}]`;
+        } else {
+          const isPptLike = /\.(pptx|ppt|odp)$/i.test(att.filename) || att.mime.includes("presentation");
+          const instruction = isPptLike
+            ? "Extract ALL content from this presentation. For every slide: its number, title, all body text, all bullet points (every level), all speaker notes, and describe every image, chart, or diagram in full. Do not skip any slide or any content."
+            : "Extract ALL content from this document word for word. Include every heading, every paragraph, every footnote, every caption, every table (reproduce all rows and columns exactly), and describe every image or diagram in full. Do not summarise — reproduce the complete text.";
+          text = await extractWithGemini(b64, att.mime || "application/octet-stream", instruction, signal);
+          if (!text || text.length < 20) {
+            text = `[Document: ${att.filename} — extraction returned limited content. Try pasting key sections directly.]`;
+          }
         }
-      } else if (isVideo) {
-        // Video → Gemini multimodal (describe scenes, transcribe speech, read on-screen text)
+      } else if (isPdf || isAudio || isVideo || isImage) {
+        // PDFs, images, audio, video: pass directly to Gemini — it reads natively with full fidelity
         const buf = await data.arrayBuffer();
         const b64 = arrayBufferToBase64(buf);
-        const instruction =
-          "Describe this video thoroughly. Include: what happens in each scene, any on-screen text or captions, any spoken dialogue (transcribe accurately), and the overall structure and key content.";
-        text = await extractWithGemini(b64, att.mime || "video/mp4", instruction, signal);
-        if (!text || text.length < 20) {
-          text = `[Video: ${att.filename} — could not be analysed. Try a shorter clip or provide a transcript.]`;
-        }
-      } else if (isImage) {
-        // Vision: describe the image in full detail via Gemini multimodal
-        const buf = await data.arrayBuffer();
-        const b64 = arrayBufferToBase64(buf);
-        const instruction =
-          "Describe every element of this image with full precision. Transcribe all visible text exactly. " +
-          "For charts/graphs: describe type, axes, labels, data values, trends. " +
-          "For tables: reproduce all rows and columns in markdown table format. " +
-          "For diagrams: describe structure, labels, and relationships. " +
-          "For screenshots: describe UI elements and all visible content. " +
-          "For photographs: describe subjects, setting, composition, and any text. " +
-          "Be exhaustive — the description must let someone fully understand the image without seeing it.";
-        text = await extractWithGemini(b64, att.mime, instruction, signal);
-        if (!text || text.length < 10) {
-          text = `[Image: ${att.filename} — visual content could not be analysed. Try a clearer image.]`;
+        const mime = att.mime || (isPdf ? "application/pdf" : isAudio ? "audio/mpeg" : isVideo ? "video/mp4" : "image/jpeg");
+        if (buf.byteLength <= MAX_INLINE_BYTES) {
+          // Pass inline — Gemini sees every page, every embedded image, every chart
+          inline.push({ mimeType: mime, data: b64 });
+          text = `[attached: ${att.filename}]`;
+        } else {
+          // File > 20 MB: fall back to full extraction with G_PRO + max tokens
+          const instruction = isPdf
+            ? "Reproduce the COMPLETE text of this PDF word for word. Include every heading, every paragraph, every footnote, every table (all rows and columns), every caption, and describe every figure, chart, image, and diagram in full detail. Do not skip any page, summarise, or truncate. Output the full document content."
+            : isAudio
+            ? "Transcribe this audio file word for word, completely. Include speaker labels if multiple speakers. Do not summarise."
+            : isVideo
+            ? "Transcribe all spoken words. Describe every scene in detail. Read all on-screen text exactly. Cover the full duration."
+            : "Describe every element of this image with full precision. Transcribe all visible text exactly. For tables: reproduce every row and column. For charts: describe axes, all data points, and trends.";
+          text = await extractWithGemini(b64, mime, instruction, signal);
+          if (!text || text.length < 20) {
+            text = `[${att.filename} — content could not be fully read. Try splitting into smaller files.]`;
+          }
         }
       } else {
         text = `[File: ${att.filename} (${att.mime}) — format not recognised. Try converting to PDF, image, or plain text.]`;
@@ -1121,7 +1137,7 @@ async function ingestFiles(
     action: `Read ${successCount} file${successCount !== 1 ? "s" : ""}`,
   });
 
-  return parts.join("");
+  return { text: parts.join(""), inline };
 }
 
 // ---------------------------------------------------------------------------
@@ -1258,20 +1274,31 @@ async function streamGoogle(
   messages: { role: string; content: string }[],
   write: WriteFunction,
   signal: AbortSignal,
+  inlineParts?: Array<{ mimeType: string; data: string }>,
 ): Promise<string> {
   const apiKey = Deno.env.get("GOOGLE_AI_API_KEY");
   if (!apiKey) throw new Error("GOOGLE_AI_API_KEY not configured");
 
-  // Build Gemini contents array: system as first user turn if present
-  const contents: { role: string; parts: { text: string }[] }[] = [];
+  type GeminiPart = { text: string } | { inlineData: { mimeType: string; data: string } };
+  const contents: { role: string; parts: GeminiPart[] }[] = [];
 
   for (const m of messages) {
     const geminiRole = m.role === "assistant" ? "model" : "user";
     const last = contents[contents.length - 1];
     if (last && last.role === geminiRole) {
-      last.parts[0].text += "\n\n" + m.content;
+      (last.parts[0] as { text: string }).text += "\n\n" + m.content;
     } else {
       contents.push({ role: geminiRole, parts: [{ text: m.content }] });
+    }
+  }
+
+  // Attach inline file data to the last user message so Gemini reads them natively
+  if (inlineParts?.length) {
+    const lastMsg = contents[contents.length - 1];
+    if (lastMsg?.role === "user") {
+      for (const p of inlineParts) {
+        lastMsg.parts.push({ inlineData: { mimeType: p.mimeType, data: p.data } });
+      }
     }
   }
 
@@ -1798,9 +1825,12 @@ async function runMain(
 
     // ── 8. Ingest files ──────────────────────────────────────────────────
     let fileContext = "";
+    let geminiInlineParts: Array<{ mimeType: string; data: string }> = [];
     if (hasFiles) {
       try {
-        fileContext = await ingestFiles(req.attachments!, svc, write, signal);
+        const ingestResult = await ingestFiles(req.attachments!, svc, write, signal);
+        fileContext = ingestResult.text;
+        geminiInlineParts = ingestResult.inline;
       } catch (err: any) {
         write("error", {
           message: `File ingestion failed: ${err?.message}`,
@@ -2354,6 +2384,7 @@ Rules:
             messages,
             write,
             signal,
+            geminiInlineParts.length ? geminiInlineParts : undefined,
           );
         }
       } catch (err: any) {
