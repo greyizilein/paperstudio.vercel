@@ -251,7 +251,7 @@ export interface UseCzarEditorReturn {
   stopStream: () => void;
 
   // Import file
-  importFile: (attachment: CzarRequest['attachments'] extends (infer T)[] ? T : never) => void;
+  importFile: (attachment: { storage_path: string; filename: string; size: number; mime: string }, mode?: string) => void;
 
   // Chat interface
   messages: ChatMessage[];
@@ -409,6 +409,8 @@ export function useCzarEditor(): UseCzarEditorReturn {
   const activeMessageIdRef = useRef<string | null>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const thirtySecTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Holds the last uploaded attachment so sendMessage can re-attach it when user confirms
+  const pendingImportRef = useRef<{ storage_path: string; filename: string; size: number; mime: string } | null>(null);
 
   const persistContent = useCallback(async (content: string) => {
     if (!activePieceId || !user) return;
@@ -465,13 +467,21 @@ export function useCzarEditor(): UseCzarEditorReturn {
   const loadDoc = useCallback(async (convId: string) => {
     setDocLoading(true);
     setDocError(null);
+    // Defensively reset streaming state when switching conversations
+    setStreamingDoc(false);
+    setStreamOp(null);
+    setCurrentAgent(null);
+    pendingImportRef.current = null;
     activeMessageIdRef.current = null;
     try {
       const rawMsgs = await loadMessages(convId);
       // Drop internal placeholders so correction/image markers never resurface
       // as chat bubbles or get loaded into the document.
       const msgs = rawMsgs.filter((m: any) => m.content && !isInternalPlaceholder(m.content));
-      const lastAssistant = [...msgs].reverse().find((m: any) => m.role === 'assistant');
+      // Import-mode messages are short summaries, not document content — skip them
+      const lastAssistant = [...msgs].reverse().find(
+        (m: any) => m.role === 'assistant' && m.mode !== 'import'
+      );
       setDocContentRaw(lastAssistant?.content ?? '');
       if (lastAssistant) activeMessageIdRef.current = lastAssistant.id;
 
@@ -482,7 +492,7 @@ export function useCzarEditor(): UseCzarEditorReturn {
           role: m.role as 'user' | 'assistant',
           content: m.content ?? '',
           mode: m.mode ?? null,
-          isDocument: m.role === 'assistant' && m.mode !== 'chat' && (m.content?.length ?? 0) > 150,
+          isDocument: m.role === 'assistant' && m.mode !== 'chat' && m.mode !== 'import' && (m.content?.length ?? 0) > 150,
         }));
       setMessages(chatMsgs);
 
@@ -805,52 +815,95 @@ export function useCzarEditor(): UseCzarEditorReturn {
   }, [activePieceId, docContent, docTitle, streamingDoc, prefs, activeVoice, audience, targetLength, persistContent, setDocTitle, startStreamTimeout, clearStreamTimeout]);
 
   const importFile = useCallback((attachment: any, mode: string = 'import') => {
-    if (!activePieceId) return;
+    if (!activePieceId || streamingDoc) return;
     const ctrl = new AbortController();
     abortRef.current = ctrl;
-    setStreamingDoc(true);
-    setStreamOp('continue');
-    setContentMode('chat');
     startStreamTimeout(ctrl);
-    const base = docContent;
-    let appended = '';
+    setStreamingDoc(true);
 
-    const userMessage = mode === 'analyze_data'
-      ? `Perform a comprehensive data analysis of "${attachment.filename}". Run all appropriate statistical tests, generate visualisations, and write a full analytical narrative.`
-      : `Read "${attachment.filename}" and immediately execute whatever task it contains.`;
+    if (mode === 'analyze_data') {
+      // Data analysis: full document output → stream to Writer tab
+      setStreamOp('continue');
+      setContentMode('chat');
+      const base = docContent;
+      let appended = '';
+      const userMessage = `Perform a comprehensive data analysis of "${attachment.filename}". Run all appropriate statistical tests, generate visualisations, and write a full analytical narrative.`;
+      streamCzar(
+        {
+          conversation_id: activePieceId,
+          user_message: userMessage,
+          attachments: [attachment],
+          mode: 'analyze_data' as any,
+          settings: buildCzarSettings(prefs, activeVoice, audience, targetLength, undefined, rubricCriteria),
+        },
+        {
+          onAgent: (e) => setCurrentAgent(e.name),
+          onDelta: (text) => { appended += text; setDocContentRaw((base ? base + '\n\n' : '') + appended); },
+          onDone: () => {
+            clearStreamTimeout();
+            setStreamingDoc(false);
+            setStreamOp(null);
+            setCurrentAgent(null);
+            persistContent((base ? base + '\n\n' : '') + appended);
+          },
+          onError: (msg) => {
+            clearStreamTimeout();
+            setStreamingDoc(false);
+            setStreamOp(null);
+            setCurrentAgent(null);
+            setError(msg ?? 'Data analysis failed');
+          },
+        },
+        ctrl.signal,
+      );
+      return;
+    }
 
+    // Import mode: read document, summarise, ask to confirm — response goes to Chat tab
+    pendingImportRef.current = attachment;
+    const userMsgId = 'user_' + Date.now();
+    const assistantMsgId = 'ast_' + Date.now();
+    setMessages(prev => [
+      ...prev,
+      { id: userMsgId, role: 'user' as const, content: `📎 ${attachment.filename}`, mode: null },
+      { id: assistantMsgId, role: 'assistant' as const, content: '', mode: 'import', isStreaming: true },
+    ]);
+    let buffer = '';
     streamCzar(
       {
         conversation_id: activePieceId,
-        user_message: userMessage,
+        user_message: `I've uploaded "${attachment.filename}". Please read it and tell me what it is.`,
         attachments: [attachment],
-        mode: mode as any,
+        mode: 'import' as any,
         settings: buildCzarSettings(prefs, activeVoice, audience, targetLength, undefined, rubricCriteria),
       },
       {
         onAgent: (e) => setCurrentAgent(e.name),
         onDelta: (text) => {
-          appended += text;
-          setDocContentRaw((base ? base + '\n\n' : '') + appended);
+          buffer += text;
+          setMessages(prev => prev.map(m => m.id === assistantMsgId ? { ...m, content: buffer } : m));
         },
         onDone: () => {
           clearStreamTimeout();
           setStreamingDoc(false);
           setStreamOp(null);
           setCurrentAgent(null);
-          persistContent((base ? base + '\n\n' : '') + appended);
+          setMessages(prev => prev.map(m => m.id === assistantMsgId ? { ...m, isStreaming: false } : m));
+          // Backend saves the message directly — do NOT call persistContent here
         },
         onError: (msg) => {
           clearStreamTimeout();
           setStreamingDoc(false);
           setStreamOp(null);
           setCurrentAgent(null);
-          setError(msg ?? 'File import failed');
+          setMessages(prev => prev.map(m => m.id === assistantMsgId
+            ? { ...m, isStreaming: false, content: msg ?? 'File import failed' }
+            : m));
         },
       },
       ctrl.signal,
     );
-  }, [activePieceId, docContent, streamingDoc, prefs, activeVoice, audience, targetLength, persistContent, startStreamTimeout, clearStreamTimeout]);
+  }, [activePieceId, docContent, streamingDoc, prefs, activeVoice, audience, targetLength, persistContent, startStreamTimeout, clearStreamTimeout, rubricCriteria]);
 
   const sendMessage = useCallback((text: string, panelSettings?: Partial<CzPanelSettings>) => {
     if (!activePieceId || streamingDoc || !text.trim()) return;
@@ -902,6 +955,10 @@ export function useCzarEditor(): UseCzarEditorReturn {
     const effectiveMode = panelSettings?.mode ?? (isDocumentUpload ? 'import' : isImageRequest(text) ? 'chat' : 'write');
     setContentMode(effectiveMode as any);
 
+    // Re-attach the last uploaded file so CZAR has full document context when user confirms
+    const pendingAttachment = pendingImportRef.current;
+    pendingImportRef.current = null;
+
     const userMsgId = 'user_' + Date.now();
     const assistantMsgId = 'ast_' + Date.now();
 
@@ -919,6 +976,7 @@ export function useCzarEditor(): UseCzarEditorReturn {
         user_message: text,
         mode: effectiveMode as any,
         settings: buildCzarSettings(prefs, activeVoice, audience, targetLength, panelSettings as any, rubricCriteria),
+        ...(pendingAttachment ? { attachments: [pendingAttachment] } : {}),
       },
       {
         onAgent: (e) => setCurrentAgent(e.name),
@@ -934,7 +992,7 @@ export function useCzarEditor(): UseCzarEditorReturn {
           clearStreamTimeout();
           setStreamOp(null);
 
-          const isDoc = buffer.length > 200 && (
+          const isDoc = buffer.length > 200 && effectiveMode !== 'import' && (
             effectiveMode !== 'chat' ||
             /^#{1,3} /m.test(buffer) ||
             buffer.split('\n\n').length >= 4

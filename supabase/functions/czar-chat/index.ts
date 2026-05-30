@@ -373,7 +373,7 @@ Rules: sections must be numbered; words per section must be specific integers; e
     case "analyze_data":
       return `You are a data analyst and academic statistician. Analyse the provided dataset comprehensively: run descriptive statistics, normality checks, reliability analysis (if Likert scales), correlation analysis, appropriate inferential tests (t-test, ANOVA, regression, chi-square, etc.), and effect sizes. Generate matplotlib/seaborn visualisations for each key finding. Then write a complete dissertation Chapter 4 narrative (2,500–3,500 words) in formal academic prose covering all findings.`;
     case "import":
-      return `A document has been uploaded. Read it and identify what task it requires. Execute that task immediately and completely.`;
+      return `A document has been uploaded. Read its full extracted content carefully. In 2-3 sentences, tell the user: (1) what type of document it is, (2) what task or assignment it requires — include word count, academic level, and key requirements if stated. Then end with exactly this line: "Just say **go** when you're ready and I'll get started." Do NOT write the document, assignment, or any content yet. Only describe what you found and confirm readiness.`;
     case "chat":
     default:
       return "";
@@ -783,8 +783,8 @@ async function runDataAnalysis(
         const buf = await raw.arrayBuffer();
         const bytes = new Uint8Array(buf);
         let b = "";
-        for (let i = 0; i < bytes.length; i += 32768) {
-          b += String.fromCharCode(...bytes.subarray(i, i + 32768));
+        for (let i = 0; i < bytes.length; i += 8192) {
+          b += String.fromCharCode.apply(null, bytes.subarray(i, i + 8192) as unknown as number[]);
         }
         fileB64 = btoa(b);
       }
@@ -1001,12 +1001,22 @@ async function ingestFiles(
         /\.(jpg|jpeg|png|gif|webp|bmp|tiff|ico|avif|heic)$/i.test(att.filename)
       );
 
+      // Safe base64 encoder — avoids call-stack overflow on large buffers
+      function toBase64(buf: ArrayBuffer): string {
+        const bytes = new Uint8Array(buf);
+        let b = '';
+        for (let i = 0; i < bytes.length; i += 8192) {
+          b += String.fromCharCode.apply(null, bytes.subarray(i, i + 8192) as unknown as number[]);
+        }
+        return btoa(b);
+      }
+
       if (isText || isSvg || isDataFile) {
         text = await data.text();
       } else if (isExcel || isSPSS) {
         // For Excel/SPSS: extract a structural description via Gemini multimodal
         const buf = await data.arrayBuffer();
-        const b64 = btoa(String.fromCharCode(...new Uint8Array(buf)));
+        const b64 = toBase64(buf);
         const instruction = isExcel
           ? "This is an Excel spreadsheet. Describe its structure: list all sheet names, column headers, data types, and provide the first 20 rows as a CSV-style table. Note any patterns in the data."
           : "This is an SPSS .sav file. List the variable names, labels, value labels, and describe the dataset structure.";
@@ -1017,7 +1027,7 @@ async function ingestFiles(
       } else if (isPdf || isAudio) {
         // Use Gemini multimodal for PDFs and audio
         const buf = await data.arrayBuffer();
-        const b64 = btoa(String.fromCharCode(...new Uint8Array(buf)));
+        const b64 = toBase64(buf);
         const instruction = isPdf
           ? "Extract ALL content from this PDF document. Include: all text (headings, paragraphs, footnotes, captions), all tables (reproduce every row and column), all figures and charts (describe in detail including axes, data, and trends), all diagrams (describe structure and labels). Preserve section headings and document structure. This document may be an assignment brief, research paper, or report — extract every word of guidance, requirements, word counts, and marking criteria."
           : "Transcribe this audio file accurately and completely. Return only the transcription, with speaker labels if multiple speakers are apparent.";
@@ -1030,7 +1040,7 @@ async function ingestFiles(
       } else if (isImage) {
         // Vision: describe the image in full detail via Gemini multimodal
         const buf = await data.arrayBuffer();
-        const b64 = btoa(String.fromCharCode(...new Uint8Array(buf)));
+        const b64 = toBase64(buf);
         const instruction =
           "Describe every element of this image with full precision. Transcribe all visible text exactly. " +
           "For charts/graphs: describe type, axes, labels, data values, trends. " +
@@ -1757,36 +1767,18 @@ async function runMain(
     }
 
     // ── 8b. Document intelligence (import mode) ──────────────────────────────
+    // Import mode: read the document and confirm readiness — do NOT auto-execute.
+    // The modeDirective for 'import' instructs the model to summarise and ask "just say go".
+    // When user replies "go", the next request reattaches the file and runs in write mode.
     if (mode === "import" && !signal.aborted) {
-      // Content source: attachments (fileContext) OR embedded in user message ([DOCUMENT UPLOADED: ...])
       const isEmbedded = req.user_message.startsWith("[DOCUMENT UPLOADED:");
-      const contentToAnalyse = fileContext || (isEmbedded ? req.user_message : "");
-      const filenameHint = req.attachments?.[0]?.filename
-        ?? (isEmbedded ? req.user_message.match(/\[DOCUMENT UPLOADED:\s*([^\]]+)\]/)?.[1] ?? "document" : "document");
-
-      if (contentToAnalyse) {
-        write("agent", { id: "intelligence", name: "Document Intelligence", status: "working", action: "Understanding your document…" });
-        try {
-          const { action, inferredMessage } = await inferDocumentTask(contentToAnalyse, filenameHint, signal);
-          mode = action;
-          // For embedded documents, replace the message with the inferred task
-          // (keeps the document content in fileContext via the user message for the write path)
-          if (isEmbedded) {
-            // Preserve document content as file context, replace user message with the inferred task
-            fileContext = contentToAnalyse;
-            req.user_message = inferredMessage;
-          } else {
-            req.user_message = inferredMessage;
-          }
-          const newModelChoice = pickModel(tier, mode, "high", email);
-          Object.assign(modelChoice, newModelChoice);
-          write("agent", { id: "intelligence", name: "Document Intelligence", status: "done", action: `Detected: ${action} task — executing now` });
-        } catch {
-          mode = "write";
-          if (isEmbedded) fileContext = contentToAnalyse;
-          write("agent", { id: "intelligence", name: "Document Intelligence", status: "done", action: "Defaulting to write mode" });
-        }
-      } else {
+      if (isEmbedded) {
+        // Move embedded document text to fileContext so the user message is clean
+        fileContext = fileContext || req.user_message;
+        req.user_message = "I've uploaded a document. Please read it and tell me what it is.";
+      }
+      // If no content at all, fall back to chat
+      if (!fileContext && !req.attachments?.length) {
         mode = "chat";
       }
     }
