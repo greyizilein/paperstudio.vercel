@@ -28,6 +28,101 @@ const czarUrlTransform = (url: string): string => {
   return defaultUrlTransform(url);
 };
 
+// ─── QUESTION CARD ────────────────────────────────────────────────────────────
+
+type CzQuestion =
+  | { id: string; text: string; type: 'radio' | 'checkbox'; options: string[] }
+  | { id: string; text: string; type: 'text'; placeholder?: string };
+
+function CzarQuestionCard({ raw, onAnswer }: { raw: string; onAnswer: (text: string) => void }) {
+  const [questions, setQuestions] = React.useState<CzQuestion[]>([]);
+  const [answers, setAnswers] = React.useState<Record<string, string | string[]>>({});
+  const [submitted, setSubmitted] = React.useState(false);
+  const [parseError, setParseError] = React.useState(false);
+
+  React.useEffect(() => {
+    try {
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) { setParseError(true); return; }
+      setQuestions(parsed);
+      const init: Record<string, string | string[]> = {};
+      parsed.forEach((q: CzQuestion) => { init[q.id] = q.type === 'checkbox' ? [] : ''; });
+      setAnswers(init);
+    } catch { setParseError(true); }
+  }, [raw]);
+
+  if (parseError) return null;
+
+  if (submitted) {
+    return (
+      <div className="my-2 flex items-center gap-1.5">
+        <span className="font-mono text-[10px] tracking-widest uppercase text-zinc-400">Answers sent</span>
+        <span className="text-[#e85d3f] text-xs">✓</span>
+      </div>
+    );
+  }
+
+  const isComplete = questions.every(q => {
+    const a = answers[q.id];
+    return q.type === 'checkbox' ? (a as string[]).length > 0 : (a as string).trim() !== '';
+  });
+
+  const handleSubmit = () => {
+    const text = questions.map(q => {
+      const a = answers[q.id];
+      return `${q.text}: ${Array.isArray(a) ? a.join(', ') : a}`;
+    }).join('\n');
+    onAnswer(text);
+    setSubmitted(true);
+  };
+
+  return (
+    <div className="my-3 rounded-2xl border border-zinc-200 bg-zinc-50 p-4 space-y-4 not-prose">
+      {questions.map(q => (
+        <div key={q.id}>
+          <p className="font-mono text-[10px] tracking-widest uppercase text-zinc-500 mb-2">{q.text}</p>
+          {(q.type === 'radio' || q.type === 'checkbox') && (
+            <div className="flex flex-wrap gap-1.5">
+              {q.options.map(opt => {
+                const sel = q.type === 'radio'
+                  ? answers[q.id] === opt
+                  : (answers[q.id] as string[]).includes(opt);
+                return (
+                  <button key={opt} onClick={() => {
+                    if (q.type === 'radio') {
+                      setAnswers(p => ({ ...p, [q.id]: opt }));
+                    } else {
+                      setAnswers(p => {
+                        const curr = p[q.id] as string[];
+                        return { ...p, [q.id]: curr.includes(opt) ? curr.filter(o => o !== opt) : [...curr, opt] };
+                      });
+                    }
+                  }} className={`px-3 py-1.5 rounded-full border text-[12px] transition-all ${sel ? 'border-[#e85d3f] bg-[#e85d3f]/10 text-[#e85d3f] font-medium' : 'border-zinc-200 bg-white text-zinc-600'}`}>
+                    {opt}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+          {q.type === 'text' && (
+            <input
+              type="text"
+              placeholder={(q as { placeholder?: string }).placeholder ?? ''}
+              value={answers[q.id] as string}
+              onChange={e => setAnswers(p => ({ ...p, [q.id]: e.target.value }))}
+              className="w-full border border-zinc-200 rounded-xl px-3 py-2 text-[13px] bg-white focus:outline-none focus:border-[#e85d3f]/50"
+            />
+          )}
+        </div>
+      ))}
+      <button onClick={handleSubmit} disabled={!isComplete}
+        className={`w-full rounded-xl py-2.5 text-[13px] font-medium transition-all ${isComplete ? 'bg-[#e85d3f] text-white' : 'bg-zinc-200 text-zinc-400 cursor-not-allowed'}`}>
+        Send →
+      </button>
+    </div>
+  );
+}
+
 // Custom image renderer — handles czar-loading:// and czar-error:// markers
 const czarImgComponents: Components = {
   img: ({ src, alt }) => {
@@ -253,7 +348,18 @@ function UserBubble({ content }: { content: string }) {
   );
 }
 
-function CzarChatMessage({ content, isStreaming, imageUrl }: { content: string; isStreaming?: boolean; imageUrl?: string }) {
+function CzarChatMessage({ content, isStreaming, imageUrl, onAnswer }: { content: string; isStreaming?: boolean; imageUrl?: string; onAnswer?: (text: string) => void }) {
+  const components: Components = React.useMemo(() => ({
+    ...czarImgComponents,
+    code: ({ className, children }) => {
+      const lang = className?.replace('language-', '');
+      if (lang === 'czar-questions' && onAnswer && !isStreaming) {
+        return <CzarQuestionCard raw={String(children).trim()} onAnswer={onAnswer} />;
+      }
+      return <code className={className}>{children}</code>;
+    },
+  }), [onAnswer, isStreaming]);
+
   return (
     <div className="mb-5">
       {/* Brand mark sits above the message so content spans the full width */}
@@ -267,7 +373,7 @@ function CzarChatMessage({ content, isStreaming, imageUrl }: { content: string; 
           <>
             {content && (
               <div className="prose prose-zinc max-w-none prose-p:font-serif prose-p:text-[16px] prose-p:leading-[1.75] prose-headings:font-serif prose-headings:font-bold prose-h1:text-2xl prose-h2:text-xl prose-h3:text-lg">
-                <ReactMarkdown remarkPlugins={[remarkGfm]} urlTransform={czarUrlTransform} components={czarImgComponents}>{content}</ReactMarkdown>
+                <ReactMarkdown remarkPlugins={[remarkGfm]} urlTransform={czarUrlTransform} components={components}>{content}</ReactMarkdown>
                 {isStreaming && <span className="inline-block w-0.5 h-4 bg-[#e85d3f] ml-0.5 animate-pulse align-middle" />}
               </div>
             )}
@@ -698,7 +804,7 @@ export function CzarMobile() {
               )}
               {editor.messages.map((msg) => {
                 if (msg.role === 'user') return <UserBubble key={msg.id} content={msg.content} />;
-                return <CzarChatMessage key={msg.id} content={msg.content} isStreaming={msg.isStreaming} imageUrl={msg.imageUrl} />;
+                return <CzarChatMessage key={msg.id} content={msg.content} isStreaming={msg.isStreaming} imageUrl={msg.imageUrl} onAnswer={editor.sendMessage} />;
               })}
 
               {editor.streamingDoc && editor.currentAgent && (
